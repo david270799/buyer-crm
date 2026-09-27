@@ -312,6 +312,14 @@ async def test_added_to_group_by_a_stranger_leaves(db, env):
     await e["added_by"](555)
     assert any(isinstance(m, LeaveChat) for m in e["session"].sent)
     assert e["session"].messages(GROUP) == []
+    assert "не администратор" in e["session"].messages(ADMIN_TG)[0].text
+
+
+async def test_added_by_an_anonymous_admin_explains_how_to_fix(db, env):
+    e = env(FakeGemini())
+    await e["added_by"](1087968824)
+    assert any(isinstance(m, LeaveChat) for m in e["session"].sent)
+    assert "Анонимность" in e["session"].messages(ADMIN_TG)[0].text
 
 
 async def test_setclient_by_reply_keeps_the_balance(db, env):

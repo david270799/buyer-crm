@@ -12,8 +12,8 @@ Telegram открывает Mini App только по **HTTPS**, поэтому
 3. Скопируйте проект и настройки:
    ```bash
    git clone <адрес репозитория> buyer-crm && cd buyer-crm
-   cp .env.example .env            # заполните BOT_TOKEN, ADMIN_TELEGRAM_IDS, DOMAIN,
-                                   # MINI_APP_URL, FIREBASE_PROJECT_ID, FIREBASE_STORAGE_BUCKET
+   cp .env.example .env            # заполните BOT_TOKEN, ADMIN_TELEGRAM_IDS, DOMAIN, MINI_APP_URL,
+                                   # FIREBASE_PROJECT_ID, FIREBASE_STORAGE_BUCKET, GEMINI_API_KEY
    mkdir -p secrets && nano secrets/service-account.json   # JSON сервисного аккаунта Firebase
    chmod 600 .env secrets/service-account.json
    ```
@@ -29,7 +29,14 @@ Telegram открывает Mini App только по **HTTPS**, поэтому
 6. Откройте бота в Telegram → `/start` → кнопка **«CRM»** (бот ставит её сам, если задан `MINI_APP_URL`).
    Клиент открывает ту же кнопку из лички с ботом и видит только свой режим.
 
+7. В @BotFather выключите Privacy Mode (`/setprivacy` → Disable), добавьте бота в группу с клиентом
+   (сами, с выключенной «анонимностью») и ответьте `/setclient` на любое сообщение клиента.
+   С этого момента каждое фото клиента с подписью становится заказом.
+
 Обновление после изменений в коде: `git pull && docker compose up -d --build`.
+
+Пошаговая инструкция со скриншотами, включая проверку на своём компьютере через временный
+HTTPS-туннель, — [guide.pdf](guide.pdf).
 
 ## Вариант 2 — Google Cloud Run (тот же Google-аккаунт, что и Firebase)
 

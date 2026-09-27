@@ -452,6 +452,16 @@ def group_added_for_admin(title: str, chat_id: int, sees_photos: bool) -> str:
     return "\n".join(lines)
 
 
+def group_left_for_admin(title: str, anonymous: bool) -> str:
+    if anonymous:
+        return (
+            f"🚪 Меня добавили в группу «{e(title)}» анонимно, поэтому я вышел: не видно, "
+            "что это вы. Выключите в группе «Анонимность» (Remain anonymous) у себя "
+            "и добавьте меня снова."
+        )
+    return f"🚪 Меня добавил в группу «{e(title)}» не администратор CRM — я вышел."
+
+
 ADMIN_HELP = """<b>Команды администратора</b>
 /buy 5 140000 170000 — выкуп: закупка, цена клиенту (списывает баланс один раз)
 /cancel 5 — отмена (возвращает списанное один раз; после отправки отмены нет)

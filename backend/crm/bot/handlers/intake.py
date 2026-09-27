@@ -37,6 +37,8 @@ from crm.services.recognition import Recognition, recognize_safely
 logger = logging.getLogger(__name__)
 
 MAX_FILE_BYTES = 20 * 1024 * 1024  # Bot API download limit
+# Telegram's stand-in sender for group admins with "Remain anonymous" on.
+ANONYMOUS_ADMIN_ID = 1087968824
 PARALLEL = 3
 
 
@@ -196,6 +198,11 @@ def build(services: Services, settings: Settings) -> Router:
             logger.warning("Added to chat %s by non-admin %s: leaving", chat.id, adder and adder.id)
             with contextlib.suppress(Exception):
                 await bot.leave_chat(chat.id)
+            anonymous = adder is not None and adder.id == ANONYMOUS_ADMIN_ID
+            text = fmt.group_left_for_admin(chat.title or "группа", anonymous)
+            for admin_id in sorted(settings.admin_ids):
+                with contextlib.suppress(Exception):
+                    await bot.send_message(admin_id, text)
             return
         me = await bot.get_me()
         is_admin = event.new_chat_member.status == ChatMemberStatus.ADMINISTRATOR
