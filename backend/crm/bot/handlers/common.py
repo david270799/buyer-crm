@@ -7,15 +7,16 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, W
 
 from crm.bot import formatting as fmt
 from crm.bot.access import HasRole
-from crm.bot.handlers.reply import answer
+from crm.bot.handlers.reply import answer, answer_privately
 from crm.config import Settings
 from crm.domain.enums import Role
+from crm.domain.errors import CRMError
 from crm.services.common import Actor
 from crm.services.container import Services
 
 _STRANGER_TEXT = "Это закрытая CRM-система.\nВаш Telegram ID: <code>{user_id}</code>"
 SETCLIENT_USAGE = (
-    "Ответьте командой /setclient на любое сообщение клиента в группе\n"
+    "Ответьте командой /setclient на любое сообщение самого клиента (не помощника) в группе\n"
     "или укажите ID: <code>/setclient 123456789 Имя</code>"
 )
 
@@ -67,11 +68,15 @@ async def setclient(
     else:
         parts = (command.args or "").split(maxsplit=1)
         if not parts or not parts[0].isdigit():
-            await answer(message, SETCLIENT_USAGE)
+            await answer_privately(message, SETCLIENT_USAGE)
             return
         telegram_id, name = int(parts[0]), parts[1] if len(parts) > 1 else None
-    change = await asyncio.to_thread(services.clients.set_client, actor, telegram_id, name)
-    await answer(message, fmt.client_set(change))
+    try:
+        change = await asyncio.to_thread(services.clients.set_client, actor, telegram_id, name)
+    except CRMError as exc:
+        await answer_privately(message, f"❌ {fmt.e(exc.user_message)}")
+        return
+    await answer_privately(message, fmt.client_set(change))
 
 
 def build() -> Router:

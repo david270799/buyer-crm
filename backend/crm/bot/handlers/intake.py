@@ -1,13 +1,18 @@
 """Orders from photos: one message with a photo → one new order.
 
-Who: the client in the orders group (or in a private chat with the bot); the
-admin in a private chat (e.g. forwarding a client's photo). Photos the admin
-posts in the group are not orders. Replies to other messages are treated as
-conversation, not orders.
+Who: in the orders group, anyone except the admin — the client and their
+assistants (the admin's own photos there, e.g. of parcels, are not orders);
+in a private chat with the bot, the client or the admin (e.g. forwarding a
+photo). Replies to other messages are conversation, not orders.
 
 Steps: download → square WebP (services/image_service) → Gemini
 (services/recognition) → store the photo → create the order
-(services/intake_service) → reply to the photo with the order number.
+(services/intake_service).
+
+The bot writes nothing in the group. When an order needs the admin
+(model not recognised, no size, not a product, a failure), the admins get a
+private message with the photo and a link to the group message. In a private
+chat the bot answers with the order number.
 
 Photos are processed in parallel (at most a few at a time), but orders from
 one chat are numbered in the order the photos were sent.
@@ -25,9 +30,11 @@ from aiogram.types import ChatMemberUpdated, Message
 
 from crm.bot import formatting as fmt
 from crm.bot.access import audience_for
+from crm.bot.handlers.reply import answer_privately
 from crm.config import Settings
 from crm.domain.enums import Role
 from crm.domain.errors import CRMError
+from crm.domain.models import Order
 from crm.services.common import Actor
 from crm.services.container import Services
 from crm.services.image_service import ORDER_PHOTOS_FOLDER, StoredImage, process_image
@@ -64,9 +71,23 @@ def _file_id(message: Message) -> str | None:
 def is_order_photo(message: Message, role: Role | None) -> bool:
     if _file_id(message) is None or message.reply_to_message is not None:
         return False
-    if role is Role.CLIENT:
-        return True
-    return role is Role.ADMIN and message.chat.type == ChatType.PRIVATE
+    sender = message.from_user
+    if sender is None or sender.is_bot:  # anonymous admins and channels post as bots
+        return False
+    if message.chat.type == ChatType.PRIVATE:
+        return role in (Role.ADMIN, Role.CLIENT)
+    return role is not Role.ADMIN
+
+
+def questions(order: Order, recognition: Recognition) -> list[str]:
+    """What the admin should look at in a new order."""
+    found: list[str] = []
+    if not (order.brand or order.model):
+        reason = f" ({recognition.error})" if recognition.error else ""
+        found.append(f"модель не распознана{reason}")
+    if not order.size:
+        found.append("размер не указан")
+    return found
 
 
 def message_link(chat_id: int, message_id: int) -> str | None:
@@ -109,20 +130,42 @@ class PhotoIntake:
             logger.exception("Could not store an order photo")
             return None
 
+    async def tell_admins(self, bot: Bot, text: str, photo_file_id: str | None = None) -> None:
+        for admin_id in sorted(self._settings.admin_ids):
+            try:
+                if photo_file_id and len(text) <= 1024:
+                    await bot.send_photo(admin_id, photo_file_id, caption=text)
+                else:
+                    await bot.send_message(admin_id, text, disable_web_page_preview=True)
+            except Exception:  # noqa: BLE001 - try once more without the photo
+                with contextlib.suppress(Exception):
+                    await bot.send_message(admin_id, text, disable_web_page_preview=True)
+
     async def handle(
-        self, bot: Bot, message: Message, actor: Actor, *, force: bool = False
+        self,
+        bot: Bot,
+        message: Message,
+        actor: Actor,
+        *,
+        force: bool = False,
+        confirm_to: int | None = None,
     ) -> None:
-        """`message` is the photo; `force` accepts it even if it does not look like an order."""
+        """`message` is the photo; `force` accepts it even if it does not look like an
+        order (then `confirm_to`, the admin who asked, gets the result privately)."""
         chat_id = message.chat.id
+        private = message.chat.type == ChatType.PRIVATE
         if await asyncio.to_thread(self._services.intake.existing, chat_id, message.message_id):
             return  # a redelivered update
         loop = asyncio.get_running_loop()
         previous, mine = self._last.get(chat_id), loop.create_future()
         self._last[chat_id] = mine
+        link = message_link(chat_id, message.message_id)
+        file_id = _file_id(message)
         try:
             async with self._slots:
-                with contextlib.suppress(Exception):
-                    await bot.send_chat_action(chat_id, "typing")
+                if private:
+                    with contextlib.suppress(Exception):
+                        await bot.send_chat_action(chat_id, "typing")
                 prepared = await self._prepare(bot, message)
             if previous is not None:
                 await asyncio.shield(previous)  # keep the numbering in sending order
@@ -141,29 +184,57 @@ class PhotoIntake:
                     recognition=prepared.recognition,
                 ),
             )
-            if not result.already_done:
-                audience = audience_for(actor.role, message.chat)
-                await message.reply(fmt.intake_accepted(result.order, audience))
+            if result.already_done:
+                return
+            order = result.order
+            if private:
+                await message.reply(
+                    fmt.intake_accepted(order, audience_for(actor.role, message.chat))
+                )
+            elif confirm_to is not None:
+                with contextlib.suppress(Exception):
+                    await bot.send_message(confirm_to, fmt.intake_accepted(order, Role.ADMIN))
+            open_questions = questions(order, prepared.recognition)
+            admin_private = private and actor.role is Role.ADMIN
+            if open_questions and not admin_private and confirm_to is None:
+                text = fmt.intake_questions(
+                    order, open_questions, _sender_name(message), message.caption, link
+                )
+                await self.tell_admins(bot, text, file_id)
         except CRMError as exc:
-            await message.reply(f"⚠️ {fmt.e(exc.user_message)}")
-        except Exception:  # noqa: BLE001 - network, storage: the client can resend
+            await self._failed(bot, message, link, exc.user_message)
+        except Exception:  # noqa: BLE001 - network, storage: can be resent
             logger.exception("Could not accept photo %s/%s", chat_id, message.message_id)
-            with contextlib.suppress(Exception):
-                await message.reply(fmt.INTAKE_FAILED)
+            await self._failed(bot, message, link, None)
         finally:
             mine.set_result(None)
             if self._last.get(chat_id) is mine:
                 del self._last[chat_id]
 
+    async def _failed(
+        self, bot: Bot, message: Message, link: str | None, reason: str | None
+    ) -> None:
+        if message.chat.type == ChatType.PRIVATE:
+            text = f"⚠️ {fmt.e(reason)}" if reason else fmt.INTAKE_FAILED
+            with contextlib.suppress(Exception):
+                await message.reply(text)
+            return
+        text = fmt.intake_failed_for_admin(_sender_name(message), link, reason)
+        await self.tell_admins(bot, text, _file_id(message))
+
     async def _not_an_order(self, bot: Bot, message: Message) -> None:
         logger.info("Photo %s/%s does not look like an order", message.chat.id, message.message_id)
-        text = fmt.intake_not_an_order(message_link(message.chat.id, message.message_id))
+        text = fmt.intake_not_an_order(
+            _sender_name(message), message_link(message.chat.id, message.message_id)
+        )
         if message.chat.type == ChatType.PRIVATE:
             await message.reply(text)
             return
-        for admin_id in sorted(self._settings.admin_ids):
-            with contextlib.suppress(Exception):
-                await bot.send_message(admin_id, text)
+        await self.tell_admins(bot, text, _file_id(message))
+
+
+def _sender_name(message: Message) -> str:
+    return message.from_user.full_name if message.from_user else "кто-то"
 
 
 def build(services: Services, settings: Settings) -> Router:
@@ -171,7 +242,12 @@ def build(services: Services, settings: Settings) -> Router:
     intake = PhotoIntake(services, settings)
 
     async def on_photo(message: Message, bot: Bot, actor: Actor | None, role: Role | None) -> None:
-        if actor is None or not is_order_photo(message, role):
+        if not is_order_photo(message, role):
+            return
+        if message.chat.type != ChatType.PRIVATE:
+            # The client and their assistants order on the client's behalf.
+            actor = Actor.order_sender(message.from_user.id)
+        if actor is None:
             return
         await intake.handle(bot, message, actor)
 
@@ -181,15 +257,18 @@ def build(services: Services, settings: Settings) -> Router:
         if role is not Role.ADMIN or actor is None:
             return
         if target is None or _file_id(target) is None:
-            await message.reply("Ответьте командой /add на сообщение с фото товара.")
+            await answer_privately(message, "Ответьте командой /add на сообщение с фото товара.")
             return
         existing = await asyncio.to_thread(
             services.intake.existing, target.chat.id, target.message_id
         )
         if existing:
-            await message.reply(f"Этот заказ уже принят: {fmt.e(existing)}")
+            await answer_privately(message, f"Этот заказ уже принят: {fmt.e(existing)}")
             return
-        await intake.handle(bot, target, actor, force=True)
+        if message.chat.type != ChatType.PRIVATE:
+            with contextlib.suppress(Exception):
+                await message.delete()  # keep the group clean (needs the right to delete)
+        await intake.handle(bot, target, actor, force=True, confirm_to=message.from_user.id)
 
     async def on_added_to_group(event: ChatMemberUpdated, bot: Bot) -> None:
         adder = event.from_user
@@ -207,8 +286,6 @@ def build(services: Services, settings: Settings) -> Router:
         me = await bot.get_me()
         is_admin = event.new_chat_member.status == ChatMemberStatus.ADMINISTRATOR
         sees_photos = bool(me.can_read_all_group_messages) or is_admin
-        with contextlib.suppress(Exception):
-            await bot.send_message(chat.id, fmt.GROUP_WELCOME)
         text = fmt.group_added_for_admin(chat.title or "группа", chat.id, sees_photos)
         for admin_id in sorted(settings.admin_ids):
             with contextlib.suppress(Exception):

@@ -393,17 +393,14 @@ def client_set(change: ClientChange) -> str:
         lines.append("Карточка клиента создана, баланс ₩ 0.")
     elif before.telegram_id != after.telegram_id:
         lines.append(f"Раньше был: <code>{before.telegram_id}</code>. Баланс не изменён.")
-    lines.append("Клиент может открыть CRM кнопкой в личке с ботом (сначала /start).")
+    lines.append(
+        "Открыть CRM может только этот аккаунт (кнопка в личке с ботом, сначала /start). "
+        "Помощники в группе доступа к CRM не получают, но их заказы по фото принимаются."
+    )
     return "\n".join(lines)
 
 
 INTAKE_FAILED = "⚠️ Не получилось принять это фото. Отправьте его, пожалуйста, ещё раз."
-
-GROUP_WELCOME = (
-    "👋 Я принимаю заказы.\n"
-    "Отправьте фото товара, в подписи — размер (и ссылку, если есть). "
-    "На каждое фото создам заказ и отвечу его номером."
-)
 
 
 def intake_accepted(order: Order, audience: Role) -> str:
@@ -428,17 +425,49 @@ def intake_accepted(order: Order, audience: Role) -> str:
     return "\n".join(lines)
 
 
-def intake_not_an_order(link: str | None) -> str:
-    where = f" {e(link)}" if link else ""
+def _where(link: str | None) -> str:
+    return f"\nСообщение: {e(link)}" if link else ""
+
+
+def intake_not_an_order(sender: str, link: str | None) -> str:
     return (
-        f"🤔 Фото от клиента не похоже на заказ — заказ не создан.{where}\n"
-        "Если это заказ, ответьте на это фото командой /add."
+        f"🤔 Фото от {e(sender)} не похоже на заказ — заказ не создан.{_where(link)}\n"
+        "Если это заказ, ответьте на это фото в группе командой /add."
+    )
+
+
+def intake_questions(
+    order: Order, questions: list[str], sender: str, caption: str | None, link: str | None
+) -> str:
+    """Private message to the admins about a new order that needs a look."""
+    view = order_view(order, Role.ADMIN)
+    title = " ".join(part for part in (view["brand"], view["model"]) if part)
+    lines = [f"❓ <b>Заказ {e(order.id)}</b> — нужно проверить"]
+    lines += [f"• {e(q)}" for q in questions]
+    if title:
+        lines.append(e(title))
+    if view["size"]:
+        lines.append(f"Размер: {e(view['size'])}")
+    if caption:
+        short = caption if len(caption) <= 200 else caption[:200] + "…"
+        lines.append(f"Подпись: «{e(short)}»")
+    lines.append(f"Отправил: {e(sender)}{_where(link)}")
+    lines.append("Исправить: CRM → заказ → «Изменить».")
+    return "\n".join(lines)
+
+
+def intake_failed_for_admin(sender: str, link: str | None, reason: str | None) -> str:
+    why = e(reason) if reason else "не удалось скачать или обработать фото"
+    return (
+        f"⚠️ Фото от {e(sender)} не принято: {why}.{_where(link)}\n"
+        "Попросите отправить его ещё раз или ответьте на него в группе командой /add."
     )
 
 
 def group_added_for_admin(title: str, chat_id: int, sees_photos: bool) -> str:
     lines = [
         f"✅ Бот добавлен в группу «{e(title)}».",
+        "В группу я ничего не пишу: заказы по фото принимаю молча, вопросы присылаю вам сюда.",
         f"ID группы: <code>{chat_id}</code>",
         "Чтобы бот работал только в ней, укажите на сервере "
         f"<code>ALLOWED_CHAT_IDS={chat_id}</code>.",

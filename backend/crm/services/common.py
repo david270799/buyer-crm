@@ -45,6 +45,14 @@ class Actor:
         return cls(id=f"tg:{user_id}", role=role, source=Source.TELEGRAM_BOT)
 
     @classmethod
+    def order_sender(cls, user_id: int) -> "Actor":
+        """Someone in the orders group — the client or one of their assistants —
+        sending an order on the client's behalf. Used only to accept photo orders:
+        the Mini App and client commands still check the account's real role, so
+        assistants see nothing there."""
+        return cls(id=f"tg:{user_id}", role=Role.CLIENT, source=Source.TELEGRAM_BOT)
+
+    @classmethod
     def mini_app(cls, user_id: int, role: Role) -> "Actor":
         return cls(id=f"tg:{user_id}", role=role, source=Source.MINI_APP)
 

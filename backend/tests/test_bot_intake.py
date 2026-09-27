@@ -12,7 +12,7 @@ from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.base import BaseSession
 from aiogram.enums import ParseMode
-from aiogram.methods import GetFile, GetMe, LeaveChat, SendMessage
+from aiogram.methods import DeleteMessage, GetFile, GetMe, LeaveChat, SendMessage, SendPhoto
 from aiogram.types import (
     Chat,
     ChatMemberLeft,
@@ -59,12 +59,12 @@ class FakeTelegram(BaseSession):
             return BOT_USER.model_copy(update={"can_read_all_group_messages": self.reads_groups})
         if isinstance(method, GetFile):
             return File(file_id=method.file_id, file_unique_id="u", file_path="photos/p.jpg")
-        if isinstance(method, SendMessage):
+        if isinstance(method, (SendMessage, SendPhoto)):
             return Message(
                 message_id=next(_ids),
                 date=datetime.now(timezone.utc),
                 chat=Chat(id=method.chat_id, type="private"),
-                text=method.text,
+                text=getattr(method, "text", None) or getattr(method, "caption", None),
             )
         return True
 
@@ -78,6 +78,20 @@ class FakeTelegram(BaseSession):
     async def close(self):
         pass
 
+    def to(self, chat_id) -> list[str]:
+        """Texts and photo captions the bot sent to a chat."""
+        return [
+            m.text if isinstance(m, SendMessage) else (m.caption or "")
+            for m in self.sent
+            if isinstance(m, (SendMessage, SendPhoto)) and m.chat_id == chat_id
+        ]
+
+    def photos_to(self, chat_id) -> list[SendPhoto]:
+        return [m for m in self.sent if isinstance(m, SendPhoto) and m.chat_id == chat_id]
+
+    def deleted(self) -> list[int]:
+        return [m.message_id for m in self.sent if isinstance(m, DeleteMessage)]
+
     def messages(self, chat_id=None) -> list[SendMessage]:
         return [
             m
@@ -89,8 +103,9 @@ class FakeTelegram(BaseSession):
 class FakeGemini:
     engine = "gemini-fake"
 
-    def __init__(self, *, not_a_product=False, slow_first=0.0):
+    def __init__(self, *, not_a_product=False, slow_first=0.0, unsure=False):
         self.not_a_product = not_a_product
+        self.unsure = unsure
         self.slow_first = slow_first
         self.calls: list[str | None] = []
         self._lock = threading.Lock()
@@ -105,6 +120,8 @@ class FakeGemini:
         if self.not_a_product:
             return Recognition(not_a_product=True, confidence=0.95, engine=self.engine)
         base = fallback(text)
+        if self.unsure:
+            return Recognition(size=base.size, link=base.link, confidence=0.3, engine=self.engine)
         return Recognition(
             brand="Nike",
             model=f"Dunk {text or ''}".strip(),
@@ -195,10 +212,9 @@ def env(db, clock):
     return make
 
 
-async def test_client_photo_in_group_becomes_an_order(db, env):
+async def test_photo_in_group_becomes_an_order_silently(db, env):
     seed_order(db, "n125")
-    gemini = FakeGemini()
-    e = env(gemini)
+    e = env(FakeGemini())
 
     await e["photo"]("42 https://shop.example.kr/item/7")
 
@@ -207,10 +223,8 @@ async def test_client_photo_in_group_becomes_an_order(db, env):
     assert order["source_url"] == "https://shop.example.kr/item/7"
     assert order["photo_url"].endswith(".webp") and len(e["blobs"].files) == 2
     assert order["recognition"]["engine"] == "gemini-fake"
-    [reply] = e["session"].messages(GROUP)
-    assert "Заказ n126 принят" in reply.text and "Размер: 42" in reply.text
-    assert "shop.example.kr" not in reply.text and "Gemini" not in reply.text  # client sees it
-    assert reply.reply_parameters or reply.reply_to_message_id  # answers that very photo
+    assert e["session"].to(GROUP) == []  # the bot writes nothing in the group
+    assert e["session"].to(ADMIN_TG) == []  # nothing to ask either
     assert balance(db) == START_BALANCE
 
 
@@ -220,13 +234,21 @@ async def test_redelivered_photo_is_accepted_once(db, env):
     await e["photo"]("42", message_id=first.message_id)
 
     assert len(db.list_ids("orders")) == 1
-    assert len(e["session"].messages(GROUP)) == 1
 
 
-async def test_who_can_order(db, env):
+async def test_assistants_in_the_group_can_order(db, env):
     e = env(FakeGemini())
-    await e["photo"]("42", user_id=ADMIN_TG)  # the admin posting in the group: not an order
-    await e["photo"]("42", user_id=555)  # a stranger
+    await e["photo"]("42", user_id=555)  # the client's assistant
+
+    [order_id] = db.list_ids("orders")
+    assert db.get("orders", order_id)["created_by"] == "tg:555"
+    assert e["session"].to(GROUP) == []
+
+
+async def test_what_is_not_an_order(db, env):
+    e = env(FakeGemini())
+    await e["photo"]("42", user_id=ADMIN_TG)  # the admin's own photo in the group
+    await e["photo"]("42", user_id=555, chat_id=555)  # a stranger in a private chat
     await e["photo"](
         "42",
         reply_to=Message(
@@ -237,12 +259,30 @@ async def test_who_can_order(db, env):
         ),
     )  # a reply is conversation
     assert db.list_ids("orders") == []
+    assert e["session"].to(GROUP) == []
 
+
+async def test_admin_in_private_gets_the_order_card(db, env):
+    e = env(FakeGemini())
     await e["photo"]("43 https://shop.example.kr/x", user_id=ADMIN_TG, chat_id=ADMIN_TG)
+
     [order_id] = db.list_ids("orders")
-    [reply] = e["session"].messages(ADMIN_TG)
-    assert f"Заказ {order_id} принят" in reply.text
-    assert "🔒 Ссылка" in reply.text and "Gemini" in reply.text and "/buy" in reply.text
+    [reply] = e["session"].to(ADMIN_TG)
+    assert f"Заказ {order_id} принят" in reply
+    assert "🔒 Ссылка" in reply and "Gemini" in reply and "/buy" in reply
+
+
+async def test_questions_go_to_the_admin_with_the_photo(db, env):
+    e = env(FakeGemini(unsure=True))
+    await e["photo"]("вот эти, срочно", user_id=555)
+
+    [order_id] = db.list_ids("orders")
+    assert e["session"].to(GROUP) == []
+    [question] = e["session"].photos_to(ADMIN_TG)
+    assert question.photo == "big"  # the client's own photo, resent by file_id
+    assert f"Заказ {order_id}" in question.caption
+    assert "модель не распознана" in question.caption and "размер не указан" in question.caption
+    assert "t.me/c/1234567890/" in question.caption and "срочно" in question.caption
 
 
 async def test_not_an_order_goes_to_the_admin_and_add_forces_it(db, env):
@@ -250,16 +290,18 @@ async def test_not_an_order_goes_to_the_admin_and_add_forces_it(db, env):
     photo = await e["photo"]("вот коробка пришла")
 
     assert db.list_ids("orders") == []
-    assert e["session"].messages(GROUP) == []
-    [note] = e["session"].messages(ADMIN_TG)
-    assert "/add" in note.text and "t.me/c/1234567890/" in note.text
+    [note] = e["session"].to(ADMIN_TG)
+    assert "/add" in note and "t.me/c/1234567890/" in note
 
     await e["text"]("/add", reply_to=photo)
-    assert len(db.list_ids("orders")) == 1
-    assert db.get("orders", db.list_ids("orders")[0])["created_by"] == f"tg:{ADMIN_TG}"
+    [order_id] = db.list_ids("orders")
+    assert db.get("orders", order_id)["created_by"] == f"tg:{ADMIN_TG}"
+    assert f"Заказ {order_id} принят" in e["session"].to(ADMIN_TG)[-1]
     await e["text"]("/add", reply_to=photo)
     assert len(db.list_ids("orders")) == 1
-    assert "уже принят" in e["session"].messages(GROUP)[-1].text
+    assert "уже принят" in e["session"].to(ADMIN_TG)[-1]
+    assert e["session"].to(GROUP) == []
+    assert len(e["session"].deleted()) == 2  # the /add commands are removed from the group
 
 
 async def test_photos_sent_together_keep_their_order(db, env):
@@ -286,24 +328,26 @@ async def test_without_gemini_the_caption_is_used(db, env):
     order = db.get("orders", order_id)
     assert order["size"] == "270" and order["brand"] is None
     assert order["source_url"] == "https://shop.example.kr/p"
-    assert "Модель уточнит администратор" in e["session"].messages(GROUP)[0].text
+    assert e["session"].to(GROUP) == []
+    [question] = e["session"].to(ADMIN_TG)
+    assert "модель не распознана (GEMINI_API_KEY не задан)" in question
 
 
-async def test_download_problem_asks_to_resend(db, env):
+async def test_download_problem_is_reported_to_the_admin(db, env):
     e = env(FakeGemini(), broken_download=True)
     await e["photo"]("42")
     assert db.list_ids("orders") == []
-    assert "ещё раз" in e["session"].messages(GROUP)[0].text
+    assert e["session"].to(GROUP) == []
+    assert "не принято" in e["session"].to(ADMIN_TG)[0]
 
 
-async def test_added_to_group_by_admin_greets_and_reports_the_id(db, env):
+async def test_added_to_group_by_admin_stays_silent_and_reports_the_id(db, env):
     e = env(FakeGemini(), reads_groups=False)
     await e["added_by"](ADMIN_TG)
 
-    [welcome] = e["session"].messages(GROUP)
-    assert "принимаю заказы" in welcome.text
-    [note] = e["session"].messages(ADMIN_TG)
-    assert str(GROUP) in note.text and "/setprivacy" in note.text
+    assert e["session"].to(GROUP) == []
+    [note] = e["session"].to(ADMIN_TG)
+    assert str(GROUP) in note and "/setprivacy" in note and "ничего не пишу" in note
     assert not any(isinstance(m, LeaveChat) for m in e["session"].sent)
 
 
@@ -338,17 +382,31 @@ async def test_setclient_by_reply_keeps_the_balance(db, env):
     assert client["balance"] == START_BALANCE  # never touched
     assert e["services"].roles.resolve(3003).value == "client"  # recognised at once
     assert e["services"].roles.resolve(CLIENT_TG) is None
-    assert "Раньше был" in e["session"].messages(GROUP)[-1].text
+    assert e["session"].to(GROUP) == []  # answered privately
+    assert "Раньше был" in e["session"].to(ADMIN_TG)[-1]
+    assert e["session"].deleted()  # the command itself is removed from the group
 
 
 async def test_setclient_rules(db, env):
     e = env(FakeGemini())
     await e["text"](f"/setclient {ADMIN_TG}")
-    assert "администратора" in e["session"].messages(GROUP)[-1].text
+    assert "администратора" in e["session"].to(ADMIN_TG)[-1]
     await e["text"]("/setclient 3003", user_id=CLIENT_TG)  # the client cannot
     await e["text"]("/setclient abc")
-    assert "Ответьте командой /setclient" in e["session"].messages(GROUP)[-1].text
+    assert "Ответьте командой /setclient" in e["session"].to(ADMIN_TG)[-1]
     assert db.get("client_info", "main_client")["telegram_id"] == CLIENT_TG
+    assert e["session"].to(GROUP) == []
+
+
+async def test_assistants_get_no_client_access(db, env):
+    e = env(FakeGemini())
+    for command in ("/balance", "/history", "/order 1", "/shipments"):
+        await e["text"](command, user_id=555)
+    await e["text"]("/start", user_id=555, chat_id=555)
+
+    assert e["session"].to(GROUP) == []
+    assert "закрытая" in e["session"].to(555)[0]  # no menu, no CRM button
+    assert e["services"].roles.resolve(555) is None  # the Mini App says "нет доступа"
 
 
 def test_setclient_creates_a_missing_client_with_zero_balance(db, services, admin):
