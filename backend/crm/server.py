@@ -80,6 +80,7 @@ def build_app(settings: Settings, demo: bool):
         demo_client_id=client_id,
         static_dir=web_dist,
         media_dir=media_dir,
+        bot_running=run_bot,
     )
     return create_app(services, config, lifespan=lifespan)
 

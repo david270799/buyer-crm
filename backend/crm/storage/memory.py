@@ -29,6 +29,7 @@ from crm.storage.base import (
     T,
     Transaction,
     TransactionContentionError,
+    run_callbacks,
 )
 
 _SCALARS = (type(None), bool, int, float, str, bytes, datetime)
@@ -135,7 +136,8 @@ class InMemoryDatabase:
                 if tx.is_stale():
                     continue
                 self._commit(tx.writes)
-                return result
+            run_callbacks(tx.callbacks)
+            return result
         raise TransactionContentionError("Transaction aborted by concurrent writes")
 
     def _version(self, collection: str, doc_id: str) -> int:
@@ -187,6 +189,10 @@ class _MemoryTransaction:
         self._read_versions: dict[tuple[str, str], int] = {}
         self._queried: dict[str, int] = {}
         self.writes: list[tuple[str, str, str, Doc]] = []
+        self.callbacks: list[Callable[[], None]] = []
+
+    def after_commit(self, callback: Callable[[], None]) -> None:
+        self.callbacks.append(callback)
 
     def _before_read(self) -> None:
         if self.writes:

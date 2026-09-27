@@ -17,6 +17,7 @@ from crm.services.events import EventRecorder, EventService
 from crm.services.finance_service import FinanceService
 from crm.services.image_service import ImageService
 from crm.services.ledger import BalanceLedger
+from crm.services.notifications import NotificationService
 from crm.services.order_service import OrderService
 from crm.services.sequences import SequenceAllocator
 from crm.services.shipment_service import ShipmentService
@@ -31,6 +32,7 @@ class Services:
     finance: FinanceService
     roles: RoleResolver
     events: EventService
+    notifications: NotificationService
     # None when no file storage is configured (uploads are then refused).
     images: ImageService | None = None
 
@@ -64,5 +66,8 @@ def build_services(
         ),
         roles=RoleResolver(db, clients_repo, admin_ids),
         events=EventService(db, clock, events_repo, EventReadsRepository()),
+        notifications=NotificationService(
+            db, clock, events_repo, settings_repo, clients_repo, recorder, auditor, admin_ids
+        ),
         images=ImageService(blob_storage, clock) if blob_storage is not None else None,
     )

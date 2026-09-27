@@ -62,6 +62,10 @@ class Event:
     shipment_id: str | None = None
     amount_krw: int | None = None
     created_at: datetime | None = None
+    # Telegram delivery (crm.domain.notifications); never shown in the feed.
+    delivery: str | None = None
+    delivery_attempts: int = 0
+    delivered_to: list[int] = field(default_factory=list)
 
     @classmethod
     def from_doc(cls, doc_id: str, data: dict[str, Any]) -> "Event":
@@ -80,6 +84,17 @@ class Event:
             body=data.get("body") or None,
             order_ids=[str(i) for i in order_ids] if isinstance(order_ids, list) else [],
             shipment_id=data.get("shipment_id") or None,
-            amount_krw=amount if isinstance(amount, int) and not isinstance(amount, bool) else None,
+            amount_krw=amount if _is_int(amount) else None,
             created_at=created if isinstance(created, datetime) else None,
+            delivery=data.get("delivery") if isinstance(data.get("delivery"), str) else None,
+            delivery_attempts=_int(data.get("delivery_attempts")),
+            delivered_to=[i for i in data.get("delivered_to") or [] if _is_int(i)],
         )
+
+
+def _is_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _int(value: Any) -> int:
+    return value if _is_int(value) else 0

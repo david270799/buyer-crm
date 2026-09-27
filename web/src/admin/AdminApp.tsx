@@ -2,8 +2,8 @@ import { LayoutGrid, Package, Plus, Settings, Truck, Wallet } from "lucide-react
 import { useState } from "react";
 import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 
-import { useCreateOrder, useOverview, useSetRate, useSettings } from "../api/hooks";
-import type { Shipment } from "../api/types";
+import { useCreateOrder, useOverview, useSetNotifications, useSetRate, useSettings } from "../api/hooks";
+import type { NotificationSettings, NotifyLevel, NotifyRecipient, Shipment } from "../api/types";
 import { type NavItem, PageHead, Shell } from "../components/Layout";
 import { BalanceCard } from "../components/money";
 import { OrderCard } from "../components/orders";
@@ -206,6 +206,95 @@ function FinancePage() {
   );
 }
 
+const RECIPIENTS: { value: NotifyRecipient; label: string }[] = [
+  { value: "off", label: "Выключены" },
+  { value: "admins", label: "Только мне" },
+  { value: "client", label: "Клиенту" },
+];
+
+const LEVELS: { value: NotifyLevel; label: string }[] = [
+  { value: "important", label: "Только важные" },
+  { value: "all", label: "Все" },
+];
+
+function NotificationsCard({ settings }: { settings: NotificationSettings }) {
+  const toast = useToast();
+  const save = useSetNotifications();
+  const change = (body: { recipient?: NotifyRecipient; level?: NotifyLevel }) =>
+    save.mutate(body, {
+      onSuccess: () => toast("Сохранено"),
+      onError: (e) => toast(errorText(e), "error"),
+    });
+  const on = settings.recipient !== "off";
+  return (
+    <div className="card pad stack">
+      <h3>Уведомления в Telegram</h3>
+      <div className="small muted">
+        Бот пишет в личку о том же, что появляется в колокольчике: без закупочных цен и внутренних
+        комментариев. «Только мне» — чтобы проверить, как это выглядит, до того как включить клиенту.
+      </div>
+      <div className="stack" style={{ gap: 8 }}>
+        <div className="small muted">Кому</div>
+        <div className="chips">
+          {RECIPIENTS.map((r) => (
+            <button
+              key={r.value}
+              className={`chip${settings.recipient === r.value ? " active" : ""}`}
+              disabled={save.isPending}
+              onClick={() => settings.recipient !== r.value && change({ recipient: r.value })}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {on && (
+        <div className="stack" style={{ gap: 8 }}>
+          <div className="small muted">Что отправлять</div>
+          <div className="chips">
+            {LEVELS.map((l) => (
+              <button
+                key={l.value}
+                className={`chip${settings.level === l.value ? " active" : ""}`}
+                disabled={save.isPending}
+                onClick={() => settings.level !== l.value && change({ level: l.value })}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+          <div className="tiny faint">
+            Важные: отмена, перезаказ, отправка, стоимость доставки, корректировка баланса, «требует внимания».
+          </div>
+        </div>
+      )}
+      {settings.recipient === "client" && !settings.client_has_telegram && (
+        <div className="banner warning small">У клиента не указан Telegram ID — отправлять некому.</div>
+      )}
+      {on && !settings.bot_running && (
+        <div className="banner warning small">
+          Бот сейчас не запущен на сервере — уведомления уйдут, когда он заработает (если прошло меньше суток).
+        </div>
+      )}
+      {on && settings.last_error && (
+        <div className="banner negative small">
+          Последняя отправка не удалась: {settings.last_error}
+          {settings.last_error_at ? ` · ${dateTime(settings.last_error_at)}` : ""}
+        </div>
+      )}
+      {on && settings.last_sent_at && !settings.last_error && (
+        <div className="tiny faint">Последнее уведомление отправлено {dateTime(settings.last_sent_at)}</div>
+      )}
+      {on && (
+        <div className="tiny faint">
+          Получатель должен хотя бы раз открыть бота в личке и нажать «Start» — иначе Telegram не даёт боту
+          написать первым.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsPage({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
   const toast = useToast();
   const settings = useSettings();
@@ -244,6 +333,7 @@ function SettingsPage({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
             </button>
           </div>
         </div>
+        {settings.data?.notifications && <NotificationsCard settings={settings.data.notifications} />}
         <div className="card pad stack">
           <h3>Фото</h3>
           <div className="small muted">

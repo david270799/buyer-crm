@@ -42,6 +42,7 @@ from crm.domain.errors import (
 )
 from crm.domain.events import Event
 from crm.domain.models import LedgerEntry, Order
+from crm.domain.notifications import NotificationSettings
 from crm.domain.timeutil import BUSINESS_TZ
 from crm.domain.views import ledger_view, order_view, shipment_view
 from crm.services.common import Actor
@@ -73,6 +74,8 @@ class ApiConfig:
     demo_client_id: int | None = None
     static_dir: Path | None = None
     media_dir: Path | None = None
+    # The bot (and with it the notification sender) runs in this process.
+    bot_running: bool = False
 
 
 @dataclass(frozen=True)
@@ -189,6 +192,11 @@ class MoneyIn(BaseModel):
 
 class RateIn(BaseModel):
     krw_per_usd: Decimal
+
+
+class NotificationsIn(BaseModel):
+    recipient: Literal["off", "admins", "client"] | None = None
+    level: Literal["important", "all"] | None = None
 
 
 # --- serialisation --------------------------------------------------------
@@ -556,6 +564,18 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         )
         return {"entry": ledger_view(result.entry, p.role), "already_done": result.already_done}
 
+    def notifications_json(actor: Actor, current: NotificationSettings) -> dict[str, Any]:
+        return {
+            "recipient": current.recipient.value,
+            "level": current.level.value,
+            "updated_at": current.updated_at,
+            "last_sent_at": current.last_sent_at,
+            "last_error": current.last_error if current.has_recent_error else None,
+            "last_error_at": current.last_error_at if current.has_recent_error else None,
+            "client_has_telegram": services.notifications.client_has_telegram(actor),
+            "bot_running": config.bot_running,
+        }
+
     @app.get("/api/settings")
     def get_settings(p: Admin) -> dict[str, Any]:
         current = services.finance.get_settings(p.actor)
@@ -563,7 +583,16 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "krw_per_usd": _rate(current.krw_per_usd),
             "updated_at": current.updated_at,
             "uploads_enabled": services.images is not None,
+            "notifications": notifications_json(
+                p.actor, services.notifications.get_settings(p.actor)
+            ),
         }
+
+    @app.put("/api/settings/notifications")
+    def set_notifications(body: NotificationsIn, p: Admin) -> dict[str, Any]:
+        changes = body.model_dump(exclude_none=True)
+        updated = services.notifications.update_settings(p.actor, **changes)
+        return notifications_json(p.actor, updated)
 
     @app.put("/api/settings/rate")
     def set_rate(body: RateIn, p: Admin) -> dict[str, Any]:

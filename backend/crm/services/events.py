@@ -1,15 +1,20 @@
 """Events: written inside business transactions, read by the Mini App."""
 
+import contextlib
+import logging
 import threading
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from crm.domain.events import Event, EventType, is_important
 from crm.domain.ids import normalize_order_id
+from crm.domain.notifications import DeliveryStatus
 from crm.repositories import EventReadsRepository, EventRepository
 from crm.services.common import Actor, Clock
 from crm.storage import Database, Transaction
+
+logger = logging.getLogger(__name__)
 
 _PAGE = 100
 _MAX_PAGES = 5
@@ -24,6 +29,23 @@ class EventRecorder:
         self._repo = repo
         self._lock = threading.Lock()
         self._last: datetime | None = None
+        self._listeners: list[Callable[[], None]] = []
+
+    def add_listener(self, callback: Callable[[], None]) -> None:
+        """`callback` is told that an event has been committed. It runs in the
+        thread of the business operation: keep it instant."""
+        self._listeners.append(callback)
+
+    def remove_listener(self, callback: Callable[[], None]) -> None:
+        with contextlib.suppress(ValueError):
+            self._listeners.remove(callback)
+
+    def _notify_listeners(self) -> None:
+        for callback in list(self._listeners):
+            try:
+                callback()
+            except Exception:  # noqa: BLE001 - never break the business operation
+                logger.warning("Event listener failed", exc_info=True)
 
     def _stamp(self, now: datetime) -> datetime:
         # Strictly increasing timestamps keep "before" pagination exact even
@@ -60,8 +82,11 @@ class EventRecorder:
                 "amount_krw": amount_krw,
                 "created_at": self._stamp(now),
                 "actor": actor.id,
+                "delivery": DeliveryStatus.PENDING.value,
             },
         )
+        if self._listeners:
+            tx.after_commit(self._notify_listeners)
 
 
 @dataclass(frozen=True)

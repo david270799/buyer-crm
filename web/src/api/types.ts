@@ -164,3 +164,17 @@ export interface OrderFilters {
   offset?: number;
   limit?: number;
 }
+
+export type NotifyRecipient = "off" | "admins" | "client";
+export type NotifyLevel = "important" | "all";
+
+export interface NotificationSettings {
+  recipient: NotifyRecipient;
+  level: NotifyLevel;
+  updated_at: string | null;
+  last_sent_at: string | null;
+  last_error: string | null;
+  last_error_at: string | null;
+  client_has_telegram: boolean;
+  bot_running: boolean;
+}

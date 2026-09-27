@@ -26,6 +26,24 @@ REBUY_USAGE = (
     "Пример: /rebuy 5 150000 185000 https://shop.kr/item Магазин отменил заказ"
 )
 RATE_USAGE = "Формат: /rate <KRW за 1 USD>\nПример: /rate 1350"
+NOTIFY_USAGE = (
+    "Формат: /notify [off | me | client] [important | all]\n"
+    "Пример: /notify me all — все уведомления только вам, для проверки"
+)
+
+_NOTIFY_WORDS = {
+    "off": ("recipient", "off"),
+    "выкл": ("recipient", "off"),
+    "me": ("recipient", "admins"),
+    "мне": ("recipient", "admins"),
+    "admins": ("recipient", "admins"),
+    "client": ("recipient", "client"),
+    "клиенту": ("recipient", "client"),
+    "important": ("level", "important"),
+    "важные": ("level", "important"),
+    "all": ("level", "all"),
+    "все": ("level", "all"),
+}
 
 
 def _tokens(args: str | None) -> list[str]:
@@ -112,3 +130,14 @@ def parse_rebuy(args: str | None) -> tuple[str, int, int, str | None, str | None
     if rest.lower().startswith(("http://", "https://")):
         link, _, rest = rest.partition(" ")
     return order_id, purchase, price, link, rest.strip() or None
+
+
+def parse_notify(args: str | None) -> dict[str, str]:
+    """`/notify me all` → {"recipient": "admins", "level": "all"}; empty → {}."""
+    result: dict[str, str] = {}
+    for token in (args or "").lower().split():
+        field = _NOTIFY_WORDS.get(token)
+        if field is None or field[0] in result:
+            raise ValidationError(NOTIFY_USAGE)
+        result[field[0]] = field[1]
+    return result

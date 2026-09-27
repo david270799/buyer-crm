@@ -307,3 +307,16 @@ async def test_rebuy_command(db, bot_env):
     assert "₩ 830,000 → <b>₩ 815,000</b>" in reply
     assert "Закупка" not in group_reply and "150,000" not in group_reply
     assert balance(db) == START_BALANCE - 190_000
+
+
+async def test_notify_command(db, bot_env):
+    (current,) = await bot_env("/notify")
+    (updated,) = await bot_env("/notify me all")
+    (wrong,) = await bot_env("/notify everyone")
+    client_reply = await bot_env("/notify client", user_id=CLIENT_TG)
+
+    assert "Кому: выключены" in current
+    assert "Кому: только мне (проверка)" in updated and "Что: все" in updated
+    assert "Формат: /notify" in wrong
+    assert db.get("settings", "notifications")["recipient"] == "admins"
+    assert all("Кому" not in text for text in client_reply)

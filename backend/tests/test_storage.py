@@ -139,3 +139,49 @@ def test_firestore_scan_cache_is_dropped_by_our_writes_and_expires():
     time.sleep(0.6)
     assert sorted(dict(db.scan("orders"))) == ["n1", "n2", "n3"]  # expired, re-read
     assert [i for i, _ in db.scan("shipments")] == []  # uncached collections read directly
+
+
+def test_after_commit_runs_once_and_only_on_success(db):
+    seed(db, "c", "exists", {"v": 1})
+    calls = []
+
+    def ok(tx):
+        tx.get("c", "exists")
+        tx.set("c", "a", {"v": 1})
+        tx.after_commit(lambda: calls.append(db.get("c", "a")))  # sees the committed data
+
+    db.run_transaction(ok)
+    assert calls == [{"v": 1}]
+
+    def fails(tx):
+        tx.after_commit(lambda: calls.append("must not run"))
+        tx.create("c", "exists", {"v": 2})
+
+    with pytest.raises(DocumentExistsError):
+        db.run_transaction(fails)
+    assert calls == [{"v": 1}]
+
+
+def test_after_commit_error_does_not_undo_the_commit(db):
+    def fn(tx):
+        tx.set("c", "a", {"v": 1})
+        tx.after_commit(lambda: 1 / 0)
+
+    db.run_transaction(fn)
+    assert db.get("c", "a") == {"v": 1}
+
+
+def test_memory_after_commit_ignores_retried_attempts():
+    db = InMemoryDatabase()
+    seed(db, "c", "doc", {"value": 1})
+    calls = []
+
+    def fn(tx):
+        value = tx.get("c", "doc")["value"]
+        if not calls and value == 1:
+            db.run_transaction(lambda other: other.update("c", "doc", {"value": 10}))
+        tx.update("c", "doc", {"value": value + 1})
+        tx.after_commit(lambda: calls.append(value))
+
+    db.run_transaction(fn)
+    assert calls == [10]

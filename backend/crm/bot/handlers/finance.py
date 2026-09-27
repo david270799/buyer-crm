@@ -62,6 +62,19 @@ async def rate(message: Message, command: CommandObject, services: Services, act
     await answer(message, fmt.rate_set(updated.krw_per_usd))
 
 
+async def notify(
+    message: Message, command: CommandObject, services: Services, actor: Actor
+) -> None:
+    changes = parsing.parse_notify(command.args)
+    notifications = services.notifications
+    if changes:
+        current = await asyncio.to_thread(notifications.update_settings, actor, **changes)
+    else:
+        current = await asyncio.to_thread(notifications.get_settings, actor)
+    has_telegram = await asyncio.to_thread(notifications.client_has_telegram, actor)
+    await answer(message, fmt.notify_settings(current, has_telegram))
+
+
 def build() -> Router:
     router = Router(name="finance")
     router.message.register(balance, Command("balance"), HasRole(Role.ADMIN, Role.CLIENT))
@@ -69,4 +82,5 @@ def build() -> Router:
     router.message.register(deposit, Command("deposit"), HasRole(Role.ADMIN))
     router.message.register(adjust, Command("adjust"), HasRole(Role.ADMIN))
     router.message.register(rate, Command("rate"), HasRole(Role.ADMIN))
+    router.message.register(notify, Command("notify"), HasRole(Role.ADMIN))
     return router

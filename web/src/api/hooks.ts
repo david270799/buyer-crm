@@ -7,6 +7,9 @@ import type {
   BulkResult,
   LedgerItem,
   Me,
+  NotificationSettings,
+  NotifyLevel,
+  NotifyRecipient,
   Order,
   OrderFilters,
   OrdersPage,
@@ -87,9 +90,12 @@ export const useSettings = () =>
   useQuery({
     queryKey: keys.settings,
     queryFn: () =>
-      get<{ krw_per_usd: number | null; updated_at: string | null; uploads_enabled: boolean }>(
-        "/api/settings",
-      ),
+      get<{
+        krw_per_usd: number | null;
+        updated_at: string | null;
+        uploads_enabled: boolean;
+        notifications: NotificationSettings;
+      }>("/api/settings"),
   });
 
 export const useUnread = () =>
@@ -263,6 +269,15 @@ export const useSetRate = () => {
   return useMutation({
     mutationFn: (krw_per_usd: number) => put<{ krw_per_usd: number }>("/api/settings/rate", { krw_per_usd }),
     onSuccess: refresh,
+  });
+};
+
+export const useSetNotifications = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { recipient?: NotifyRecipient; level?: NotifyLevel }) =>
+      put<NotificationSettings>("/api/settings/notifications", body),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.settings }),
   });
 };
 

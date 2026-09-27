@@ -12,8 +12,15 @@ from crm.domain.enums import (
     OrderStatus,
     Role,
 )
+from crm.domain.events import Event, EventType
 from crm.domain.models import LedgerEntry, Order, Shipment
 from crm.domain.money import format_krw, format_usd
+from crm.domain.notifications import (
+    LEVEL_LABELS,
+    RECIPIENT_LABELS,
+    NotificationSettings,
+    NotifyRecipient,
+)
 from crm.domain.timeutil import format_date, format_datetime
 from crm.domain.views import order_view
 from crm.services.finance_service import BalanceView, LedgerResult
@@ -325,6 +332,53 @@ def history(entries: list[LedgerEntry]) -> str:
     return "\n".join(lines)
 
 
+EVENT_ICONS = {
+    EventType.ORDER_CREATED: "🆕",
+    EventType.ORDER_BOUGHT: "🛍",
+    EventType.ORDER_REBOUGHT: "🔁",
+    EventType.ORDER_CANCELLED: "✖️",
+    EventType.ORDER_WAREHOUSE: "📦",
+    EventType.ORDER_DELIVERED: "✅",
+    EventType.ORDER_STATUS: "•",
+    EventType.COMMENT: "💬",
+    EventType.ATTENTION: "⚠️",
+    EventType.SHIPMENT_SENT: "🚚",
+    EventType.SHIPMENT_UPDATED: "🚚",
+    EventType.SHIPPING_COST: "💸",
+    EventType.DEPOSIT: "💰",
+    EventType.ADJUSTMENT: "⚖️",
+    EventType.RATE: "💱",
+}
+
+
+def notification(event: Event) -> str:
+    """A private-chat notification: the same client-safe text as the bell."""
+    icon = EVENT_ICONS.get(event.type, "🔔") if event.type else "🔔"
+    lines = [f"{icon} <b>{e(event.title)}</b>"]
+    if event.body:
+        lines.append(e(event.body))
+    if event.amount_krw:
+        lines.append(f"Баланс: <b>{format_krw(event.amount_krw, signed=True)}</b>")
+    return "\n".join(lines)
+
+
+def notify_settings(settings: NotificationSettings, client_has_telegram: bool) -> str:
+    lines = [
+        "<b>Уведомления в Telegram</b>",
+        f"Кому: {RECIPIENT_LABELS[settings.recipient]}",
+        f"Что: {LEVEL_LABELS[settings.level]}",
+    ]
+    if settings.recipient is NotifyRecipient.CLIENT and not client_has_telegram:
+        lines.append("⚠️ У клиента не указан Telegram ID — отправлять некому.")
+    if settings.has_recent_error and settings.last_error:
+        lines.append(f"⚠️ Последняя отправка не удалась: {e(settings.last_error)}")
+    lines.append(
+        "\n/notify off — выключить\n/notify me — только мне (проверка)\n"
+        "/notify client — клиенту\n/notify important | all — только важные или все"
+    )
+    return "\n".join(lines)
+
+
 ADMIN_HELP = """<b>Команды администратора</b>
 /buy 5 140000 170000 — выкуп: закупка, цена клиенту (списывает баланс один раз)
 /cancel 5 — отмена (возвращает списанное один раз; после отправки отмены нет)
@@ -338,6 +392,7 @@ ADMIN_HELP = """<b>Команды администратора</b>
 /deposit 5000000 [комментарий] — пополнение
 /adjust -15000 причина — корректировка (комментарий увидит клиент)
 /rate 1350 — курс KRW за 1 USD
+/notify — уведомления в личку (выкл / мне / клиенту; важные / все)
 /whoami — ваш Telegram ID"""
 
 CLIENT_HELP = """<b>Команды</b>

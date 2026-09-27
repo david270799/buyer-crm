@@ -181,6 +181,7 @@ def test_client_sees_no_admin_fields_anywhere(db, api):
         ("POST", "/api/finance/deposit", {"amount_krw": 1, "idempotency_key": "abcdefgh"}),
         ("POST", "/api/finance/adjust", {"amount_krw": 1, "idempotency_key": "abcdefgh"}),
         ("PUT", "/api/settings/rate", {"krw_per_usd": 1300}),
+        ("PUT", "/api/settings/notifications", {"recipient": "client"}),
         ("GET", "/api/settings", None),
     ],
 )
@@ -466,3 +467,18 @@ def test_notifications_feed_and_read_state(db, api):
     after = api("GET", "/api/events/unread", who=CLIENT_TG).json()
     assert after["total"] == 0 and after["seen_at"] is not None
     assert api("GET", "/api/events/unread").json()["total"] == 2  # admin separate
+
+
+def test_notification_settings(db, api):
+    initial = api("GET", "/api/settings").json()["notifications"]
+    assert initial["recipient"] == "off" and initial["level"] == "important"
+    assert initial["client_has_telegram"] is True and initial["bot_running"] is False
+
+    updated = api("PUT", "/api/settings/notifications", json={"recipient": "admins"}).json()
+    assert updated["recipient"] == "admins" and updated["level"] == "important"
+    updated = api("PUT", "/api/settings/notifications", json={"level": "all"}).json()
+    assert updated["recipient"] == "admins" and updated["level"] == "all"
+
+    bad = api("PUT", "/api/settings/notifications", json={"recipient": "everyone"})
+    assert bad.status_code == 422 and "error" in bad.json()
+    assert db.get("settings", "notifications")["recipient"] == "admins"

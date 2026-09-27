@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import logging
 
 from aiogram import Bot, Dispatcher
@@ -14,6 +16,7 @@ from aiogram.types import (
 
 from crm.bot.access import AccessMiddleware
 from crm.bot.handlers import build_router
+from crm.bot.notifier import TelegramNotifier
 from crm.config import Settings
 from crm.domain.errors import ConfigurationError
 from crm.services.container import Services
@@ -34,6 +37,7 @@ ADMIN_COMMANDS = [
     BotCommand(command="deposit", description="Пополнение баланса"),
     BotCommand(command="adjust", description="Корректировка баланса"),
     BotCommand(command="rate", description="Курс KRW/USD"),
+    BotCommand(command="notify", description="Уведомления в личку"),
     BotCommand(command="help", description="Все команды"),
 ]
 
@@ -81,11 +85,24 @@ async def run_bot(
         if settings.mini_app_url:
             await set_menu_button(bot, settings.mini_app_url)
         dp = create_dispatcher(services, settings)
-        await dp.start_polling(
-            bot, allowed_updates=dp.resolve_used_update_types(), handle_signals=handle_signals
-        )
+        notifier = TelegramNotifier(bot, services.notifications, settings.mini_app_url)
+        notifier_task = asyncio.create_task(notifier.run(), name="telegram-notifier")
+        notifier_task.add_done_callback(_report_notifier_exit)
+        try:
+            await dp.start_polling(
+                bot, allowed_updates=dp.resolve_used_update_types(), handle_signals=handle_signals
+            )
+        finally:
+            notifier_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await notifier_task
     finally:
         await bot.session.close()
+
+
+def _report_notifier_exit(task: asyncio.Task) -> None:
+    if not task.cancelled() and task.exception() is not None:
+        logger.error("Telegram notifications stopped", exc_info=task.exception())
 
 
 async def set_commands(bot: Bot, admin_ids: frozenset[int]) -> None:

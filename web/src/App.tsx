@@ -1,10 +1,12 @@
 import { LogIn, ShieldAlert, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { AdminApp } from "./admin/AdminApp";
 import { ApiError, hasCredentials, setDemoRole } from "./api/client";
 import { useConfig, useMe } from "./api/hooks";
 import { ClientApp } from "./client/ClientApp";
+import { takeDeepLink } from "./lib/deeplink";
 import { colorScheme, setupTelegram, syncChrome } from "./telegram";
 
 function useTheme() {
@@ -64,8 +66,15 @@ function DemoLogin({ onPick }: { onPick: (role: "admin" | "client") => void }) {
   );
 }
 
+// Read once at startup: a Telegram notification's "Открыть в CRM" button.
+const initialDeepLink = takeDeepLink();
+
 export function App() {
   useTheme();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (initialDeepLink) navigate(initialDeepLink, { replace: true });
+  }, [navigate]);
   const [credentials, setCredentials] = useState(hasCredentials());
   const config = useConfig();
   const me = useMe(credentials);

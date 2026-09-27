@@ -6,12 +6,15 @@ guarantees: all reads first, then writes; the whole function is re-run on
 contention; commit is all-or-nothing.
 """
 
+import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Protocol, TypeVar
 
 Doc = dict[str, Any]
 T = TypeVar("T")
+
+logger = logging.getLogger(__name__)
 
 
 class StorageError(Exception):
@@ -68,6 +71,11 @@ class Transaction(Reader, Protocol):
 
     def update(self, collection: str, doc_id: str, data: Doc) -> None: ...
 
+    def after_commit(self, callback: Callable[[], None]) -> None:
+        """Run `callback` once this transaction has committed (never if it
+        fails). Callbacks must be instant; their errors are logged, not raised."""
+        ...
+
 
 class Database(Reader, Protocol):
     def run_transaction(self, fn: Callable[[Transaction], T]) -> T: ...
@@ -79,3 +87,12 @@ class Database(Reader, Protocol):
     def list_ids(self, collection: str) -> list[str]: ...
 
     def new_id(self) -> str: ...
+
+
+def run_callbacks(callbacks: Sequence[Callable[[], None]]) -> None:
+    """After-commit callbacks: the commit already happened, so they must not raise."""
+    for callback in callbacks:
+        try:
+            callback()
+        except Exception:  # noqa: BLE001
+            logger.warning("After-commit callback failed", exc_info=True)

@@ -22,6 +22,7 @@ from crm.storage.base import (
     T,
     Transaction,
     TransactionContentionError,
+    run_callbacks,
 )
 
 
@@ -185,13 +186,15 @@ class FirestoreDatabase:
     def _run_once(self, fn: Callable[[Transaction], T]) -> T:
         transaction = self._client.transaction(max_attempts=self._max_attempts)
         touched: set[str] = set()
+        callbacks: list[Callable[[], None]] = []
 
         @transactional
         def _run(txn):
-            return fn(_FirestoreTransaction(self, txn, touched))
+            callbacks.clear()  # only the attempt that commits counts
+            return fn(_FirestoreTransaction(self, txn, touched, callbacks))
 
         try:
-            return _run(transaction)
+            result = _run(transaction)
         except (gexc.GoogleAPIError, ValueError, FirestoreReadAfterWriteError) as exc:
             # Only Firestore-originated errors are translated; application
             # errors raised by `fn` propagate unchanged.
@@ -204,6 +207,8 @@ class FirestoreDatabase:
             for name in touched:
                 if name in self._scan_caches:
                     self._scan_caches[name].invalidate()
+        run_callbacks(callbacks)
+        return result
 
 
 def _get_many(client: Client, refs: list, transaction) -> dict[str, Doc | None]:
@@ -216,10 +221,16 @@ def _get_many(client: Client, refs: list, transaction) -> dict[str, Doc | None]:
 
 
 class _FirestoreTransaction:
-    def __init__(self, db: FirestoreDatabase, txn, touched: set[str]):
+    def __init__(
+        self, db: FirestoreDatabase, txn, touched: set[str], callbacks: list[Callable[[], None]]
+    ):
         self._db = db
         self._txn = txn
         self._touched = touched
+        self._callbacks = callbacks
+
+    def after_commit(self, callback: Callable[[], None]) -> None:
+        self._callbacks.append(callback)
 
     def get(self, collection: str, doc_id: str) -> Doc | None:
         snapshot = self._db._ref(collection, doc_id).get(transaction=self._txn)

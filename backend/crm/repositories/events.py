@@ -1,8 +1,10 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from crm.domain.events import Event
 from crm.storage import Filter, OrderBy, Reader, Transaction
+
+_EPOCH = datetime.min.replace(tzinfo=UTC)  # comparable with the stored (aware) times
 
 
 class EventRepository:
@@ -35,12 +37,25 @@ class EventRepository:
         )
         return [Event.from_doc(doc_id, data) for doc_id, data in rows]
 
+    def pending_delivery(self, reader: Reader, limit: int = 50) -> list[Event]:
+        """Events waiting for a Telegram notification, oldest first.
+
+        Sorted here: an equality filter plus ordering on another field would
+        need a composite index.
+        """
+        rows = reader.query(self.collection, [Filter("delivery", "==", "pending")], limit=limit)
+        events = [Event.from_doc(doc_id, data) for doc_id, data in rows]
+        return sorted(events, key=lambda e: e.created_at or _EPOCH)
+
+    def set_delivery(self, tx: Transaction, event_id: str, data: dict[str, Any]) -> None:
+        tx.update(self.collection, event_id, data)
+
     def for_order(self, reader: Reader, order_id: str, limit: int = 200) -> list[Event]:
         rows = reader.query(
             self.collection, [Filter("order_ids", "array_contains", order_id)], limit=limit
         )
         events = [Event.from_doc(doc_id, data) for doc_id, data in rows]
-        return sorted(events, key=lambda e: e.created_at or datetime.min, reverse=True)
+        return sorted(events, key=lambda e: e.created_at or _EPOCH, reverse=True)
 
 
 class EventReadsRepository:
