@@ -1,7 +1,12 @@
-"""Run the bot with long polling: `python -m crm.bot` (from the backend/ directory)."""
+"""Run the bot with long polling (from the backend/ directory).
+
+python -m crm.bot           # real Firebase from .env
+python -m crm.bot --demo    # sample data in memory, Firebase not used
+"""
 
 import asyncio
 import logging
+import os
 import sys
 
 from aiogram.exceptions import TelegramNetworkError
@@ -11,14 +16,37 @@ from crm.config import load_settings
 from crm.domain.errors import ConfigurationError
 
 
-async def _main() -> None:
+def _demo_client_id() -> int | None:
+    raw = os.environ.get("DEMO_CLIENT_TELEGRAM_ID", "").strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        raise ConfigurationError(
+            f"DEMO_CLIENT_TELEGRAM_ID: «{raw}» не является числовым Telegram ID."
+        ) from None
+
+
+async def _main(demo: bool) -> None:
     from crm.bot.app import create_bot, run_bot
-    from crm.firebase import create_database
     from crm.services.container import build_services
 
     settings = load_settings()
     logging.getLogger().setLevel(settings.log_level)
-    services = build_services(create_database(settings), settings.admin_ids)
+    if demo:
+        from crm.demo import create_demo_database
+
+        db = create_demo_database(_demo_client_id())
+        logging.warning(
+            "ДЕМО-РЕЖИМ: данные в памяти, Firebase не используется, "
+            "после перезапуска всё начнётся заново."
+        )
+    else:
+        from crm.firebase import create_database
+
+        db = create_database(settings)
+    services = build_services(db, settings.admin_ids)
     await run_bot(create_bot(settings.bot_token), services, settings)
 
 
@@ -28,7 +56,7 @@ def main() -> None:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
     try:
-        asyncio.run(_main())
+        asyncio.run(_main(demo="--demo" in sys.argv[1:]))
     except ConfigurationError as exc:
         print(f"Ошибка конфигурации: {exc.user_message}", file=sys.stderr)
         sys.exit(2)

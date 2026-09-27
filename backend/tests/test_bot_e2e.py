@@ -252,3 +252,24 @@ async def test_admin_replies_in_group_use_client_visibility(db, bot_env):
             assert secret not in reply
     assert "₩ 120,000" in buy_reply
     assert "Закупка: ₩ 90,000" in private_buy
+
+
+async def test_demo_data_supports_the_whole_flow():
+    from crm.demo import DEMO_BALANCE, create_demo_database
+    from crm.services.container import build_services
+
+    db = create_demo_database(client_telegram_id=CLIENT_TG)
+    services = build_services(db, frozenset({ADMIN_TG}))
+    admin = services.roles.resolve(ADMIN_TG)
+    assert services.roles.resolve(CLIENT_TG) is not None
+
+    from crm.services.common import Actor
+
+    actor = Actor.telegram(ADMIN_TG, admin)
+    services.orders.buy(actor, "121", 150_000, 180_000)
+    services.shipments.ship_orders(actor, ["123", "124", "125"], "DEMO123")
+    services.orders.cancel(actor, "122")
+
+    assert db.get("client_info", "main_client")["balance"] == DEMO_BALANCE - 180_000
+    assert db.get("orders", "n124")["shipment_id"].startswith("SHP-")
+    assert services.orders.cancel(actor, "121").refunded_krw == 180_000

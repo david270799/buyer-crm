@@ -20,6 +20,24 @@ backend/
 firestore.rules      deny-all для клиентских SDK (backend работает через Admin SDK)
 ```
 
+## Попробовать без риска: демо-режим
+
+```bash
+cd backend
+python3.11 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+BOT_TOKEN=<токен тестового бота> ADMIN_TELEGRAM_IDS=<ваш Telegram ID> python -m crm.bot --demo
+```
+
+Бот работает на данных в памяти: клиент с балансом ₩5,000,000, курс 1350, заказы
+`n121`–`n125` в разных статусах. **Firebase не используется**, после перезапуска всё начинается заново.
+Для теста лучше создать отдельного бота в @BotFather. Чтобы проверить, что видит клиент,
+укажите `DEMO_CLIENT_TELEGRAM_ID` — Telegram ID второго аккаунта.
+
+Сценарий для проверки: `/balance` → `/order 121` → `/buy 121 150000 180000` → ещё раз тот же `/buy`
+(денег не списывает) → `/history` → `/cargo DEMO123 123 124 125` → `/shipments` → `/cancel 121`
+→ `/balance`.
+
 ## Запуск
 
 1. **Токен бота**: @BotFather → `/newbot` (или `/token` для существующего бота).
