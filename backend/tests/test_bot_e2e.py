@@ -273,3 +273,17 @@ async def test_demo_data_supports_the_whole_flow():
     assert db.get("client_info", "main_client")["balance"] == DEMO_BALANCE - 180_000
     assert db.get("orders", "n124")["shipment_id"].startswith("SHP-")
     assert services.orders.cancel(actor, "121").refunded_krw == 180_000
+
+
+async def test_shipcost_command_charges_difference(db, bot_env):
+    seed_order(db, "n5", status="bought", client_price=1, charged_amount_krw=1)
+    await bot_env("/cargo TRK777 5")
+
+    (first,) = await bot_env("/shipcost 1 95000")
+    (again,) = await bot_env("/shipcost #1 95000")
+    (history,) = await bot_env("/history")
+
+    assert "- ₩ 95,000" in first
+    assert "Баланс не изменился" in again
+    assert balance(db) == START_BALANCE - 95_000
+    assert "Доставка SHP-2026-001" in history

@@ -14,14 +14,32 @@ Money rules (see docs/architecture.md, "Финансовые инвариант�
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
+from datetime import datetime
+from typing import Any
 
-from crm.domain.enums import STATUS_LABELS_RU, LedgerType, OrderStatus
+from crm.domain.enums import (
+    CHARGED_STATUSES,
+    STATUS_FLOW,
+    STATUS_LABELS_RU,
+    LedgerType,
+    OrderStatus,
+    Role,
+)
 from crm.domain.errors import ConflictError, NotFoundError, ValidationError
 from crm.domain.ids import make_order_id, normalize_order_id, order_number
 from crm.domain.models import Order, status_timestamp_field
 from crm.domain.money import MAX_AMOUNT_KRW, format_krw
+from crm.domain.timeutil import to_local
 from crm.repositories import OrderRepository
-from crm.services.common import Actor, Auditor, Clock, require_admin, require_bulk_size
+from crm.services.common import (
+    UNSET,
+    Actor,
+    Auditor,
+    Clock,
+    provided_fields,
+    require_admin,
+    require_bulk_size,
+)
 from crm.services.ledger import (
     BalanceChange,
     BalanceLedger,
@@ -111,6 +129,117 @@ def _check_price(value: int | None, name: str, *, allow_zero: bool) -> None:
         raise ValidationError(f"{name} больше допустимого лимита {format_krw(MAX_AMOUNT_KRW)}.")
 
 
+def _clean_url(value: str | None, name: str) -> str | None:
+    """Only http(s) links: they are rendered as <a href> in the Mini App."""
+    text = _clean_text(value, name, _MAX_LONG_TEXT)
+    if text is None:
+        return None
+    if not text.lower().startswith(("https://", "http://")):
+        raise ValidationError(f"«{name}»: ссылка должна начинаться с https://")
+    return text
+
+
+@dataclass
+class OrderUpdate:
+    """Partial update of non-financial order fields (UNSET = keep, None = clear).
+
+    Prices can be edited only while the order is `new` and nothing is charged;
+    after /buy a price change moves money and is a separate operation.
+    """
+
+    brand: str | None = UNSET
+    model: str | None = UNSET
+    size: str | None = UNSET
+    source_url: str | None = UNSET
+    photo_url: str | None = UNSET
+    thumbnail_url: str | None = UNSET
+    client_comment: str | None = UNSET
+    internal_comment: str | None = UNSET
+    attention_required: bool = UNSET
+    purchase_price: int | None = UNSET
+    client_price: int | None = UNSET
+
+
+@dataclass
+class BulkUpdate:
+    client_comment: str | None = UNSET
+    internal_comment: str | None = UNSET
+    attention_required: bool = UNSET
+
+
+SORTS = ("newest", "oldest", "price_desc", "price_asc")
+
+
+@dataclass
+class OrderQuery:
+    status: OrderStatus | None = None
+    search: str | None = None
+    attention: bool | None = None
+    sort: str = "newest"
+    offset: int = 0
+    limit: int = 50
+
+
+@dataclass
+class OrderPage:
+    items: list[Order]
+    total: int
+
+
+@dataclass
+class OrdersOverview:
+    status_counts: dict[str, int]
+    attention_count: int
+    total: int
+    active: int
+    # Admin only (None for the client):
+    profit_total_krw: int | None = None
+    profit_month_krw: int | None = None
+    recent: list[Order] = field(default_factory=list)
+
+
+def _clean_update_fields(values: dict[str, Any]) -> dict[str, Any]:
+    cleaned: dict[str, Any] = {}
+    for name, value in values.items():
+        if name in ("brand", "model", "size"):
+            cleaned[name] = _clean_text(value, name, _MAX_SHORT_TEXT)
+        elif name in ("client_comment", "internal_comment"):
+            cleaned[name] = _clean_text(value, "Комментарий", _MAX_LONG_TEXT)
+        elif name in ("source_url", "photo_url", "thumbnail_url"):
+            cleaned[name] = _clean_url(value, "Ссылка" if name == "source_url" else "Фото")
+        elif name == "attention_required":
+            if not isinstance(value, bool):
+                raise ValidationError("attention_required должен быть true или false.")
+            cleaned[name] = value
+        elif name in ("purchase_price", "client_price"):
+            _check_price(value, "Цена", allow_zero=True)
+            cleaned[name] = value
+        else:  # pragma: no cover - programming error
+            raise ValueError(f"Unknown order field {name}")
+    return cleaned
+
+
+def _matches(order: Order, needle: str, admin: bool) -> bool:
+    haystack = [
+        order.id,
+        order.brand,
+        order.model,
+        order.size,
+        order.cargo_code,
+        order.shipment_id,
+        order.client_comment,
+    ]
+    if admin:
+        haystack.append(order.internal_comment)
+    return any(needle in value.lower() for value in haystack if value)
+
+
+def _sort_key(sort: str):
+    if sort in ("price_desc", "price_asc"):
+        return lambda o: (o.client_price or 0, order_number(o.id) or 0)
+    return lambda o: order_number(o.id) or 0
+
+
 class OrderService:
     def __init__(
         self,
@@ -138,6 +267,144 @@ class OrderService:
             raise NotFoundError(f"Заказ {order_id} не найден.")
         return order
 
+    def get_orders(self, actor: Actor, order_ids: Sequence[str]) -> dict[str, Order]:
+        """Existing orders among `order_ids` (missing ones are left out)."""
+        ids = list(dict.fromkeys(normalize_order_id(i) for i in order_ids))
+        if not ids:
+            return {}
+        found = self._orders.get_many(self._db, ids)
+        return {order_id: order for order_id, order in found.items() if order is not None}
+
+    def list_orders(self, actor: Actor, query: OrderQuery) -> OrderPage:
+        """Filter, search and sort in memory.
+
+        One CRM with one client has hundreds to a few thousand orders, so
+        reading the collection is cheap and keeps legacy documents (odd
+        status spellings, missing fields) searchable. Revisit with indexed
+        queries if the collection grows past ~10k documents.
+        """
+        if query.sort not in SORTS:
+            raise ValidationError(f"Неизвестная сортировка: {query.sort}")
+        orders = self._orders.list_all(self._db)
+        if query.status is not None:
+            orders = [o for o in orders if o.status is query.status]
+        if query.attention is not None:
+            orders = [o for o in orders if o.attention_required is query.attention]
+        needle = (query.search or "").strip().lower()
+        if needle:
+            admin = actor.role is Role.ADMIN
+            orders = [o for o in orders if _matches(o, needle, admin)]
+        orders.sort(key=_sort_key(query.sort), reverse=query.sort in ("newest", "price_desc"))
+        limit = max(1, min(query.limit, 200))
+        offset = max(0, query.offset)
+        return OrderPage(items=orders[offset : offset + limit], total=len(orders))
+
+    def overview(self, actor: Actor, recent: int = 6) -> OrdersOverview:
+        orders = self._orders.list_all(self._db)
+        counts = {status.value: 0 for status in (*STATUS_FLOW, OrderStatus.CANCELLED)}
+        for order in orders:
+            if order.status is not None:
+                counts[order.status.value] += 1
+        active = sum(1 for o in orders if o.status in STATUS_FLOW[:-1])
+        result = OrdersOverview(
+            status_counts=counts,
+            attention_count=sum(1 for o in orders if o.attention_required),
+            total=len(orders),
+            active=active,
+            recent=sorted(orders, key=_sort_key("newest"), reverse=True)[:recent],
+        )
+        if actor.role is Role.ADMIN:
+            month = to_local(self._clock.now()).strftime("%Y-%m")
+            charged = [o for o in orders if o.status in CHARGED_STATUSES and o.profit is not None]
+            result.profit_total_krw = sum(o.profit for o in charged)
+            result.profit_month_krw = sum(
+                o.profit
+                for o in charged
+                if isinstance(o.timestamp("bought_at"), datetime)
+                and to_local(o.timestamp("bought_at")).strftime("%Y-%m") == month
+            )
+        return result
+
+    # --- edit (no money) ---------------------------------------------------
+
+    def update_details(self, actor: Actor, order_id: str, update: OrderUpdate) -> Order:
+        require_admin(actor)
+        order_id = normalize_order_id(order_id)
+        changes = _clean_update_fields(provided_fields(update))
+        if not changes:
+            raise ValidationError("Нет изменений.")
+
+        def fn(tx: Transaction) -> Order:
+            order = self._require_order(tx, order_id)
+            price_change = {"purchase_price", "client_price"} & changes.keys()
+            if price_change and (order.status is not OrderStatus.NEW or order.is_charged):
+                raise ConflictError(
+                    f"Заказ {order_id} уже выкуплен: цену нельзя изменить простым "
+                    "редактированием, это отдельная финансовая операция."
+                )
+            fields: dict[str, Any] = dict(changes)
+            if price_change:
+                purchase = changes.get("purchase_price", order.purchase_price)
+                client = changes.get("client_price", order.client_price)
+                fields["profit"] = (
+                    client - purchase if client is not None and purchase is not None else None
+                )
+            now = self._clock.now()
+            fields.update({"updated_at": now, "updated_by": actor.id})
+            self._orders.update(tx, order_id, fields)
+            self._auditor.record(
+                tx,
+                actor,
+                now,
+                action="order.update",
+                entity_type="order",
+                entity_id=order_id,
+                before={name: getattr(order, name) for name in changes},
+                after=changes,
+            )
+            return replace(
+                order,
+                **{k: v for k, v in fields.items() if k not in ("updated_at", "updated_by")},
+                timestamps={**order.timestamps, "updated_at": now},
+            )
+
+        return self._db.run_transaction(fn)
+
+    def bulk_update(self, actor: Actor, order_ids: Sequence[str], update: BulkUpdate) -> BulkResult:
+        require_admin(actor)
+        ids = list(dict.fromkeys(normalize_order_id(i) for i in order_ids))
+        require_bulk_size(ids)
+        changes = _clean_update_fields(provided_fields(update))
+        if not changes:
+            raise ValidationError("Нет изменений.")
+
+        def fn(tx: Transaction) -> BulkResult:
+            orders = self._orders.get_many(tx, ids)
+            result = BulkResult()
+            now = self._clock.now()
+            for order_id in ids:
+                order = orders[order_id]
+                if order is None:
+                    result.not_found.append(order_id)
+                    continue
+                self._orders.update(
+                    tx, order_id, {**changes, "updated_at": now, "updated_by": actor.id}
+                )
+                self._auditor.record(
+                    tx,
+                    actor,
+                    now,
+                    action="order.bulk_update",
+                    entity_type="order",
+                    entity_id=order_id,
+                    before={name: getattr(order, name) for name in changes},
+                    after=changes,
+                )
+                result.updated.append(order_id)
+            return result
+
+        return self._db.run_transaction(fn)
+
     # --- create ------------------------------------------------------------
 
     def create_order(self, actor: Actor, new: NewOrder) -> Order:
@@ -148,9 +415,9 @@ class OrderService:
             "brand": _clean_text(new.brand, "Бренд", _MAX_SHORT_TEXT),
             "model": _clean_text(new.model, "Модель", _MAX_SHORT_TEXT),
             "size": _clean_text(new.size, "Размер", _MAX_SHORT_TEXT),
-            "source_url": _clean_text(new.source_url, "Ссылка", _MAX_LONG_TEXT),
-            "photo_url": _clean_text(new.photo_url, "Фото", _MAX_LONG_TEXT),
-            "thumbnail_url": _clean_text(new.thumbnail_url, "Миниатюра", _MAX_LONG_TEXT),
+            "source_url": _clean_url(new.source_url, "Ссылка"),
+            "photo_url": _clean_url(new.photo_url, "Фото"),
+            "thumbnail_url": _clean_url(new.thumbnail_url, "Миниатюра"),
             "client_comment": _clean_text(new.client_comment, "Комментарий", _MAX_LONG_TEXT),
             "internal_comment": _clean_text(
                 new.internal_comment, "Внутренний комментарий", _MAX_LONG_TEXT

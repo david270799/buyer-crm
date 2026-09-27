@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from dataclasses import fields as dataclass_fields
 from datetime import datetime, timezone
 from typing import Any, Protocol
 
@@ -12,6 +13,25 @@ from crm.storage import Database, Transaction
 MAX_BULK_ORDERS = 100
 
 
+class _Unset:
+    """Marks a field of a partial update that was not provided (None means "clear")."""
+
+    def __repr__(self) -> str:
+        return "UNSET"
+
+
+UNSET: Any = _Unset()
+
+
+def provided_fields(update: Any) -> dict[str, Any]:
+    """Fields of a partial-update dataclass that are not UNSET."""
+    return {
+        f.name: getattr(update, f.name)
+        for f in dataclass_fields(update)
+        if getattr(update, f.name) is not UNSET
+    }
+
+
 @dataclass(frozen=True)
 class Actor:
     """Who performs an operation and through which channel."""
@@ -23,6 +43,10 @@ class Actor:
     @classmethod
     def telegram(cls, user_id: int, role: Role) -> "Actor":
         return cls(id=f"tg:{user_id}", role=role, source=Source.TELEGRAM_BOT)
+
+    @classmethod
+    def mini_app(cls, user_id: int, role: Role) -> "Actor":
+        return cls(id=f"tg:{user_id}", role=role, source=Source.MINI_APP)
 
     @classmethod
     def system(cls) -> "Actor":

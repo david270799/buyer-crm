@@ -1,32 +1,46 @@
 """Shipments: one physical parcel with several orders.
 
-`ship_orders` is the single entry point used by `/cargo` today and by the
-Mini App / dashboard "Создать отправку" form later. In one transaction it
-creates the shipment (or extends the existing one with the same tracking
-code), and marks every accepted order `cargo` with `shipment_id` and
-`cargo_code`.
+`ship_orders` is the single entry point used by `/cargo` and by the Mini App
+"Создать отправку" form. In one transaction it creates the shipment (or
+extends the existing one with the same tracking code), marks every accepted
+order `cargo` with `shipment_id` and `cargo_code`, and charges the shipping
+cost to the client balance.
 
 A transaction is used instead of a plain batch write because each order has
 to be validated against its current state; the commit is still atomic.
 
-Shipping cost is only stored on the shipment. It is NOT charged to the
-client balance (see "Открытые вопросы" in docs/architecture.md).
+Shipping money rules (same idea as orders):
+* `shipping_charged_krw` on the shipment is what is currently charged;
+* setting a cost charges only the difference to it, so saving the same cost
+  twice moves nothing, and lowering the cost refunds the difference;
+* every movement is a `shipping_charge` ledger entry with a deterministic ID
+  `shipping_charge_<shipment>_<n>`, written with `create`.
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import datetime
+from typing import Any
 
-from crm.domain.enums import OrderStatus
+from crm.domain.enums import LedgerType, OrderStatus
 from crm.domain.errors import ConflictError, NotFoundError, ValidationError
 from crm.domain.ids import make_shipment_id, normalize_order_id, normalize_tracking_code
-from crm.domain.models import Order, Shipment
-from crm.domain.money import MAX_AMOUNT_KRW
+from crm.domain.models import ClientInfo, Order, Shipment
+from crm.domain.money import MAX_AMOUNT_KRW, format_krw
 from crm.domain.timeutil import to_local
 from crm.repositories import OrderRepository, ShipmentRepository
-from crm.services.common import Actor, Auditor, Clock, require_admin, require_bulk_size
+from crm.services.common import (
+    UNSET,
+    Actor,
+    Auditor,
+    Clock,
+    provided_fields,
+    require_admin,
+    require_bulk_size,
+)
+from crm.services.ledger import BalanceChange, BalanceLedger
 from crm.services.sequences import SequenceAllocator
-from crm.storage import Database, Transaction
+from crm.storage import Database, DocumentExistsError, Transaction
 
 SHIPMENT_COUNTER = "shipments"
 _MAX_TEXT = 2000
@@ -41,6 +55,24 @@ class ShipmentDetails:
     shipment_date: datetime | None = None
     comment: str | None = None
     photo_url: str | None = None
+    thumbnail_url: str | None = None
+
+
+@dataclass
+class ShipmentUpdate:
+    """Partial update: fields left as UNSET are not touched, None clears a field."""
+
+    tracking_code: str | None = UNSET
+    box_number: str | None = UNSET
+    weight_kg: float | None = UNSET
+    shipping_cost_krw: int | None = UNSET
+    shipment_date: datetime | None = UNSET
+    comment: str | None = UNSET
+    photo_url: str | None = UNSET
+    thumbnail_url: str | None = UNSET
+
+    def provided(self) -> dict[str, Any]:
+        return provided_fields(self)
 
 
 @dataclass
@@ -51,25 +83,62 @@ class ShipResult:
     already_in_shipment: list[str] = field(default_factory=list)
     not_found: list[str] = field(default_factory=list)
     skipped: list[tuple[str, str]] = field(default_factory=list)
+    shipping_change: BalanceChange | None = None
 
 
-def _validate_details(details: ShipmentDetails) -> dict:
-    if details.weight_kg is not None and not (0 < details.weight_kg <= _MAX_WEIGHT_KG):
-        raise ValidationError(f"Вес должен быть больше 0 и не больше {_MAX_WEIGHT_KG} кг.")
-    cost = details.shipping_cost_krw
-    if cost is not None and (isinstance(cost, bool) or cost < 0 or cost > MAX_AMOUNT_KRW):
-        raise ValidationError("Некорректная стоимость доставки.")
-    for name, value in (("Комментарий", details.comment), ("Номер коробки", details.box_number)):
-        if value is not None and len(value) > _MAX_TEXT:
-            raise ValidationError(f"Поле «{name}» слишком длинное.")
-    return {
-        "box_number": (details.box_number or "").strip() or None,
-        "weight_kg": details.weight_kg,
-        "shipping_cost_krw": cost,
-        "shipment_date": details.shipment_date,
-        "comment": (details.comment or "").strip() or None,
-        "photo_url": details.photo_url,
-    }
+@dataclass
+class ShipmentUpdateResult:
+    shipment: Shipment
+    shipping_change: BalanceChange | None = None
+
+
+def _clean_text(value: str | None, name: str) -> str | None:
+    if value is None:
+        return None
+    if len(value) > _MAX_TEXT:
+        raise ValidationError(f"Поле «{name}» слишком длинное.")
+    return value.strip() or None
+
+
+def _validate_fields(values: dict[str, Any]) -> dict[str, Any]:
+    cleaned: dict[str, Any] = {}
+    for name, value in values.items():
+        if name == "weight_kg":
+            if value is not None and not (0 < float(value) <= _MAX_WEIGHT_KG):
+                raise ValidationError(f"Вес должен быть больше 0 и не больше {_MAX_WEIGHT_KG} кг.")
+            cleaned[name] = float(value) if value is not None else None
+        elif name == "shipping_cost_krw":
+            if value is not None and (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or value < 0
+                or value > MAX_AMOUNT_KRW
+            ):
+                raise ValidationError("Стоимость доставки должна быть целой суммой в вонах ≥ 0.")
+            cleaned[name] = value
+        elif name == "tracking_code":
+            cleaned[name] = normalize_tracking_code(value) if value else None
+        elif name == "box_number":
+            cleaned[name] = _clean_text(value, "Номер коробки")
+        elif name == "comment":
+            cleaned[name] = _clean_text(value, "Комментарий")
+        elif name in ("photo_url", "thumbnail_url"):
+            cleaned[name] = _clean_text(value, "Фото")
+        elif name == "shipment_date":
+            if value is not None and not isinstance(value, datetime):
+                raise ValidationError("Некорректная дата отправки.")
+            cleaned[name] = value
+        else:  # pragma: no cover - programming error
+            raise ValueError(f"Unknown shipment field {name}")
+    return cleaned
+
+
+def _details_fields(details: ShipmentDetails) -> dict[str, Any]:
+    return _validate_fields({f.name: getattr(details, f.name) for f in fields(details)})
+
+
+def shipping_entry_id(shipment_id: str, seq: int) -> str:
+    return f"shipping_charge_{shipment_id}_{seq}"
 
 
 class ShipmentService:
@@ -80,6 +149,7 @@ class ShipmentService:
         orders: OrderRepository,
         shipments: ShipmentRepository,
         sequences: SequenceAllocator,
+        ledger: BalanceLedger,
         auditor: Auditor,
     ):
         self._db = db
@@ -87,17 +157,34 @@ class ShipmentService:
         self._orders = orders
         self._shipments = shipments
         self._sequences = sequences
+        self._ledger = ledger
         self._auditor = auditor
 
+    # --- reads -------------------------------------------------------------
+
+    def resolve_id(self, reference: str) -> str:
+        """`SHP-2026-018`, `18` or `#18` → shipment document ID."""
+        ref = reference.strip().upper()
+        number = ref.lstrip("#")
+        if number.isdigit():
+            found = self._shipments.find_by_number(self._db, int(number))
+            if found is None:
+                raise NotFoundError(f"Отправка #{number} не найдена.")
+            return found.id
+        return ref
+
     def get_shipment(self, actor: Actor, shipment_id: str) -> tuple[Shipment, list[Order]]:
-        shipment = self._shipments.get(self._db, shipment_id.strip().upper())
+        shipment_id = self.resolve_id(shipment_id)
+        shipment = self._shipments.get(self._db, shipment_id)
         if shipment is None:
             raise NotFoundError(f"Отправка {shipment_id} не найдена.")
         orders = self._orders.get_many(self._db, shipment.order_ids)
-        return shipment, [order for order in orders.values() if order is not None]
+        return shipment, [orders[i] for i in shipment.order_ids if orders.get(i) is not None]
 
     def list_shipments(self, actor: Actor, limit: int = 20) -> list[Shipment]:
-        return self._shipments.list_recent(self._db, limit=limit)
+        return self._shipments.list_recent(self._db, limit=max(1, min(limit, 200)))
+
+    # --- create / extend -----------------------------------------------------
 
     def ship_orders(
         self,
@@ -106,11 +193,16 @@ class ShipmentService:
         tracking_code: str | None,
         details: ShipmentDetails | None = None,
     ) -> ShipResult:
+        """Create a shipment (or add orders to the one with this tracking code).
+
+        For an existing shipment only the details that are not None are
+        applied; a new shipping cost there charges the difference.
+        """
         require_admin(actor)
         code = normalize_tracking_code(tracking_code) if tracking_code else None
         ids = list(dict.fromkeys(normalize_order_id(i) for i in order_ids))
         require_bulk_size(ids)
-        detail_fields = _validate_details(details or ShipmentDetails())
+        detail_fields = _details_fields(details or ShipmentDetails())
 
         def fn(tx: Transaction) -> ShipResult:
             existing = self._shipments.find_by_tracking(tx, code) if code else []
@@ -156,11 +248,27 @@ class ShipmentService:
                     lambda n: self._shipments.exists(tx, make_shipment_id(year, n)),
                 )
                 shipment_id = make_shipment_id(year, number)
+                charged_before, seq = 0, 0
+                new_cost = detail_fields["shipping_cost_krw"]
             else:
                 shipment_id = target.id
+                charged_before, seq = target.shipping_charged_krw, target.shipping_charge_seq
+                new_cost = detail_fields["shipping_cost_krw"]
+            delta = (new_cost or 0) - charged_before if new_cost is not None else 0
+            client = self._ledger.load_client(tx) if delta else None
 
             # --- writes ---
             added_ids = [order.id for order in to_add]
+            charge_fields: dict[str, Any] = {}
+            if client is not None:
+                result.shipping_change = self._charge_shipping(
+                    tx, client, actor, now, shipment_id, seq + 1, delta, new_cost or 0
+                )
+                charge_fields = {
+                    "shipping_charged_krw": charged_before + delta,
+                    "shipping_charge_seq": seq + 1,
+                }
+
             if target is None:
                 assert number is not None
                 data = {
@@ -168,6 +276,9 @@ class ShipmentService:
                     "shipment_number": number,
                     "tracking_code": code,
                     **detail_fields,
+                    "shipping_charged_krw": 0,
+                    "shipping_charge_seq": 0,
+                    **charge_fields,
                     "order_ids": added_ids,
                     "created_at": now,
                     "created_by": actor.id,
@@ -184,16 +295,27 @@ class ShipmentService:
                     entity_type="shipment",
                     entity_id=shipment_id,
                     before=None,
-                    after={"tracking_code": code, "order_ids": added_ids},
+                    after={
+                        "tracking_code": code,
+                        "order_ids": added_ids,
+                        "shipping_cost_krw": detail_fields["shipping_cost_krw"],
+                    },
                 )
                 result.shipment = Shipment.from_doc(shipment_id, data)
                 result.created = True
             else:
                 merged = list(dict.fromkeys([*target.order_ids, *added_ids]))
+                provided = {k: v for k, v in detail_fields.items() if v is not None}
                 self._shipments.update(
                     tx,
                     shipment_id,
-                    {"order_ids": merged, "updated_at": now, "updated_by": actor.id},
+                    {
+                        **provided,
+                        **charge_fields,
+                        "order_ids": merged,
+                        "updated_at": now,
+                        "updated_by": actor.id,
+                    },
                 )
                 self._auditor.record(
                     tx,
@@ -203,13 +325,19 @@ class ShipmentService:
                     entity_type="shipment",
                     entity_id=shipment_id,
                     before={"order_ids": target.order_ids},
-                    after={"order_ids": merged},
+                    after={"order_ids": merged, **provided},
                 )
-                target.order_ids = merged
-                result.shipment = target
+                raw = {
+                    **_shipment_doc(target),
+                    **provided,
+                    **charge_fields,
+                    "order_ids": merged,
+                    "updated_at": now,
+                }
+                result.shipment = Shipment.from_doc(shipment_id, raw)
 
             for order in to_add:
-                fields = {
+                order_fields = {
                     "status": OrderStatus.CARGO.value,
                     "shipment_id": shipment_id,
                     "cargo_at": now,
@@ -218,8 +346,8 @@ class ShipmentService:
                     **order.legacy_charge_fields(),
                 }
                 if code:
-                    fields["cargo_code"] = code
-                self._orders.update(tx, order.id, fields)
+                    order_fields["cargo_code"] = code
+                self._orders.update(tx, order.id, order_fields)
                 self._auditor.record(
                     tx,
                     actor,
@@ -237,9 +365,156 @@ class ShipmentService:
             result.added = added_ids
             return result
 
-        return self._sequences.run(
-            SHIPMENT_COUNTER,
-            lambda: self._shipments.max_shipment_number(self._db),
-            self._clock.now,
-            fn,
+        try:
+            return self._sequences.run(
+                SHIPMENT_COUNTER,
+                lambda: self._shipments.max_shipment_number(self._db),
+                self._clock.now,
+                fn,
+            )
+        except DocumentExistsError:
+            raise _duplicate_charge_error() from None
+
+    # --- edit ----------------------------------------------------------------
+
+    def update_shipment(
+        self, actor: Actor, shipment_id: str, update: ShipmentUpdate
+    ) -> ShipmentUpdateResult:
+        require_admin(actor)
+        changes = _validate_fields(update.provided())
+        if not changes:
+            raise ValidationError("Нет изменений.")
+        shipment_id = self.resolve_id(shipment_id)
+
+        def fn(tx: Transaction) -> ShipmentUpdateResult:
+            shipment = self._shipments.get(tx, shipment_id)
+            if shipment is None:
+                raise NotFoundError(f"Отправка {shipment_id} не найдена.")
+
+            tracking_changed = (
+                "tracking_code" in changes and changes["tracking_code"] != shipment.tracking_code
+            )
+            if tracking_changed and changes["tracking_code"]:
+                clash = [
+                    s
+                    for s in self._shipments.find_by_tracking(tx, changes["tracking_code"])
+                    if s.id != shipment_id
+                ]
+                if clash:
+                    raise ConflictError(
+                        f"Трек-номер {changes['tracking_code']} уже есть в отправке {clash[0].id}."
+                    )
+            orders = self._orders.get_many(tx, shipment.order_ids) if tracking_changed else {}
+
+            delta = 0
+            if "shipping_cost_krw" in changes:
+                delta = (changes["shipping_cost_krw"] or 0) - shipment.shipping_charged_krw
+            client = self._ledger.load_client(tx) if delta else None
+
+            # --- writes ---
+            now = self._clock.now()
+            doc_changes: dict[str, Any] = {**changes, "updated_at": now, "updated_by": actor.id}
+            change = None
+            if client is not None:
+                seq = shipment.shipping_charge_seq + 1
+                change = self._charge_shipping(
+                    tx,
+                    client,
+                    actor,
+                    now,
+                    shipment_id,
+                    seq,
+                    delta,
+                    changes["shipping_cost_krw"] or 0,
+                )
+                doc_changes["shipping_charged_krw"] = shipment.shipping_charged_krw + delta
+                doc_changes["shipping_charge_seq"] = seq
+            self._shipments.update(tx, shipment_id, doc_changes)
+
+            for order_id, order in orders.items():
+                if order is not None:
+                    self._orders.update(
+                        tx,
+                        order_id,
+                        {
+                            "cargo_code": changes["tracking_code"],
+                            "updated_at": now,
+                            "updated_by": actor.id,
+                        },
+                    )
+            before = _shipment_doc(shipment)
+            self._auditor.record(
+                tx,
+                actor,
+                now,
+                action="shipment.update",
+                entity_type="shipment",
+                entity_id=shipment_id,
+                before={key: before.get(key) for key in changes},
+                after=changes,
+            )
+            updated = Shipment.from_doc(shipment_id, {**before, **doc_changes})
+            return ShipmentUpdateResult(shipment=updated, shipping_change=change)
+
+        try:
+            return self._db.run_transaction(fn)
+        except DocumentExistsError:
+            raise _duplicate_charge_error() from None
+
+    # --- helpers -------------------------------------------------------------
+
+    def _charge_shipping(
+        self,
+        tx: Transaction,
+        client: ClientInfo,
+        actor: Actor,
+        now: datetime,
+        shipment_id: str,
+        seq: int,
+        delta: int,
+        new_cost: int,
+    ) -> BalanceChange:
+        comment = (
+            f"Доставка {shipment_id}"
+            if seq == 1
+            else f"Доставка {shipment_id}: стоимость изменена на {format_krw(new_cost)}"
         )
+        return self._ledger.apply(
+            tx,
+            client,
+            entry_id=shipping_entry_id(shipment_id, seq),
+            type=LedgerType.SHIPPING_CHARGE,
+            amount_krw=-delta,
+            actor=actor,
+            now=now,
+            shipment_id=shipment_id,
+            comment=comment,
+        )
+
+
+def _shipment_doc(shipment: Shipment) -> dict[str, Any]:
+    return {
+        "shipment_id": shipment.id,
+        "shipment_number": shipment.shipment_number,
+        "tracking_code": shipment.tracking_code,
+        "box_number": shipment.box_number,
+        "weight_kg": shipment.weight_kg,
+        "shipping_cost_krw": shipment.shipping_cost_krw,
+        "shipment_date": shipment.shipment_date,
+        "photo_url": shipment.photo_url,
+        "thumbnail_url": shipment.thumbnail_url,
+        "order_ids": shipment.order_ids,
+        "comment": shipment.comment,
+        "created_at": shipment.created_at,
+        "created_by": shipment.created_by,
+        "shipping_charged_krw": shipment.shipping_charged_krw,
+        "shipping_charge_seq": shipment.shipping_charge_seq,
+        "updated_at": shipment.updated_at,
+    }
+
+
+def _duplicate_charge_error() -> ConflictError:
+    return ConflictError(
+        "Списание за эту доставку уже есть в истории транзакций. "
+        "Повторное списание заблокировано — проверьте отправку вручную."
+    )

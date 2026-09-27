@@ -320,3 +320,150 @@ def test_get_order_normalises_id(db, services, client_actor):
     assert services.orders.get_order(client_actor, "12").brand == "Adidas"
     with pytest.raises(NotFoundError):
         services.orders.get_order(client_actor, "13")
+
+
+# --- listing / overview / edits (Mini App) ---------------------------------
+
+from datetime import datetime, timezone  # noqa: E402
+
+from crm.services.order_service import BulkUpdate, OrderQuery, OrderUpdate  # noqa: E402
+
+
+def _catalog(db):
+    seed_order(db, "n1", status="new", brand="Nike", model="Air Max 95", client_price=None)
+    seed_order(
+        db,
+        "n2",
+        status="bought",
+        brand="Adidas",
+        model="Samba",
+        client_price=200,
+        purchase_price=150,
+        profit=50,
+        bought_at=datetime(2026, 9, 3, tzinfo=timezone.utc),
+    )
+    seed_order(
+        db,
+        "n10",
+        status="Warehouse",
+        brand="Nike",
+        model="Dunk",
+        client_price=500,
+        purchase_price=300,
+        profit=200,
+        attention_required=True,
+        internal_comment="продавец молчит",
+        bought_at=datetime(2026, 8, 20, tzinfo=timezone.utc),
+    )
+    seed_order(db, "n3", status="cancelled", brand="Puma", client_price=90)
+
+
+def test_list_orders_sorts_by_number_and_filters(db, services, admin, client_actor):
+    _catalog(db)
+
+    page = services.orders.list_orders(client_actor, OrderQuery())
+    assert [o.id for o in page.items] == ["n10", "n3", "n2", "n1"] and page.total == 4
+
+    nike = services.orders.list_orders(client_actor, OrderQuery(search="nike"))
+    assert [o.id for o in nike.items] == ["n10", "n1"]
+    warehouse = services.orders.list_orders(client_actor, OrderQuery(status=OrderStatus.WAREHOUSE))
+    assert [o.id for o in warehouse.items] == ["n10"]  # legacy capitalised status included
+    attention = services.orders.list_orders(admin, OrderQuery(attention=True))
+    assert [o.id for o in attention.items] == ["n10"]
+    oldest = services.orders.list_orders(admin, OrderQuery(sort="oldest", offset=1, limit=2))
+    assert [o.id for o in oldest.items] == ["n2", "n3"] and oldest.total == 4
+    by_price = services.orders.list_orders(admin, OrderQuery(sort="price_desc"))
+    assert by_price.items[0].id == "n10"
+
+
+def test_internal_comment_is_searchable_only_by_admin(db, services, admin, client_actor):
+    _catalog(db)
+    assert services.orders.list_orders(admin, OrderQuery(search="молчит")).total == 1
+    assert services.orders.list_orders(client_actor, OrderQuery(search="молчит")).total == 0
+
+
+def test_list_orders_rejects_unknown_sort(db, services, admin):
+    with pytest.raises(ValidationError):
+        services.orders.list_orders(admin, OrderQuery(sort="random"))
+
+
+def test_overview_counts_and_profit(db, services, admin, client_actor):
+    _catalog(db)
+
+    admin_view = services.orders.overview(admin)
+    client_view = services.orders.overview(client_actor)
+
+    assert admin_view.status_counts == {
+        "new": 1,
+        "bought": 1,
+        "warehouse": 1,
+        "cargo": 0,
+        "delivered": 0,
+        "cancelled": 1,
+    }
+    assert admin_view.attention_count == 1
+    assert admin_view.active == 3 and admin_view.total == 4
+    assert admin_view.profit_total_krw == 250
+    assert admin_view.profit_month_krw == 50  # clock is in September 2026
+    assert client_view.profit_total_krw is None and client_view.profit_month_krw is None
+    assert [o.id for o in admin_view.recent][:2] == ["n10", "n3"]
+
+
+def test_update_details_changes_only_given_fields(db, services, admin):
+    seed_order(db, "n5", brand="Nike", client_comment="old", legacy_field="keep")
+
+    order = services.orders.update_details(
+        admin, "5", OrderUpdate(model="Air Force 1", client_comment=None, attention_required=True)
+    )
+
+    doc = db.get("orders", "n5")
+    assert doc["brand"] == "Nike" and doc["model"] == "Air Force 1"
+    assert doc["client_comment"] is None and doc["attention_required"] is True
+    assert doc["legacy_field"] == "keep"
+    assert order.model == "Air Force 1" and order.attention_required
+    assert "order.update" in audit_actions(db)
+    assert balance(db) == START_BALANCE
+
+
+def test_prices_editable_only_before_buy(db, services, admin):
+    seed_order(db, "n5", purchase_price=None, client_price=None)
+    services.orders.update_details(admin, "5", OrderUpdate(purchase_price=100, client_price=150))
+    assert db.get("orders", "n5")["profit"] == 50
+
+    services.orders.buy(admin, "5", 100, 150)
+    with pytest.raises(ConflictError, match="отдельная финансовая операция"):
+        services.orders.update_details(admin, "5", OrderUpdate(client_price=999))
+    services.orders.update_details(admin, "5", OrderUpdate(client_comment="ок"))  # still fine
+
+
+@pytest.mark.parametrize("url", ["javascript:alert(1)", "data:text/html,x", "ftp://x"])
+def test_links_must_be_http(db, services, admin, url):
+    seed_order(db, "n5")
+    with pytest.raises(ValidationError):
+        services.orders.update_details(admin, "5", OrderUpdate(source_url=url))
+    with pytest.raises(ValidationError):
+        services.orders.create_order(admin, NewOrder(source_url=url))
+
+
+def test_update_details_needs_changes_and_admin(db, services, admin, client_actor):
+    seed_order(db, "n5")
+    with pytest.raises(ValidationError):
+        services.orders.update_details(admin, "5", OrderUpdate())
+    with pytest.raises(PermissionDeniedError):
+        services.orders.update_details(client_actor, "5", OrderUpdate(brand="x"))
+
+
+def test_bulk_update(db, services, admin):
+    seed_order(db, "n1")
+    seed_order(db, "n2")
+
+    result = services.orders.bulk_update(
+        admin, ["1", "2", "3"], BulkUpdate(attention_required=True, client_comment="Задержка")
+    )
+
+    assert result.updated == ["n1", "n2"] and result.not_found == ["n3"]
+    for order_id in ("n1", "n2"):
+        doc = db.get("orders", order_id)
+        assert doc["attention_required"] is True and doc["client_comment"] == "Задержка"
+    with pytest.raises(ValidationError):
+        services.orders.bulk_update(admin, ["1"], BulkUpdate())

@@ -17,8 +17,9 @@ from crm.domain.money import format_krw, format_usd
 from crm.domain.timeutil import format_date, format_datetime
 from crm.domain.views import order_view
 from crm.services.finance_service import BalanceView, LedgerResult
+from crm.services.ledger import BalanceChange
 from crm.services.order_service import BulkResult, BuyResult, CancelResult
-from crm.services.shipment_service import ShipResult
+from crm.services.shipment_service import ShipmentUpdateResult, ShipResult
 
 
 def e(value: object) -> str:
@@ -183,6 +184,26 @@ def cargo_result(result: ShipResult) -> str:
     lines += _bulk_tail(
         result.not_found, result.skipped, "Уже в этой отправке", result.already_in_shipment
     )
+    if result.shipping_change:
+        lines.append(_shipping_line(result.shipping_change))
+    return "\n".join(lines)
+
+
+def _shipping_line(change: BalanceChange) -> str:
+    return (
+        f"🚚 Доставка: {format_krw(change.amount_krw, signed=True)}\n"
+        f"{_balance_line(change.balance_before, change.balance_after)}"
+    )
+
+
+def shipment_updated(result: ShipmentUpdateResult) -> str:
+    lines = [f"✅ {_shipment_title(result.shipment)} обновлена"]
+    if result.shipment.shipping_cost_krw is not None:
+        lines.append(f"Стоимость доставки: {format_krw(result.shipment.shipping_cost_krw)}")
+    if result.shipping_change:
+        lines.append(_shipping_line(result.shipping_change))
+    else:
+        lines.append("Баланс не изменился.")
     return "\n".join(lines)
 
 
@@ -262,6 +283,8 @@ def ledger_result(result: LedgerResult) -> str:
 
 def _ledger_subject(entry: LedgerEntry) -> str:
     label = LEDGER_LABELS_RU.get(entry.type, "Операция") if entry.type else "Операция"
+    if entry.type is LedgerType.SHIPPING_CHARGE:
+        return entry.comment or f"{label} · {entry.shipment_id}"
     if entry.order_id:
         parts = [entry.order_id, entry.comment]
         if entry.type is LedgerType.ORDER_REFUND:
@@ -288,6 +311,7 @@ ADMIN_HELP = """<b>Команды администратора</b>
 /cancel 5 — отмена (возвращает списанное один раз)
 /status warehouse 5 7 12 — статус нескольких заказов (warehouse, cargo, delivered)
 /cargo TRACK123 5 10 18 — отправка: создаёт shipment, ставит статус «Отправлен»
+/shipcost 1 95000 — стоимость доставки отправки #1 (списывается с баланса)
 /order 5 — карточка заказа
 /shipments, /shipment SHP-2026-001 — отправки
 /balance, /history — баланс и история

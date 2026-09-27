@@ -17,6 +17,10 @@ STATUS_USAGE = (
 CARGO_USAGE = "Формат: /cargo <трек-номер> <номера…>\nПример: /cargo TRACK123 5 10 18"
 DEPOSIT_USAGE = "Формат: /deposit <сумма> [комментарий]\nПример: /deposit 5000000 перевод 26.09"
 ADJUST_USAGE = "Формат: /adjust <±сумма> <причина>\nПример: /adjust -15000 комиссия банка"
+SHIPCOST_USAGE = (
+    "Формат: /shipcost <отправка> <стоимость>\nПример: /shipcost 18 95000 или "
+    "/shipcost SHP-2026-018 95000"
+)
 RATE_USAGE = "Формат: /rate <KRW за 1 USD>\nПример: /rate 1350"
 
 
@@ -84,3 +88,10 @@ def parse_rate_command(args: str | None) -> Decimal | None:
     if len(tokens) != 1:
         raise ValidationError(RATE_USAGE)
     return parse_rate(tokens[0])
+
+
+def parse_shipcost(args: str | None) -> tuple[str, int]:
+    tokens = (args or "").split()
+    if len(tokens) != 2:
+        raise ValidationError(SHIPCOST_USAGE)
+    return tokens[0], parse_krw(tokens[1])

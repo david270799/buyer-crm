@@ -28,6 +28,9 @@ class OrderRepository:
         """Partial update: fields written by other code are left untouched."""
         tx.update(self.collection, order_id, fields)
 
+    def list_all(self, reader: Reader) -> list[Order]:
+        return [Order.from_doc(doc_id, data) for doc_id, data in reader.query(self.collection)]
+
     def list_by_shipment(self, reader: Reader, shipment_id: str) -> list[Order]:
         rows = reader.query(self.collection, [Filter("shipment_id", "==", shipment_id)])
         return [Order.from_doc(doc_id, data) for doc_id, data in rows]

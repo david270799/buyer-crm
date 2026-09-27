@@ -9,7 +9,7 @@ cannot leak to the client.
 from typing import Any
 
 from crm.domain.enums import STATUS_FLOW, OrderStatus, Role
-from crm.domain.models import Order, status_timestamp_field
+from crm.domain.models import LedgerEntry, Order, Shipment, status_timestamp_field
 
 CLIENT_ORDER_FIELDS = (
     "id",
@@ -51,4 +51,45 @@ def order_view(order: Order, role: Role) -> dict[str, Any]:
     view["timestamps"] = {
         name: order.timestamps[name] for name in timestamp_names if name in order.timestamps
     }
+    return view
+
+
+def shipment_view(shipment: Shipment, role: Role) -> dict[str, Any]:
+    view: dict[str, Any] = {
+        "id": shipment.id,
+        "shipment_number": shipment.shipment_number,
+        "tracking_code": shipment.tracking_code,
+        "box_number": shipment.box_number,
+        "weight_kg": shipment.weight_kg,
+        "shipping_cost_krw": shipment.shipping_cost_krw,
+        "shipment_date": shipment.shipment_date,
+        "photo_url": shipment.photo_url,
+        "thumbnail_url": shipment.thumbnail_url,
+        "order_ids": list(shipment.order_ids),
+        "order_count": len(shipment.order_ids),
+        "comment": shipment.comment,
+        "created_at": shipment.created_at,
+    }
+    if role is Role.ADMIN:
+        view["shipping_charged_krw"] = shipment.shipping_charged_krw
+        view["created_by"] = shipment.created_by
+        view["updated_at"] = shipment.updated_at
+    return view
+
+
+def ledger_view(entry: LedgerEntry, role: Role) -> dict[str, Any]:
+    view: dict[str, Any] = {
+        "id": entry.id,
+        "type": entry.type.value if entry.type else None,
+        "amount_krw": entry.amount_krw,
+        "balance_before": entry.balance_before,
+        "balance_after": entry.balance_after,
+        "order_id": entry.order_id,
+        "shipment_id": entry.shipment_id,
+        "comment": entry.comment,
+        "created_at": entry.created_at,
+    }
+    if role is Role.ADMIN:
+        view["created_by"] = entry.created_by
+        view["source"] = entry.source
     return view

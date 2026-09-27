@@ -67,3 +67,16 @@ def _credentials(settings: Settings, credentials):
             "Не найдены учётные данные Firebase. Укажите FIREBASE_CREDENTIALS (путь к JSON "
             "сервисного аккаунта) или FIREBASE_CREDENTIALS_JSON."
         ) from None
+
+
+def create_blob_storage(settings: Settings):
+    """Firebase Storage for photos, or None when no bucket is configured."""
+    if not settings.firebase_storage_bucket:
+        return None
+    import firebase_admin
+    from firebase_admin import storage
+
+    from crm.storage.blobs import FirebaseBlobStorage
+
+    app = firebase_admin.get_app()  # initialised by create_database
+    return FirebaseBlobStorage(storage.bucket(settings.firebase_storage_bucket, app=app))

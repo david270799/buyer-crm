@@ -1,10 +1,15 @@
 from datetime import datetime, timezone
 
 import pytest
-from conftest import START_BALANCE, audit_actions, balance, seed, seed_order
+from conftest import START_BALANCE, audit_actions, balance, ledger_entries, seed, seed_order
 
-from crm.domain.errors import ConflictError, PermissionDeniedError, ValidationError
-from crm.services.shipment_service import ShipmentDetails
+from crm.domain.errors import (
+    ConflictError,
+    NotFoundError,
+    PermissionDeniedError,
+    ValidationError,
+)
+from crm.services.shipment_service import ShipmentDetails, ShipmentUpdate
 
 pytestmark = pytest.mark.usefixtures("client_doc")
 
@@ -121,7 +126,7 @@ def test_legacy_cargo_order_without_shipment_is_attached(db, services, admin):
     assert order["charged_amount_krw"] == 50_000  # legacy charge persisted
 
 
-def test_shipment_details_are_stored_and_cost_is_not_charged(db, services, admin):
+def test_shipment_details_are_stored_and_cost_is_charged_once(db, services, admin):
     _bought(db, "n1")
     shipped_on = datetime(2026, 9, 12, 1, 0, tzinfo=timezone.utc)
     details = ShipmentDetails(
@@ -139,12 +144,116 @@ def test_shipment_details_are_stored_and_cost_is_not_charged(db, services, admin
     assert shipment["box_number"] == "B-18"
     assert shipment["weight_kg"] == 12.5
     assert shipment["shipping_cost_krw"] == 95_000
+    assert shipment["shipping_charged_krw"] == 95_000
     assert shipment["shipment_date"] == shipped_on
     assert shipment["comment"] == "Хрупкое"
-    assert (
-        "cargo_code" not in db.get("orders", "n1") or db.get("orders", "n1")["cargo_code"] is None
+    assert db.get("orders", "n1").get("cargo_code") is None
+    assert balance(db) == START_BALANCE - 95_000
+    entry = ledger_entries(db)[f"shipping_charge_{result.shipment.id}_1"]
+    assert entry["type"] == "shipping_charge"
+    assert entry["amount_krw"] == -95_000
+    assert entry["shipment_id"] == result.shipment.id
+    assert result.shipping_change.balance_after == START_BALANCE - 95_000
+
+
+def test_repeating_cargo_with_cost_does_not_charge_again(db, services, admin):
+    _bought(db, "n1", "n2")
+    details = ShipmentDetails(shipping_cost_krw=50_000)
+    services.shipments.ship_orders(admin, ["1"], "TRK1", details)
+
+    services.shipments.ship_orders(admin, ["1"], "TRK1", details)  # nothing new
+    services.shipments.ship_orders(admin, ["2"], "TRK1", details)  # same cost
+
+    assert balance(db) == START_BALANCE - 50_000
+    assert len(ledger_entries(db)) == 1
+
+
+def test_changing_shipping_cost_charges_only_the_difference(db, services, admin):
+    _bought(db, "n1")
+    shipment = services.shipments.ship_orders(
+        admin, ["1"], "TRK1", ShipmentDetails(shipping_cost_krw=50_000)
+    ).shipment
+
+    up = services.shipments.update_shipment(
+        admin, shipment.id, ShipmentUpdate(shipping_cost_krw=80_000)
     )
+    same = services.shipments.update_shipment(
+        admin, shipment.id, ShipmentUpdate(shipping_cost_krw=80_000)
+    )
+    down = services.shipments.update_shipment(
+        admin, shipment.id, ShipmentUpdate(shipping_cost_krw=60_000)
+    )
+
+    assert up.shipping_change.amount_krw == -30_000
+    assert same.shipping_change is None
+    assert down.shipping_change.amount_krw == 20_000
+    assert balance(db) == START_BALANCE - 60_000
+    doc = db.get("shipments", shipment.id)
+    assert doc["shipping_cost_krw"] == 60_000
+    assert doc["shipping_charged_krw"] == 60_000
+    assert sorted(ledger_entries(db)) == [f"shipping_charge_{shipment.id}_{n}" for n in (1, 2, 3)]
+
+    services.shipments.update_shipment(admin, shipment.id, ShipmentUpdate(shipping_cost_krw=None))
     assert balance(db) == START_BALANCE
+    assert db.get("shipments", shipment.id)["shipping_charged_krw"] == 0
+
+
+def test_cost_added_later_is_charged(db, services, admin):
+    _bought(db, "n1")
+    shipment = services.shipments.ship_orders(admin, ["1"], "TRK1").shipment
+    assert balance(db) == START_BALANCE
+
+    services.shipments.update_shipment(admin, shipment.id, ShipmentUpdate(shipping_cost_krw=70_000))
+
+    assert balance(db) == START_BALANCE - 70_000
+
+
+def test_update_details_without_money(db, services, admin):
+    _bought(db, "n1", "n2")
+    shipment = services.shipments.ship_orders(admin, ["1", "2"], "TRK1").shipment
+
+    result = services.shipments.update_shipment(
+        admin, shipment.id, ShipmentUpdate(tracking_code="new-trk", box_number="7", weight_kg=3)
+    )
+
+    assert result.shipping_change is None
+    assert result.shipment.tracking_code == "NEW-TRK"
+    assert db.get("orders", "n1")["cargo_code"] == "NEW-TRK"
+    assert db.get("orders", "n2")["cargo_code"] == "NEW-TRK"
+    assert db.get("shipments", shipment.id)["box_number"] == "7"
+    assert ledger_entries(db) == {}
+
+
+def test_update_tracking_to_one_used_elsewhere_is_refused(db, services, admin):
+    _bought(db, "n1", "n2")
+    services.shipments.ship_orders(admin, ["1"], "TRK1")
+    second = services.shipments.ship_orders(admin, ["2"], "TRK2").shipment
+    with pytest.raises(ConflictError, match="SHP-2026-001"):
+        services.shipments.update_shipment(admin, second.id, ShipmentUpdate(tracking_code="trk1"))
+
+
+def test_update_shipment_validation(db, services, admin, client_actor):
+    with pytest.raises(ValidationError):
+        services.shipments.update_shipment(admin, "SHP-2026-001", ShipmentUpdate())
+    with pytest.raises(NotFoundError):
+        services.shipments.update_shipment(admin, "SHP-2026-404", ShipmentUpdate(comment="x"))
+    with pytest.raises(PermissionDeniedError):
+        services.shipments.update_shipment(client_actor, "x", ShipmentUpdate(comment="x"))
+    with pytest.raises(ValidationError):
+        services.shipments.update_shipment(
+            admin, "SHP-2026-001", ShipmentUpdate(shipping_cost_krw=-1)
+        )
+
+
+def test_ledger_still_reconstructs_balance_with_shipping(db, services, admin):
+    _bought(db, "n1")
+    shipment = services.shipments.ship_orders(
+        admin, ["1"], "TRK1", ShipmentDetails(shipping_cost_krw=40_000)
+    ).shipment
+    services.shipments.update_shipment(admin, shipment.id, ShipmentUpdate(shipping_cost_krw=10_000))
+
+    total = sum(e["amount_krw"] for e in ledger_entries(db).values())
+    assert START_BALANCE + total == balance(db) == START_BALANCE - 10_000
 
 
 def test_duplicate_tracking_in_data_is_reported(db, services, admin):
@@ -180,3 +289,13 @@ def test_get_shipment_returns_orders(db, services, client_actor, admin):
     assert shipment.tracking_code == "TRK123"
     assert sorted(order.id for order in orders) == ["n1", "n2"]
     assert [s.id for s in services.shipments.list_shipments(client_actor)] == ["SHP-2026-001"]
+
+
+def test_shipment_reference_by_number(db, services, admin, client_actor):
+    _bought(db, "n1")
+    services.shipments.ship_orders(admin, ["1"], "TRK1")
+    shipment, _ = services.shipments.get_shipment(client_actor, "#1")
+    assert shipment.id == "SHP-2026-001"
+    assert services.shipments.resolve_id("1") == "SHP-2026-001"
+    with pytest.raises(NotFoundError):
+        services.shipments.resolve_id("99")

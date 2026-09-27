@@ -183,6 +183,12 @@ class Shipment:
     comment: str | None
     created_at: datetime | None
     created_by: str | None
+    # What is currently charged to the client balance for shipping, and how
+    # many shipping ledger entries exist (for deterministic entry IDs).
+    shipping_charged_krw: int = 0
+    shipping_charge_seq: int = 0
+    thumbnail_url: str | None = None
+    updated_at: datetime | None = None
 
     @classmethod
     def from_doc(cls, doc_id: str, data: Doc) -> "Shipment":
@@ -200,6 +206,10 @@ class Shipment:
             comment=_str_or_none(data.get("comment")),
             created_at=_dt(data.get("created_at")),
             created_by=_str_or_none(data.get("created_by")),
+            shipping_charged_krw=to_int_amount(data.get("shipping_charged_krw")) or 0,
+            shipping_charge_seq=_int_or_none(data.get("shipping_charge_seq")) or 0,
+            thumbnail_url=_str_or_none(data.get("thumbnail_url")),
+            updated_at=_dt(data.get("updated_at")),
         )
 
 

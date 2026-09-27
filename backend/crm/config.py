@@ -22,6 +22,11 @@ class Settings:
     firebase_storage_bucket: str | None
     gemini_api_key: str | None
     log_level: str
+    # Mini App / HTTP API
+    mini_app_url: str | None = None
+    web_origins: tuple[str, ...] = ()
+    init_data_max_age_hours: int = 24
+    port: int = 8080
 
 
 def _optional(env: Mapping[str, str], name: str) -> str | None:
@@ -45,6 +50,15 @@ def _int_set(env: Mapping[str, str], name: str) -> frozenset[int]:
     return frozenset(result)
 
 
+def _positive_int(env: Mapping[str, str], name: str, default: int) -> int:
+    raw = env.get(name, "").strip()
+    if not raw:
+        return default
+    if not raw.isdigit() or int(raw) <= 0:
+        raise ConfigurationError(f"{name} должен быть положительным целым числом.")
+    return int(raw)
+
+
 def load_settings(env: Mapping[str, str] | None = None, *, require_bot: bool = True) -> Settings:
     env = os.environ if env is None else env
     settings = Settings(
@@ -57,7 +71,17 @@ def load_settings(env: Mapping[str, str] | None = None, *, require_bot: bool = T
         firebase_storage_bucket=_optional(env, "FIREBASE_STORAGE_BUCKET"),
         gemini_api_key=_optional(env, "GEMINI_API_KEY"),
         log_level=(_optional(env, "LOG_LEVEL") or "INFO").upper(),
+        mini_app_url=_optional(env, "MINI_APP_URL"),
+        web_origins=tuple(
+            origin.strip().rstrip("/")
+            for origin in env.get("WEB_ORIGINS", "").split(",")
+            if origin.strip()
+        ),
+        init_data_max_age_hours=_positive_int(env, "INIT_DATA_MAX_AGE_HOURS", 24),
+        port=_positive_int(env, "PORT", 8080),
     )
+    if settings.mini_app_url and not settings.mini_app_url.startswith("https://"):
+        raise ConfigurationError("MINI_APP_URL должен начинаться с https:// (требование Telegram).")
     if require_bot:
         if not settings.bot_token:
             raise ConfigurationError("Не задан BOT_TOKEN (токен от @BotFather).")

@@ -12,6 +12,7 @@ from crm.domain.enums import Role
 from crm.domain.errors import ValidationError
 from crm.services.common import Actor
 from crm.services.container import Services
+from crm.services.shipment_service import ShipmentUpdate
 
 
 async def cargo(message: Message, command: CommandObject, services: Services, actor: Actor) -> None:
@@ -32,14 +33,28 @@ async def shipment(
 ) -> None:
     shipment_id = (command.args or "").strip()
     if not shipment_id:
-        raise ValidationError("Формат: /shipment SHP-2026-001")
+        raise ValidationError("Формат: /shipment 18 или /shipment SHP-2026-018")
     found, orders = await asyncio.to_thread(services.shipments.get_shipment, actor, shipment_id)
     await answer(message, fmt.shipment_details(found, orders))
+
+
+async def shipcost(
+    message: Message, command: CommandObject, services: Services, actor: Actor
+) -> None:
+    reference, cost = parsing.parse_shipcost(command.args)
+    result = await asyncio.to_thread(
+        services.shipments.update_shipment,
+        actor,
+        reference,
+        ShipmentUpdate(shipping_cost_krw=cost),
+    )
+    await answer(message, fmt.shipment_updated(result))
 
 
 def build() -> Router:
     router = Router(name="shipments")
     router.message.register(cargo, Command("cargo"), HasRole(Role.ADMIN))
+    router.message.register(shipcost, Command("shipcost"), HasRole(Role.ADMIN))
     router.message.register(shipments, Command("shipments"), HasRole(Role.ADMIN, Role.CLIENT))
     router.message.register(shipment, Command("shipment"), HasRole(Role.ADMIN, Role.CLIENT))
     return router
