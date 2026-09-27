@@ -64,7 +64,10 @@ def build_app(settings: Settings, demo: bool):
         if blobs is None:
             logger.warning("FIREBASE_STORAGE_BUCKET не задан — загрузка фото отключена.")
 
-    services = build_services(db, admin_ids, blob_storage=blobs)
+    from crm.services.recognition import create_recognizer
+
+    recognizer = create_recognizer(settings.gemini_api_key, settings.gemini_model)
+    services = build_services(db, admin_ids, blob_storage=blobs, recognizer=recognizer)
     web_dist = Path(os.environ.get("WEB_DIST") or DEFAULT_WEB_DIST)
     if not (web_dist / "index.html").is_file():
         logger.warning("Mini App не собран (%s) — работает только API. См. web/README.", web_dist)

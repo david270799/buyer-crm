@@ -1,8 +1,9 @@
 """Standardised product and parcel photos.
 
-Every image is re-encoded to WebP: the main picture fits into 1280×1280
-(proportions kept, never upscaled) and is compressed to roughly 80–120 KB,
-plus a 400 px thumbnail for lists. Originals are not kept.
+Every image becomes a square WebP: the whole picture is kept (never cropped
+or stretched) and centred on a white 1:1 canvas, at most 1280×1280 (never
+upscaled), compressed to at most ~500 KB at the highest quality that fits.
+A 400 px square thumbnail is made for lists. Originals are not kept.
 """
 
 import io
@@ -11,7 +12,8 @@ from dataclasses import dataclass
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from crm.domain.errors import ValidationError
+from crm.domain.enums import Role
+from crm.domain.errors import PermissionDeniedError, ValidationError
 from crm.services.common import Actor, Clock, require_admin
 from crm.storage.blobs import BlobStorage
 
@@ -20,10 +22,14 @@ MAX_INPUT_PIXELS = 50_000_000  # decompression-bomb guard
 
 MAIN_MAX_SIDE = 1280
 THUMB_MAX_SIDE = 400
-MAIN_TARGET_BYTES = 120_000
-THUMB_TARGET_BYTES = 30_000
-MIN_QUALITY, MAX_QUALITY = 45, 85
+MAIN_TARGET_BYTES = 500_000
+THUMB_TARGET_BYTES = 40_000
+MIN_QUALITY, MAX_QUALITY = 50, 90
 _MIN_SIDE_WHEN_SHRINKING = 480
+
+# Photos the client sends with an order are stored by the intake pipeline
+# on the client's behalf; every other upload is admin-only.
+ORDER_PHOTOS_FOLDER = "orders"
 
 
 @dataclass(frozen=True)
@@ -55,6 +61,17 @@ def _open(data: bytes) -> Image.Image:
         background.paste(rgba, mask=rgba.getchannel("A"))
         return background
     return image.convert("RGB")
+
+
+def _square(image: Image.Image) -> Image.Image:
+    """Centre the whole picture on a white 1:1 canvas: nothing is cut off or stretched."""
+    width, height = image.size
+    if width == height:
+        return image
+    side = max(width, height)
+    canvas = Image.new("RGB", (side, side), (255, 255, 255))
+    canvas.paste(image, ((side - width) // 2, (side - height) // 2))
+    return canvas
 
 
 def _fit(image: Image.Image, max_side: int) -> Image.Image:
@@ -94,7 +111,7 @@ def _encode(image: Image.Image, max_side: int, target_bytes: int) -> tuple[bytes
 
 
 def process_image(data: bytes) -> tuple[bytes, bytes, tuple[int, int]]:
-    image = _open(data)
+    image = _square(_open(data))
     main, main_image = _encode(image, MAIN_MAX_SIDE, MAIN_TARGET_BYTES)
     thumb, _ = _encode(main_image, THUMB_MAX_SIDE, THUMB_TARGET_BYTES)
     return main, thumb, main_image.size
@@ -106,8 +123,18 @@ class ImageService:
         self._clock = clock
 
     def store(self, actor: Actor, data: bytes, folder: str = "images") -> StoredImage:
-        require_admin(actor)
-        main, thumb, (width, height) = process_image(data)
+        if folder == ORDER_PHOTOS_FOLDER:
+            if actor.role not in (Role.ADMIN, Role.CLIENT):
+                raise PermissionDeniedError("Недостаточно прав.")
+        else:
+            require_admin(actor)
+        return self.store_processed(*process_image(data), folder=folder)
+
+    def store_processed(
+        self, main: bytes, thumb: bytes, size: tuple[int, int], *, folder: str
+    ) -> StoredImage:
+        """Upload an already processed pair (see `process_image`)."""
+        width, height = size
         month = self._clock.now().strftime("%Y/%m")
         name = uuid.uuid4().hex
         base = f"{folder}/{month}/{name}"

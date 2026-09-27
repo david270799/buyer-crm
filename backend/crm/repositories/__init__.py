@@ -2,6 +2,7 @@ from crm.repositories.audit import AuditRepository
 from crm.repositories.clients import ClientRepository
 from crm.repositories.counters import CounterRepository
 from crm.repositories.events import EventReadsRepository, EventRepository
+from crm.repositories.intake import IntakeRepository
 from crm.repositories.ledger import LedgerRepository
 from crm.repositories.orders import OrderRepository
 from crm.repositories.settings import SettingsRepository
@@ -13,6 +14,7 @@ __all__ = [
     "CounterRepository",
     "EventReadsRepository",
     "EventRepository",
+    "IntakeRepository",
     "LedgerRepository",
     "OrderRepository",
     "SettingsRepository",

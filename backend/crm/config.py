@@ -22,6 +22,7 @@ class Settings:
     firebase_storage_bucket: str | None
     gemini_api_key: str | None
     log_level: str
+    gemini_model: str | None = None
     # Mini App / HTTP API
     mini_app_url: str | None = None
     web_origins: tuple[str, ...] = ()
@@ -70,6 +71,7 @@ def load_settings(env: Mapping[str, str] | None = None, *, require_bot: bool = T
         firebase_credentials_json=_optional(env, "FIREBASE_CREDENTIALS_JSON"),
         firebase_storage_bucket=_optional(env, "FIREBASE_STORAGE_BUCKET"),
         gemini_api_key=_optional(env, "GEMINI_API_KEY"),
+        gemini_model=_optional(env, "GEMINI_MODEL"),
         log_level=(_optional(env, "LOG_LEVEL") or "INFO").upper(),
         mini_app_url=_optional(env, "MINI_APP_URL"),
         web_origins=tuple(

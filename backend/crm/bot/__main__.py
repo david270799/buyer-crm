@@ -42,11 +42,16 @@ async def _main(demo: bool) -> None:
             "ДЕМО-РЕЖИМ: данные в памяти, Firebase не используется, "
             "после перезапуска всё начнётся заново."
         )
+        blobs = None
     else:
-        from crm.firebase import create_database
+        from crm.firebase import create_blob_storage, create_database
 
         db = create_database(settings)
-    services = build_services(db, settings.admin_ids)
+        blobs = create_blob_storage(settings)
+    from crm.services.recognition import create_recognizer
+
+    recognizer = create_recognizer(settings.gemini_api_key, settings.gemini_model)
+    services = build_services(db, settings.admin_ids, blob_storage=blobs, recognizer=recognizer)
     await run_bot(create_bot(settings.bot_token), services, settings)
 
 

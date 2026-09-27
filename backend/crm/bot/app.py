@@ -37,6 +37,7 @@ ADMIN_COMMANDS = [
     BotCommand(command="deposit", description="Пополнение баланса"),
     BotCommand(command="adjust", description="Корректировка баланса"),
     BotCommand(command="rate", description="Курс KRW/USD"),
+    BotCommand(command="add", description="Принять фото как заказ (ответом на фото)"),
     BotCommand(command="notify", description="Уведомления в личку"),
     BotCommand(command="help", description="Все команды"),
 ]
@@ -61,7 +62,7 @@ def create_dispatcher(services: Services, settings: Settings) -> Dispatcher:
     access = AccessMiddleware(services.roles, settings.allowed_chat_ids)
     dp.message.outer_middleware(access)
     dp.callback_query.outer_middleware(access)
-    dp.include_router(build_router())
+    dp.include_router(build_router(services, settings))
     return dp
 
 
@@ -81,6 +82,13 @@ async def run_bot(
                 "Скопируйте актуальный токен из @BotFather."
             ) from None
         logger.info("Bot @%s started; admins: %s", me.username, sorted(settings.admin_ids))
+        if not me.can_read_all_group_messages:
+            logger.warning(
+                "Privacy mode is on: in groups the bot sees order photos only if it is a group "
+                "admin. Turn it off in @BotFather: /setprivacy → Disable, then re-add the bot."
+            )
+        if services.recognizer is None:
+            logger.warning("GEMINI_API_KEY is not set: orders are accepted without recognition.")
         await set_commands(bot, settings.admin_ids)
         if settings.mini_app_url:
             await set_menu_button(bot, settings.mini_app_url)

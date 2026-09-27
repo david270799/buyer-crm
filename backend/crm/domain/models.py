@@ -78,6 +78,8 @@ class Order:
     # Admin only: every purchase attempt (first buy and each re-purchase).
     purchases: list[Doc] = field(default_factory=list)
     rebuy_count: int = 0
+    # Admin only: what Gemini read from the client's photo (see services/recognition).
+    recognition: Doc | None = None
     timestamps: dict[str, datetime] = field(default_factory=dict)
     created_by: str | None = None
     updated_by: str | None = None
@@ -125,6 +127,9 @@ class Order:
             attention_required=bool(data.get("attention_required", False)),
             purchases=[dict(p) for p in data.get("purchases") or [] if isinstance(p, dict)],
             rebuy_count=_int_or_none(data.get("rebuy_count")) or 0,
+            recognition=dict(data["recognition"])
+            if isinstance(data.get("recognition"), dict)
+            else None,
             timestamps=timestamps,
             created_by=_str_or_none(data.get("created_by")),
             updated_by=_str_or_none(data.get("updated_by")),

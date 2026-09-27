@@ -6,6 +6,7 @@ from crm.repositories import (
     CounterRepository,
     EventReadsRepository,
     EventRepository,
+    IntakeRepository,
     LedgerRepository,
     OrderRepository,
     SettingsRepository,
@@ -16,9 +17,11 @@ from crm.services.common import Auditor, Clock, SystemClock
 from crm.services.events import EventRecorder, EventService
 from crm.services.finance_service import FinanceService
 from crm.services.image_service import ImageService
+from crm.services.intake_service import IntakeService
 from crm.services.ledger import BalanceLedger
 from crm.services.notifications import NotificationService
 from crm.services.order_service import OrderService
+from crm.services.recognition import Recognizer
 from crm.services.sequences import SequenceAllocator
 from crm.services.shipment_service import ShipmentService
 from crm.storage import Database
@@ -33,8 +36,11 @@ class Services:
     roles: RoleResolver
     events: EventService
     notifications: NotificationService
+    intake: IntakeService
     # None when no file storage is configured (uploads are then refused).
     images: ImageService | None = None
+    # None without GEMINI_API_KEY: orders are still accepted, fields stay empty.
+    recognizer: Recognizer | None = None
 
 
 def build_services(
@@ -42,6 +48,7 @@ def build_services(
     admin_ids: frozenset[int],
     clock: Clock | None = None,
     blob_storage: BlobStorage | None = None,
+    recognizer: Recognizer | None = None,
 ) -> Services:
     clock = clock or SystemClock()
     orders_repo = OrderRepository()
@@ -69,5 +76,9 @@ def build_services(
         notifications=NotificationService(
             db, clock, events_repo, settings_repo, clients_repo, recorder, auditor, admin_ids
         ),
+        intake=IntakeService(
+            db, clock, orders_repo, IntakeRepository(), sequences, auditor, recorder
+        ),
         images=ImageService(blob_storage, clock) if blob_storage is not None else None,
+        recognizer=recognizer,
     )

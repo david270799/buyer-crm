@@ -374,7 +374,7 @@ def test_image_upload(api, blobs):
 
     assert uploaded.status_code == 200
     body = uploaded.json()
-    assert body["width"] == 1280 and body["height"] == 960
+    assert body["width"] == body["height"] == 1280  # square, like every photo
     assert body["photo_url"].endswith(".webp") and len(blobs.files) == 2
     client = api(
         "POST",

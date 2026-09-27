@@ -379,6 +379,61 @@ def notify_settings(settings: NotificationSettings, client_has_telegram: bool) -
     return "\n".join(lines)
 
 
+INTAKE_FAILED = "⚠️ Не получилось принять это фото. Отправьте его, пожалуйста, ещё раз."
+
+GROUP_WELCOME = (
+    "👋 Я принимаю заказы.\n"
+    "Отправьте фото товара, в подписи — размер (и ссылку, если есть). "
+    "На каждое фото создам заказ и отвечу его номером."
+)
+
+
+def intake_accepted(order: Order, audience: Role) -> str:
+    """Reply to the photo. `audience` is who can read it (see access.audience_for)."""
+    view = order_view(order, audience)
+    lines = [f"🆕 <b>Заказ {e(order.id)} принят</b>"]
+    title = " ".join(part for part in (view["brand"], view["model"]) if part)
+    lines.append(e(title) if title else "Модель уточнит администратор")
+    lines.append(f"Размер: {e(view['size'])}" if view["size"] else "Размер: не указан")
+    if view["client_comment"]:
+        lines.append(f"💬 {e(view['client_comment'])}")
+    if audience is Role.ADMIN:
+        if view["source_url"]:
+            lines.append(f"🔒 Ссылка: {e(view['source_url'])}")
+        recognition = view.get("recognition") or {}
+        if recognition.get("engine"):
+            confidence = recognition.get("confidence") or 0
+            lines.append(f"🤖 Gemini: уверенность {round(confidence * 100)}%")
+        elif recognition.get("error"):
+            lines.append(f"🤖 Без распознавания: {e(recognition['error'])}")
+        lines.append(f"\nВыкуп: <code>/buy {e(order.id)} закупка цена</code>")
+    return "\n".join(lines)
+
+
+def intake_not_an_order(link: str | None) -> str:
+    where = f" {e(link)}" if link else ""
+    return (
+        f"🤔 Фото от клиента не похоже на заказ — заказ не создан.{where}\n"
+        "Если это заказ, ответьте на это фото командой /add."
+    )
+
+
+def group_added_for_admin(title: str, chat_id: int, sees_photos: bool) -> str:
+    lines = [
+        f"✅ Бот добавлен в группу «{e(title)}».",
+        f"ID группы: <code>{chat_id}</code>",
+        "Чтобы бот работал только в ней, укажите на сервере "
+        f"<code>ALLOWED_CHAT_IDS={chat_id}</code>.",
+    ]
+    if not sees_photos:
+        lines.append(
+            "\n⚠️ Бот не видит обычные сообщения группы (Privacy Mode). В @BotFather: "
+            "/setprivacy → выберите бота → Disable, затем удалите бота из группы и добавьте "
+            "снова. Или сделайте бота администратором группы."
+        )
+    return "\n".join(lines)
+
+
 ADMIN_HELP = """<b>Команды администратора</b>
 /buy 5 140000 170000 — выкуп: закупка, цена клиенту (списывает баланс один раз)
 /cancel 5 — отмена (возвращает списанное один раз; после отправки отмены нет)
@@ -393,9 +448,13 @@ ADMIN_HELP = """<b>Команды администратора</b>
 /adjust -15000 причина — корректировка (комментарий увидит клиент)
 /rate 1350 — курс KRW за 1 USD
 /notify — уведомления в личку (выкл / мне / клиенту; важные / все)
+/add — ответом на фото: принять его как заказ
+Фото товара в личку боту (или пересланное) — новый заказ
 /whoami — ваш Telegram ID"""
 
-CLIENT_HELP = """<b>Команды</b>
+CLIENT_HELP = """<b>Новый заказ</b> — фото товара, в подписи размер (и ссылка, если есть).
+
+<b>Команды</b>
 /balance — баланс в ₩ и $
 /history — история баланса
 /order 125 — карточка заказа
