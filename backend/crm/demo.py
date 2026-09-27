@@ -125,7 +125,17 @@ def create_demo_database(
             clock.advance(hours=7)
             services.orders.buy(admin, order_id, purchase, price)
 
-    clock.advance(days=2)
+    clock.advance(days=1)
+    services.orders.rebuy(
+        admin,
+        "n123",
+        212_000,
+        249_000,
+        source_url="https://store.example.kr/salomon-xt6",
+        reason="В первом магазине закончился размер 265 — выкупили в другом магазине.",
+    )
+
+    clock.advance(days=1)
     services.orders.cancel(admin, "n117")
     services.orders.set_status(admin, ["n118", "n119", "n120", "n121"], OrderStatus.WAREHOUSE)
 

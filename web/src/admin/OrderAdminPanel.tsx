@@ -1,13 +1,22 @@
-import { Ban, Pencil, ShoppingBag, Truck, Warehouse } from "lucide-react";
+import { Ban, Pencil, Repeat, ShoppingBag, Truck, Warehouse } from "lucide-react";
 import { useState } from "react";
 
 import { useBulkStatus } from "../api/hooks";
 import type { Order, OrderStatus } from "../api/types";
 import { errorText, useToast } from "../components/ui";
-import { krw } from "../lib/format";
-import { bulkSummary, BuySheet, CancelConfirm, EditOrderSheet, ShipmentSheet } from "./sheets";
+import { date, krw } from "../lib/format";
+import { bulkSummary, BuySheet, CancelConfirm, EditOrderSheet, RebuySheet, ShipmentSheet } from "./sheets";
 
-type Dialog = "buy" | "cancel" | "edit" | "ship" | null;
+type Dialog = "buy" | "cancel" | "edit" | "ship" | "rebuy" | null;
+
+function shopName(url: string | null): string {
+  if (!url) return "без ссылки";
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
 
 export function OrderAdminPanel({ order }: { order: Order }) {
   const toast = useToast();
@@ -20,7 +29,10 @@ export function OrderAdminPanel({ order }: { order: Order }) {
     );
 
   const status = order.status;
-  const canCancel = status === "new" || ((status === "bought" || status === "warehouse") && !order.shipment_id);
+  const beforeShipping = (status === "bought" || status === "warehouse") && !order.shipment_id;
+  const canCancel = status === "new" || beforeShipping;
+  const canRebuy = beforeShipping && (order.charged_amount_krw ?? 0) > 0;
+  const purchases = order.purchases ?? [];
   const profit = order.profit ?? null;
   return (
     <>
@@ -41,6 +53,27 @@ export function OrderAdminPanel({ order }: { order: Order }) {
           <dt>Списано с баланса</dt>
           <dd>{krw(order.charged_amount_krw ?? 0)}</dd>
         </dl>
+        {purchases.length > 1 && (
+          <div className="stack" style={{ gap: 6 }}>
+            <div className="small muted">Закупки ({purchases.length})</div>
+            <ol className="purchases">
+              {purchases.map((p, i) => (
+                <li key={i} className={p.replaced_at ? "replaced" : ""}>
+                  <div className="row between">
+                    <span className="grow" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {shopName(p.source_url)}
+                    </span>
+                    <span className="num">{krw(p.purchase_price)}</span>
+                  </div>
+                  <div className="tiny faint num">
+                    {date(p.bought_at)} · клиенту {krw(p.client_price)} ·{" "}
+                    {p.replaced_at ? "заменена" : "текущая"}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
         {order.internal_comment && (
           <div className="banner info small">
             <div>🔒 {order.internal_comment}</div>
@@ -67,6 +100,11 @@ export function OrderAdminPanel({ order }: { order: Order }) {
               Доставлен
             </button>
           )}
+          {canRebuy && (
+            <button className="btn" onClick={() => setDialog("rebuy")}>
+              <Repeat size={16} /> Перезаказ
+            </button>
+          )}
           {canCancel && (
             <button className="btn danger" onClick={() => setDialog("cancel")}>
               <Ban size={16} /> Отменить
@@ -76,6 +114,7 @@ export function OrderAdminPanel({ order }: { order: Order }) {
       </div>
       {dialog === "buy" && <BuySheet order={order} onClose={() => setDialog(null)} />}
       {dialog === "cancel" && <CancelConfirm order={order} onClose={() => setDialog(null)} />}
+      {dialog === "rebuy" && <RebuySheet order={order} onClose={() => setDialog(null)} />}
       {dialog === "edit" && <EditOrderSheet order={order} onClose={() => setDialog(null)} />}
       {dialog === "ship" && (
         <ShipmentSheet ids={[order.id]} onClose={() => setDialog(null)} onDone={() => setDialog(null)} />

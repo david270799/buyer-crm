@@ -916,6 +916,10 @@ table.orders .r {
   flex-direction: column;
 }
 
+.card.list {
+  overflow: hidden;
+}
+
 .list-item {
   display: flex;
   align-items: center;
@@ -1469,4 +1473,141 @@ table.orders .r {
 .filters .select {
   flex: 0 0 auto;
   width: auto;
+}
+
+/* Top bar with the notifications bell */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -4px 0 10px;
+}
+
+.topbar-title {
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+@media (min-width: 960px) {
+  .topbar {
+    justify-content: flex-end;
+    margin: -8px 0 4px;
+  }
+
+  .topbar-title {
+    display: none;
+  }
+}
+
+.bell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.bell-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 19px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.bell-badge.important {
+  background: var(--negative);
+  color: #fff;
+}
+
+/* Events (notifications and order history) */
+
+.event {
+  display: flex;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.event:last-child {
+  border-bottom: none;
+}
+
+.event.clickable {
+  cursor: pointer;
+}
+
+.event.unread {
+  background: color-mix(in srgb, var(--info-soft) 60%, transparent);
+}
+
+.event-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.event.important .event-icon {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.event-title {
+  font-weight: 600;
+}
+
+.event-body {
+  margin-top: 2px;
+  color: var(--text-2);
+  font-size: 14px;
+  white-space: pre-line;
+}
+
+.purchases {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.purchases li {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.purchases li .row {
+  white-space: nowrap;
+}
+
+.purchases li.replaced {
+  color: var(--text-3);
+  background: transparent;
+  border: 1px dashed var(--border-strong);
 }

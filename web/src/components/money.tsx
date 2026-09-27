@@ -39,7 +39,7 @@ function EntryIcon({ item }: { item: LedgerItem }) {
       ? ArrowDownLeft
       : item.type === "shipping_charge"
         ? Truck
-        : item.type === "order_refund"
+        : item.type === "order_refund" || item.type === "order_rebuy"
           ? RotateCcw
           : SlidersHorizontal;
   return (
@@ -53,7 +53,8 @@ function entryTitle(item: LedgerItem): string {
   if (item.type === "shipping_charge") return item.shipment_id ? `Доставка · ${item.shipment_id}` : "Доставка";
   if (item.order_id) {
     const title = item.order?.title;
-    return [item.type === "order_refund" ? "Возврат" : null, item.order_id, title].filter(Boolean).join(" · ");
+    const prefix = item.type === "order_refund" ? "Возврат" : item.type === "order_rebuy" ? "Перезаказ" : null;
+    return [prefix, item.order_id, title].filter(Boolean).join(" · ");
   }
   return item.type ? LEDGER_LABEL[item.type] : "Операция";
 }

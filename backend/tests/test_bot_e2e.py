@@ -267,8 +267,11 @@ def test_demo_data_is_consistent_and_realistic():
         "deposit",
         "order_charge",
         "order_refund",
+        "order_rebuy",
         "shipping_charge",
     }
+    event_types = {data["type"] for _, data in db.query("events")}
+    assert {"order_rebought", "shipment_sent", "attention", "comment"} <= event_types
     statuses = {doc_id: data["status"] for doc_id, data in db.query("orders")}
     assert statuses["n117"] == "cancelled" and statuses["n118"] == "delivered"
     assert statuses["n120"] == "cargo" and statuses["n124"] == "new"

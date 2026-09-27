@@ -3,6 +3,7 @@ import { type ReactNode, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { backButton } from "../telegram";
+import { BellButton } from "./events";
 
 export interface NavItem {
   to: string;
@@ -20,7 +21,7 @@ function useTelegramBack() {
   const navigate = useNavigate();
   useEffect(() => {
     const parts = pathname.split("/").filter(Boolean);
-    const nested = parts.length > 1 || pathname === "/balance";
+    const nested = parts.length > 1 || pathname === "/balance" || pathname === "/notifications";
     const parent = parts.length > 1 ? `/${parts.slice(0, -1).join("/")}` : "/";
     return backButton(nested, () => navigate(parent));
   }, [pathname, navigate]);
@@ -48,7 +49,13 @@ export function Shell({ nav, title, children }: { nav: NavItem[]; title: string;
           Время: Сеул (KST)
         </div>
       </aside>
-      <main className="main">{children}</main>
+      <main className="main">
+        <header className="topbar">
+          <span className="topbar-title">{title}</span>
+          <BellButton />
+        </header>
+        {children}
+      </main>
       <nav className="tabbar" aria-label="Навигация">
         {nav.map((item) => (
           <NavLink key={item.to} to={item.to} className={isActive(item, pathname) ? "active" : ""}>

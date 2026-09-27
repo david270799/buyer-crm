@@ -11,6 +11,7 @@ import {
   useCreateShipment,
   useMoney,
   useOverview,
+  useRebuy,
   useSettings,
   useUpdateOrder,
   useUpdateShipment,
@@ -161,6 +162,102 @@ export function BuySheet({ order, onClose }: { order: Order; onClose: () => void
         </div>
       )}
       {valid && <BalancePreview delta={-price} label="Будет списано с баланса" />}
+    </Sheet>
+  );
+}
+
+export function RebuySheet({ order, onClose }: { order: Order; onClose: () => void }) {
+  const toast = useToast();
+  const rebuy = useRebuy(order.id);
+  const [purchase, setPurchase] = useState<number | null>(null);
+  const [price, setPrice] = useState<number | null>(order.client_price ?? null);
+  const [link, setLink] = useState(order.source_url ?? "");
+  const [reason, setReason] = useState("");
+  const charged = order.charged_amount_krw ?? 0;
+  const valid = purchase !== null && purchase >= 0 && price !== null && price > 0;
+  const delta = valid ? price - charged : 0; // extra to charge (+) or to refund (−)
+  const profit = valid ? price - purchase : null;
+  return (
+    <Sheet
+      title={`Перезаказ ${order.id}`}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" onClick={onClose}>
+            Отмена
+          </button>
+          <button
+            className="btn primary"
+            disabled={!valid || rebuy.isPending}
+            onClick={() =>
+              rebuy.mutate(
+                {
+                  purchase_price: purchase!,
+                  client_price: price!,
+                  source_url: link.trim() || null,
+                  reason: reason.trim() || null,
+                },
+                {
+                  onSuccess: (r) => {
+                    toast(
+                      r.already_done
+                        ? "Ничего не изменилось — данные те же"
+                        : r.change
+                          ? `Перезаказан. Баланс: ${krw(r.change.amount_krw, true)}`
+                          : "Перезаказан. Цена для клиента та же",
+                    );
+                    onClose();
+                  },
+                  onError: (e) => toast(errorText(e), "error"),
+                },
+              )
+            }
+          >
+            {rebuy.isPending ? "Подождите…" : "Перезаказать"}
+          </button>
+        </>
+      }
+    >
+      <div className="small muted" style={{ marginBottom: 12 }}>
+        Магазин отменил заказ, и вы выкупили товар в другом месте. Сейчас: закупка{" "}
+        {krw(order.purchase_price)}, клиенту {krw(order.client_price)}.
+      </div>
+      <div className="form-grid two">
+        <Field label="Новая закупка">
+          <MoneyInput value={purchase} onChange={setPurchase} autoFocus />
+        </Field>
+        <Field label="Цена для клиента">
+          <MoneyInput value={price} onChange={setPrice} />
+        </Field>
+        <div className="full">
+          <Field label="Ссылка на новый магазин">
+            <input className="input" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://" />
+          </Field>
+        </div>
+        <div className="full">
+          <Field label="Причина" hint="Клиент увидит её в истории заказа и в уведомлении">
+            <textarea
+              className="textarea"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Магазин отменил заказ: товара нет в наличии"
+            />
+          </Field>
+        </div>
+      </div>
+      {profit !== null && (
+        <div className={`small num ${profit < 0 ? "negative" : "muted"}`} style={{ marginTop: 10 }}>
+          Прибыль: {krw(profit)}
+        </div>
+      )}
+      {valid && delta === 0 && (
+        <div className="small" style={{ marginTop: 10 }}>
+          Цена для клиента не меняется — баланс не изменится.
+        </div>
+      )}
+      {valid && delta !== 0 && (
+        <BalancePreview delta={-delta} label={delta > 0 ? "Доплата с баланса" : "Возврат разницы"} />
+      )}
     </Sheet>
   );
 }

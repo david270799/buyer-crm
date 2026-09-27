@@ -444,7 +444,8 @@ def test_notifications_feed_and_read_state(db, api):
     api("POST", "/api/orders/5/buy", json={"purchase_price": 1, "client_price": 10})
     api("POST", "/api/orders/5/cancel")
 
-    assert api("GET", "/api/events/unread", who=CLIENT_TG).json() == {"important": 1, "total": 2}
+    unread = api("GET", "/api/events/unread", who=CLIENT_TG).json()
+    assert (unread["important"], unread["total"], unread["seen_at"]) == (1, 2, None)
     feed = api("GET", "/api/events", who=CLIENT_TG).json()["items"]
     assert [e["type"] for e in feed] == ["order_cancelled", "order_bought"]
     important = api("GET", "/api/events", who=CLIENT_TG, params={"important": "true"}).json()
@@ -453,5 +454,6 @@ def test_notifications_feed_and_read_state(db, api):
     assert [e["type"] for e in older.json()["items"]] == ["order_bought"]
 
     assert api("POST", "/api/events/read", who=CLIENT_TG).json() == {"ok": True}
-    assert api("GET", "/api/events/unread", who=CLIENT_TG).json()["total"] == 0
+    after = api("GET", "/api/events/unread", who=CLIENT_TG).json()
+    assert after["total"] == 0 and after["seen_at"] is not None
     assert api("GET", "/api/events/unread").json()["total"] == 2  # admin separate

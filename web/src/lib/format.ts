@@ -98,6 +98,7 @@ export function statusLabel(status: OrderStatus | null): string {
 export const LEDGER_LABEL: Record<LedgerType, string> = {
   order_charge: "Выкуп",
   order_refund: "Возврат",
+  order_rebuy: "Перезаказ",
   deposit: "Пополнение",
   adjustment: "Корректировка",
   shipping_charge: "Доставка",
@@ -117,4 +118,8 @@ export function items(count: number): string {
 
 export function orderTitle(order: { brand: string | null; model: string | null; title?: string | null }): string {
   return order.title || [order.brand, order.model].filter(Boolean).join(" ") || "Без названия";
+}
+
+export function timeOnly(value: string | null | undefined): string {
+  return value ? timeFmt.format(new Date(value)) : "";
 }

@@ -427,9 +427,9 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         return {"items": [event_json(e) for e in items]}
 
     @app.get("/api/events/unread")
-    def unread_events(p: Any_) -> dict[str, int]:
+    def unread_events(p: Any_) -> dict[str, Any]:
         unread = services.events.unread(p.actor)
-        return {"important": unread.important, "total": unread.total}
+        return {"important": unread.important, "total": unread.total, "seen_at": unread.seen_at}
 
     @app.post("/api/events/read")
     def read_events(p: Any_) -> dict[str, bool]:

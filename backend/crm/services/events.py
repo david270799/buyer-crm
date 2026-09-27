@@ -68,6 +68,7 @@ class EventRecorder:
 class Unread:
     important: int
     total: int
+    seen_at: datetime | None = None
 
 
 class EventService:
@@ -110,6 +111,7 @@ class EventService:
         return Unread(
             important=min(sum(1 for e in recent if e.important), UNREAD_CAP),
             total=min(len(recent), UNREAD_CAP),
+            seen_at=seen,
         )
 
     def mark_read(self, actor: Actor) -> None:

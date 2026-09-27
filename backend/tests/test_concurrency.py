@@ -99,3 +99,16 @@ def test_parallel_deposits_on_different_keys_all_apply(db, services, admin):
     _check_errors(db, errors)
     assert len(ledger_entries(db)) == len(results)
     assert balance(db) == START_BALANCE + len(results) * 1_000
+
+
+def test_parallel_identical_rebuys_move_the_difference_once(db, services, admin):
+    seed_order(db, "n5")
+    services.orders.buy(admin, "5", 140_000, 170_000)
+
+    results, errors = _run_parallel(lambda: services.orders.rebuy(admin, "5", 150_000, 185_000))
+
+    _check_errors(db, errors)
+    rebuys = [key for key in ledger_entries(db) if key.startswith("order_rebuy")]
+    assert rebuys == ["order_rebuy_n5_1"]
+    assert sum(not r.already_done for r in results) <= 1
+    assert balance(db) == START_BALANCE - 185_000

@@ -23,6 +23,46 @@ export interface Order {
   profit?: number | null;
   charged_amount_krw?: number;
   internal_comment?: string | null;
+  purchases?: Purchase[];
+  rebuy_count?: number;
+}
+
+export interface Purchase {
+  purchase_price: number | null;
+  client_price: number | null;
+  source_url: string | null;
+  bought_at: string | null;
+  replaced_at?: string | null;
+  note?: string | null;
+}
+
+export type EventType =
+  | "order_created"
+  | "order_bought"
+  | "order_rebought"
+  | "order_cancelled"
+  | "order_warehouse"
+  | "order_delivered"
+  | "order_status"
+  | "comment"
+  | "attention"
+  | "shipment_sent"
+  | "shipment_updated"
+  | "shipping_cost"
+  | "deposit"
+  | "adjustment"
+  | "rate";
+
+export interface CrmEvent {
+  id: string;
+  type: EventType | null;
+  important: boolean;
+  title: string;
+  body: string | null;
+  order_ids: string[];
+  shipment_id: string | null;
+  amount_krw: number | null;
+  created_at: string | null;
 }
 
 export interface Shipment {
@@ -43,7 +83,13 @@ export interface Shipment {
   shipping_charged_krw?: number;
 }
 
-export type LedgerType = "order_charge" | "order_refund" | "deposit" | "adjustment" | "shipping_charge";
+export type LedgerType =
+  | "order_charge"
+  | "order_refund"
+  | "order_rebuy"
+  | "deposit"
+  | "adjustment"
+  | "shipping_charge";
 
 export interface LedgerItem {
   id: string;

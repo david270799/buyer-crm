@@ -5,6 +5,7 @@ import { Link, useParams } from "react-router-dom";
 import { useOrder } from "../api/hooks";
 import type { Order, Shipment } from "../api/types";
 import { PageHead } from "../components/Layout";
+import { OrderHistory } from "../components/events";
 import { Photo } from "../components/orders";
 import { StatusBadge, Stepper } from "../components/status";
 import { ErrorState, Loading, useToast } from "../components/ui";
@@ -74,7 +75,7 @@ export function OrderDetailsPage({ adminPanel }: { adminPanel?: (order: Order) =
   const { data, error, isLoading, refetch } = useOrder(id);
   if (isLoading) return <Loading rows={3} height={140} />;
   if (error || !data) return <ErrorState error={error} onRetry={refetch} />;
-  const { order, shipment } = data;
+  const { order, shipment, history } = data;
 
   return (
     <>
@@ -145,6 +146,7 @@ export function OrderDetailsPage({ adminPanel }: { adminPanel?: (order: Order) =
           )}
           {shipment && <ShipmentLink shipment={shipment} />}
           {adminPanel?.(order)}
+          <OrderHistory events={history} />
           <div className="card pad">
             <Timestamps order={order} />
           </div>

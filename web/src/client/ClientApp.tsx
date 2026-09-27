@@ -10,6 +10,7 @@ import { Empty, ErrorState, Loading, useDebounced } from "../components/ui";
 import { plural } from "../lib/format";
 import { BalancePage } from "../shared/BalancePage";
 import { StatusChips, StatusTiles, useOrderFilters } from "../shared/filters";
+import { NotificationsPage } from "../shared/NotificationsPage";
 import { OrderDetailsPage } from "../shared/OrderDetailsPage";
 import { ShipmentDetailsPage, ShipmentsPage } from "../shared/ShipmentsPages";
 
@@ -110,6 +111,7 @@ export function ClientApp() {
         <Route path="/shipments" element={<ShipmentsPage />} />
         <Route path="/shipments/:id" element={<ShipmentDetailsPage />} />
         <Route path="/balance" element={<BalancePage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Shell>

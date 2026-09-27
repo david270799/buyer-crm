@@ -11,6 +11,7 @@ import { Empty, ErrorState, errorText, Field, Loading, MoneyInput, Switch, useTo
 import { dateTime, krw } from "../lib/format";
 import { BalancePage } from "../shared/BalancePage";
 import { StatusTiles } from "../shared/filters";
+import { NotificationsPage } from "../shared/NotificationsPage";
 import { OrderDetailsPage } from "../shared/OrderDetailsPage";
 import { EditButton, ShipmentDetailsPage, ShipmentsPage } from "../shared/ShipmentsPages";
 import { OrderAdminPanel } from "./OrderAdminPanel";
@@ -284,6 +285,7 @@ export function AdminApp({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
         <Route path="/finance" element={<FinancePage />} />
         <Route path="/balance" element={<Navigate to="/finance" replace />} />
         <Route path="/settings" element={<SettingsPage onLeaveDemo={onLeaveDemo} />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Shell>

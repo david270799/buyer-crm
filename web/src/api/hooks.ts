@@ -1,8 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, get, newIdempotencyKey, patch, post, put, query } from "./client";
 import type {
   BalanceChange,
+  CrmEvent,
   BulkResult,
   LedgerItem,
   Me,
@@ -24,6 +25,8 @@ export const keys = {
   shipment: (id: string) => ["shipment", id] as const,
   transactions: ["transactions"] as const,
   settings: ["settings"] as const,
+  unread: ["events", "unread"] as const,
+  events: (important: boolean) => ["events", "feed", important] as const,
 };
 
 export const useConfig = () =>
@@ -55,7 +58,10 @@ export const useOrders = (filters: OrderFilters) =>
 export const useOrder = (id: string) =>
   useQuery({
     queryKey: keys.order(id),
-    queryFn: () => get<{ order: Order; shipment: Shipment | null }>(`/api/orders/${encodeURIComponent(id)}`),
+    queryFn: () =>
+      get<{ order: Order; shipment: Shipment | null; history: CrmEvent[] }>(
+        `/api/orders/${encodeURIComponent(id)}`,
+      ),
   });
 
 export const useShipments = () =>
@@ -85,6 +91,35 @@ export const useSettings = () =>
         "/api/settings",
       ),
   });
+
+export const useUnread = () =>
+  useQuery({
+    queryKey: keys.unread,
+    queryFn: () => get<{ important: number; total: number; seen_at: string | null }>("/api/events/unread"),
+    refetchInterval: 30_000,
+  });
+
+const EVENTS_PAGE = 30;
+
+export const useEvents = (important: boolean) =>
+  useInfiniteQuery({
+    queryKey: keys.events(important),
+    initialPageParam: null as string | null,
+    queryFn: ({ pageParam }) =>
+      get<{ items: CrmEvent[] }>(
+        `/api/events${query({ important: important || undefined, before: pageParam, limit: EVENTS_PAGE })}`,
+      ),
+    getNextPageParam: (last) =>
+      last.items.length === EVENTS_PAGE ? (last.items[last.items.length - 1]?.created_at ?? null) : null,
+  });
+
+export const useMarkRead = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => post<{ ok: boolean }>("/api/events/read"),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.unread }),
+  });
+};
 
 // --- mutations ---------------------------------------------------------------
 
@@ -132,6 +167,18 @@ export const useBuy = (id: string) => {
     mutationFn: (body: { purchase_price: number; client_price: number }) =>
       post<{ order: Order; already_done: boolean; change: BalanceChange | null }>(
         `/api/orders/${id}/buy`,
+        body,
+      ),
+    onSuccess: refresh,
+  });
+};
+
+export const useRebuy = (id: string) => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (body: { purchase_price: number; client_price: number; source_url?: string | null; reason?: string | null }) =>
+      post<{ order: Order; already_done: boolean; change: BalanceChange | null }>(
+        `/api/orders/${id}/rebuy`,
         body,
       ),
     onSuccess: refresh,
