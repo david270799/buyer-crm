@@ -95,21 +95,25 @@ def test_buy_unknown_status_is_refused(db, services, admin):
         services.orders.buy(admin, "8", 1, 1)
 
 
-def test_buy_legacy_bought_order_is_not_charged_again(db, services, admin):
-    # Written by the old /buy: no charged_amount_krw, balance already reduced.
-    seed_order(
-        db, "n3", status="bought", purchase_price=100_000, client_price=120_000, profit=20_000
-    )
+def test_bought_order_without_recorded_charge_is_never_charged(db, services, admin):
+    # E.g. typed in the Firebase console: status says bought, no charge recorded.
+    seed_order(db, "n3", status="bought", purchase_price=100_000, client_price=120_000)
 
-    assert services.orders.buy(admin, "3", 100_000, 120_000).already_done
-    with pytest.raises(ConflictError):
-        services.orders.buy(admin, "3", 100_000, 130_000)
+    with pytest.raises(ConflictError, match="не зафиксировано"):
+        services.orders.buy(admin, "3", 100_000, 120_000)
     assert balance(db) == START_BALANCE
     assert ledger_entries(db) == {}
 
 
-def test_buy_legacy_status_with_capitals_is_understood(db, services, admin):
-    seed_order(db, "n4", status="Bought", client_price=50_000, purchase_price=40_000)
+def test_status_with_capitals_is_understood(db, services, admin):
+    seed_order(
+        db,
+        "n4",
+        status="Bought",
+        client_price=50_000,
+        purchase_price=40_000,
+        charged_amount_krw=50_000,
+    )
     assert services.orders.buy(admin, "4", 40_000, 50_000).already_done
 
 
@@ -194,14 +198,14 @@ def test_cancel_new_order_has_no_refund(db, services, admin):
     assert balance(db) == START_BALANCE
 
 
-def test_cancel_legacy_bought_order_refunds_client_price(db, services, admin):
+def test_cancel_without_recorded_charge_refunds_nothing(db, services, admin):
     seed_order(db, "n3", status="bought", client_price=120_000, purchase_price=100_000)
     result = services.orders.cancel(admin, "3")
-    assert result.refunded_krw == 120_000
-    assert balance(db) == START_BALANCE + 120_000
+    assert result.refunded_krw == 0
+    assert balance(db) == START_BALANCE
 
 
-def test_cancel_legacy_cancelled_order_refunds_nothing(db, services, admin):
+def test_cancel_of_cancelled_order_refunds_nothing(db, services, admin):
     seed_order(db, "n3", status="cancelled", client_price=120_000)
     assert services.orders.cancel(admin, "3").already_done
     assert balance(db) == START_BALANCE
@@ -210,7 +214,7 @@ def test_cancel_legacy_cancelled_order_refunds_nothing(db, services, admin):
 @pytest.mark.parametrize("status", ["cargo", "delivered"])
 def test_cancel_shipped_order_is_refused(db, services, admin, status):
     seed_order(db, "n5", status=status, client_price=10)
-    with pytest.raises(ConflictError, match="/adjust"):
+    with pytest.raises(ConflictError, match="не возвращаются"):
         services.orders.cancel(admin, "5")
     assert balance(db) == START_BALANCE
 
@@ -261,14 +265,14 @@ def test_set_status_cargo_needs_a_shipment(db, services, admin):
     assert result.skipped[0][0] == "n1" and "/cargo" in result.skipped[0][1]
 
 
-def test_set_status_persists_legacy_charge_so_cancel_still_refunds(db, services, admin):
+def test_set_status_never_invents_a_charge(db, services, admin):
     seed_order(db, "n3", status="bought", client_price=120_000)
 
     services.orders.set_status(admin, ["3"], OrderStatus.WAREHOUSE)
 
-    assert db.get("orders", "n3")["charged_amount_krw"] == 120_000
-    assert services.orders.cancel(admin, "3").refunded_krw == 120_000
-    assert balance(db) == START_BALANCE + 120_000
+    assert "charged_amount_krw" not in db.get("orders", "n3")
+    assert services.orders.cancel(admin, "3").refunded_krw == 0
+    assert balance(db) == START_BALANCE
 
 
 def test_set_status_limits_bulk_size(db, services, admin):

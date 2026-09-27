@@ -32,6 +32,8 @@ ADMIN_ONLY_ORDER_FIELDS = (
     "profit",
     "charged_amount_krw",
     "internal_comment",
+    "purchases",
+    "rebuy_count",
     "source_chat_id",
     "source_message_id",
     "created_by",

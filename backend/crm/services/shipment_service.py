@@ -24,10 +24,11 @@ from typing import Any
 
 from crm.domain.enums import LedgerType, OrderStatus
 from crm.domain.errors import ConflictError, NotFoundError, ValidationError
+from crm.domain.events import EventType
 from crm.domain.ids import make_shipment_id, normalize_order_id, normalize_tracking_code
 from crm.domain.models import ClientInfo, Order, Shipment
 from crm.domain.money import MAX_AMOUNT_KRW, format_krw
-from crm.domain.timeutil import to_local
+from crm.domain.timeutil import format_date, to_local
 from crm.repositories import OrderRepository, ShipmentRepository
 from crm.services.common import (
     UNSET,
@@ -38,6 +39,7 @@ from crm.services.common import (
     require_admin,
     require_bulk_size,
 )
+from crm.services.events import EventRecorder
 from crm.services.ledger import BalanceChange, BalanceLedger
 from crm.services.sequences import SequenceAllocator
 from crm.storage import Database, DocumentExistsError, Transaction
@@ -151,6 +153,7 @@ class ShipmentService:
         sequences: SequenceAllocator,
         ledger: BalanceLedger,
         auditor: Auditor,
+        events: EventRecorder,
     ):
         self._db = db
         self._clock = clock
@@ -159,6 +162,7 @@ class ShipmentService:
         self._sequences = sequences
         self._ledger = ledger
         self._auditor = auditor
+        self._events = events
 
     # --- reads -------------------------------------------------------------
 
@@ -343,7 +347,6 @@ class ShipmentService:
                     "cargo_at": now,
                     "updated_at": now,
                     "updated_by": actor.id,
-                    **order.legacy_charge_fields(),
                 }
                 if code:
                     order_fields["cargo_code"] = code
@@ -363,6 +366,26 @@ class ShipmentService:
                     },
                 )
             result.added = added_ids
+            assert result.shipment is not None
+            number = result.shipment.shipment_number
+            lines = [f"{_items(len(added_ids))}: {', '.join(added_ids)}"]
+            if code:
+                lines.append(f"Трек-номер: {code}")
+            if result.shipping_change:
+                lines.append(f"Доставка: {format_krw(new_cost or 0)}")
+            self._events.record(
+                tx,
+                actor,
+                now,
+                EventType.SHIPMENT_SENT,
+                f"Отправка #{number} отправлена"
+                if result.created
+                else f"Добавлено в отправку #{number}",
+                body="\n".join(lines),
+                order_ids=added_ids,
+                shipment_id=shipment_id,
+                amount_krw=result.shipping_change.amount_krw if result.shipping_change else None,
+            )
             return result
 
         try:
@@ -454,6 +477,7 @@ class ShipmentService:
                 after=changes,
             )
             updated = Shipment.from_doc(shipment_id, {**before, **doc_changes})
+            self._record_update_events(tx, actor, now, shipment, updated, changes, change)
             return ShipmentUpdateResult(shipment=updated, shipping_change=change)
 
         try:
@@ -462,6 +486,60 @@ class ShipmentService:
             raise _duplicate_charge_error() from None
 
     # --- helpers -------------------------------------------------------------
+
+    def _record_update_events(
+        self,
+        tx: Transaction,
+        actor: Actor,
+        now: datetime,
+        old: Shipment,
+        new: Shipment,
+        changes: dict[str, Any],
+        change: BalanceChange | None,
+    ) -> None:
+        name = f"#{old.shipment_number}" if old.shipment_number else old.id
+        ids = list(old.order_ids)
+        if change is not None:
+            self._events.record(
+                tx,
+                actor,
+                now,
+                EventType.SHIPPING_COST,
+                f"Стоимость доставки отправки {name} изменена",
+                body=f"{format_krw(old.shipping_cost_krw or 0)} → "
+                f"{format_krw(new.shipping_cost_krw or 0)}",
+                order_ids=ids,
+                shipment_id=old.id,
+                amount_krw=change.amount_krw,
+            )
+        lines = []
+        if (
+            "tracking_code" in changes
+            and new.tracking_code != old.tracking_code
+            and new.tracking_code
+        ):
+            lines.append(f"Трек-номер: {new.tracking_code}")
+        if "comment" in changes and new.comment and new.comment != old.comment:
+            lines.append(new.comment)
+        if "photo_url" in changes and new.photo_url and new.photo_url != old.photo_url:
+            lines.append("Добавлено фото отправки")
+        if (
+            "shipment_date" in changes
+            and new.shipment_date
+            and new.shipment_date != old.shipment_date
+        ):
+            lines.append(f"Дата отправки: {format_date(new.shipment_date)}")
+        if lines:
+            self._events.record(
+                tx,
+                actor,
+                now,
+                EventType.SHIPMENT_UPDATED,
+                f"Отправка {name} обновлена",
+                body="\n".join(lines),
+                order_ids=ids,
+                shipment_id=old.id,
+            )
 
     def _charge_shipping(
         self,
@@ -518,3 +596,15 @@ def _duplicate_charge_error() -> ConflictError:
         "Списание за эту доставку уже есть в истории транзакций. "
         "Повторное списание заблокировано — проверьте отправку вручную."
     )
+
+
+def _items(count: int) -> str:
+    mod10, mod100 = count % 10, count % 100
+    word = (
+        "товар"
+        if mod10 == 1 and mod100 != 11
+        else "товара"
+        if 2 <= mod10 <= 4 and not 12 <= mod100 <= 14
+        else "товаров"
+    )
+    return f"{count} {word}"

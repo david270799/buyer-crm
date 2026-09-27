@@ -152,3 +152,17 @@ def test_audience_is_client_outside_private_admin_chat():
     assert audience_for(Role.ADMIN, group) is Role.CLIENT
     assert audience_for(Role.CLIENT, private) is Role.CLIENT
     assert audience_for(None, private) is Role.CLIENT
+
+
+def test_parse_rebuy():
+    assert parsing.parse_rebuy("5 150,000 185000") == ("n5", 150_000, 185_000, None, None)
+    assert parsing.parse_rebuy("n5 1 2 https://shop.kr/x Магазин отменил") == (
+        "n5",
+        1,
+        2,
+        "https://shop.kr/x",
+        "Магазин отменил",
+    )
+    assert parsing.parse_rebuy("5 1 2 Нет в наличии") == ("n5", 1, 2, None, "Нет в наличии")
+    with pytest.raises(ValidationError):
+        parsing.parse_rebuy("5 1")

@@ -2,9 +2,9 @@
 
     python -m crm.tools.doctor
 
-It never writes. Run it before the first start of the bot against the real
-project: it shows whether the legacy documents match the assumptions the
-new code makes (see docs/architecture.md, "Совместимость с данными").
+It never writes. Run it before the first start against the real project and
+after adding documents by hand in the Firebase console: it shows documents
+the CRM cannot interpret (unknown status, charges that were never recorded).
 """
 
 import sys
@@ -86,7 +86,7 @@ def check_orders(db: Database, report: Report) -> int:
     rows = db.query("orders")
     report.info(f"документов: {len(rows)}")
     numbers, statuses, id_field_types = [], Counter(), Counter()
-    unknown, non_canonical, charged_without_price, float_prices = [], [], [], []
+    unknown, non_canonical, bought_without_charge, float_prices = [], [], [], []
     for doc_id, data in rows:
         number = order_number(doc_id)
         if number is None:
@@ -98,8 +98,8 @@ def check_orders(db: Database, report: Report) -> int:
         order = Order.from_doc(doc_id, data)
         if order.status is None:
             unknown.append(doc_id)
-        if order.status in CHARGED_STATUSES and not order.client_price:
-            charged_without_price.append(doc_id)
+        if order.status in CHARGED_STATUSES and not order.is_charged:
+            bought_without_charge.append(doc_id)
         if any(isinstance(data.get(f), float) for f in ("purchase_price", "client_price")):
             float_prices.append(doc_id)
 
@@ -116,10 +116,10 @@ def check_orders(db: Database, report: Report) -> int:
         report.ok("все статусы распознаны")
     if non_canonical:
         report.warn(f"документы с ID не формата nN: {', '.join(non_canonical[:15])}")
-    if charged_without_price:
+    if bought_without_charge:
         report.warn(
-            "выкуплены, но без client_price (при отмене вернётся 0): "
-            + ", ".join(charged_without_price[:15])
+            "статус «выкуплен» и дальше, но списание не записано (заказ добавлен не через CRM): "
+            "отмена ничего не вернёт, /buy откажет — " + ", ".join(bought_without_charge[:15])
         )
     if float_prices:
         report.info(f"цены дробным числом у {len(float_prices)} заказов (читаются корректно)")

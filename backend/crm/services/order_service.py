@@ -26,6 +26,7 @@ from crm.domain.enums import (
     Role,
 )
 from crm.domain.errors import ConflictError, NotFoundError, ValidationError
+from crm.domain.events import EventType
 from crm.domain.ids import make_order_id, normalize_order_id, order_number
 from crm.domain.models import Order, status_timestamp_field
 from crm.domain.money import MAX_AMOUNT_KRW, format_krw
@@ -40,6 +41,7 @@ from crm.services.common import (
     require_admin,
     require_bulk_size,
 )
+from crm.services.events import EventRecorder
 from crm.services.ledger import (
     BalanceChange,
     BalanceLedger,
@@ -98,6 +100,13 @@ class CancelResult:
     order: Order
     already_done: bool
     refunded_krw: int = 0
+    change: BalanceChange | None = None
+
+
+@dataclass
+class RebuyResult:
+    order: Order
+    already_done: bool
     change: BalanceChange | None = None
 
 
@@ -249,6 +258,7 @@ class OrderService:
         ledger: BalanceLedger,
         sequences: SequenceAllocator,
         auditor: Auditor,
+        events: EventRecorder,
     ):
         self._db = db
         self._clock = clock
@@ -256,6 +266,7 @@ class OrderService:
         self._ledger = ledger
         self._sequences = sequences
         self._auditor = auditor
+        self._events = events
 
     # --- reads -------------------------------------------------------------
 
@@ -362,6 +373,7 @@ class OrderService:
                 before={name: getattr(order, name) for name in changes},
                 after=changes,
             )
+            self._record_comment_events(tx, actor, now, [order], changes)
             return replace(
                 order,
                 **{k: v for k, v in fields.items() if k not in ("updated_at", "updated_by")},
@@ -401,9 +413,45 @@ class OrderService:
                     after=changes,
                 )
                 result.updated.append(order_id)
+            updated = [orders[i] for i in result.updated if orders[i] is not None]
+            self._record_comment_events(tx, actor, now, updated, changes)
             return result
 
         return self._db.run_transaction(fn)
+
+    def _record_comment_events(
+        self, tx: Transaction, actor: Actor, now: datetime, orders: list[Order], changes: dict
+    ) -> None:
+        """A client comment and a newly raised "attention" are news for the client."""
+        if not orders:
+            return
+        comment = changes.get("client_comment")
+        raised = changes.get("attention_required") is True and any(
+            not o.attention_required for o in orders
+        )
+        comment_changed = comment is not None and any(o.client_comment != comment for o in orders)
+        ids = [o.id for o in orders]
+        if raised:
+            reason = comment or next((o.client_comment for o in orders if o.client_comment), None)
+            self._events.record(
+                tx,
+                actor,
+                now,
+                EventType.ATTENTION,
+                f"Требуется внимание: {_ids(ids)}",
+                body=reason,
+                order_ids=ids,
+            )
+        elif comment_changed:
+            self._events.record(
+                tx,
+                actor,
+                now,
+                EventType.COMMENT,
+                f"Комментарий к {'заказу' if len(ids) == 1 else 'заказам'} {_ids(ids)}",
+                body=comment,
+                order_ids=ids,
+            )
 
     # --- create ------------------------------------------------------------
 
@@ -466,7 +514,17 @@ class OrderService:
                 before=None,
                 after={"status": OrderStatus.NEW.value},
             )
-            return Order.from_doc(order_id, data)
+            created = Order.from_doc(order_id, data)
+            self._events.record(
+                tx,
+                actor,
+                now,
+                EventType.ORDER_CREATED,
+                f"Новый заказ {order_id}",
+                body=_describe(created),
+                order_ids=[order_id],
+            )
+            return created
 
         return self._sequences.run(ORDER_COUNTER, self._max_order_number, self._clock.now, fn)
 
@@ -500,8 +558,9 @@ class OrderService:
                     f"Заказ {order_id} уже выкуплен: закупка {_fmt(order.purchase_price)}, "
                     f"клиенту {_fmt(order.client_price)}, "
                     f"списано {format_krw(order.charged_amount_krw)}.\n"
-                    "Повторное списание не выполняется. Изменение цены после выкупа будет "
-                    "отдельной операцией с корректировкой баланса."
+                    "Повторное списание не выполняется. Если магазин отменил заказ и вы "
+                    "выкупили в другом — используйте перезаказ: "
+                    "/rebuy <номер> <закупка> <цена клиенту>."
                 )
             if order.is_charged:
                 raise ConflictError(
@@ -521,6 +580,7 @@ class OrderService:
                     "client_price": client_price,
                     "profit": profit,
                     "charged_amount_krw": client_price,
+                    "purchases": [_purchase(purchase_price, client_price, order.source_url, now)],
                     "bought_at": now,
                     "updated_at": now,
                     "updated_by": actor.id,
@@ -565,8 +625,18 @@ class OrderService:
                 client_price=client_price,
                 profit=profit,
                 charged_amount_krw=client_price,
-                charge_is_explicit=True,
+                purchases=[_purchase(purchase_price, client_price, order.source_url, now)],
                 timestamps={**order.timestamps, "bought_at": now, "updated_at": now},
+            )
+            self._events.record(
+                tx,
+                actor,
+                now,
+                EventType.ORDER_BOUGHT,
+                f"Заказ {order_id} выкуплен",
+                body=f"{_describe(bought)} · {format_krw(client_price)}",
+                order_ids=[order_id],
+                amount_krw=-client_price,
             )
             return BuyResult(order=bought, already_done=False, change=change)
 
@@ -590,9 +660,8 @@ class OrderService:
                 return CancelResult(order=order, already_done=True)
             if order.status in (OrderStatus.CARGO, OrderStatus.DELIVERED):
                 raise ConflictError(
-                    f"Заказ {order_id} уже в статусе «{label(order.status)}». Автоматическая "
-                    "отмена с возвратом денег для отправленного заказа не выполняется. "
-                    "Если возврат нужен — используйте /adjust."
+                    f"Заказ {order_id} уже в статусе «{label(order.status)}». После отправки "
+                    "заказ не отменяется и деньги за него не возвращаются."
                 )
             if order.shipment_id:
                 raise ConflictError(
@@ -646,8 +715,21 @@ class OrderService:
                 status=OrderStatus.CANCELLED,
                 status_raw=OrderStatus.CANCELLED.value,
                 charged_amount_krw=0,
-                charge_is_explicit=True,
                 timestamps={**order.timestamps, "cancelled_at": now, "updated_at": now},
+            )
+            self._events.record(
+                tx,
+                actor,
+                now,
+                EventType.ORDER_CANCELLED,
+                f"Заказ {order_id} отменён",
+                body=(
+                    f"{_describe(order)}\nВозврат на баланс: {format_krw(refund, signed=True)}"
+                    if refund
+                    else _describe(order)
+                ),
+                order_ids=[order_id],
+                amount_krw=refund or None,
             )
             return CancelResult(
                 order=cancelled, already_done=False, refunded_krw=refund, change=change
@@ -706,7 +788,6 @@ class OrderService:
                         ts_field: now,
                         "updated_at": now,
                         "updated_by": actor.id,
-                        **order.legacy_charge_fields(),
                     },
                 )
                 self._auditor.record(
@@ -720,9 +801,169 @@ class OrderService:
                     after={"status": new_status.value},
                 )
                 result.updated.append(order.id)
+            if result.updated:
+                event_type, title = _STATUS_EVENTS.get(
+                    new_status, (EventType.ORDER_STATUS, "Статус обновлён")
+                )
+                self._events.record(
+                    tx,
+                    actor,
+                    now,
+                    event_type,
+                    f"{title}: {_ids(result.updated)}",
+                    order_ids=result.updated,
+                )
             return result
 
         return self._db.run_transaction(fn)
+
+    # --- re-purchase ---------------------------------------------------------
+
+    def rebuy(
+        self,
+        actor: Actor,
+        order_id: str,
+        purchase_price: int,
+        client_price: int,
+        *,
+        source_url: str | None = UNSET,
+        reason: str | None = None,
+    ) -> RebuyResult:
+        """The shop cancelled a bought order and it was bought elsewhere.
+
+        Only the difference between the new client price and what is already
+        charged moves (charged or refunded) — one `order_rebuy` ledger entry.
+        Submitting the same purchase again changes nothing.
+        """
+        require_admin(actor)
+        order_id = normalize_order_id(order_id)
+        _check_price(purchase_price, "Закупочная цена", allow_zero=True)
+        _check_price(client_price, "Цена для клиента", allow_zero=False)
+        link = _clean_url(source_url, "Ссылка") if source_url is not UNSET else UNSET
+        reason = _clean_text(reason, "Причина", _MAX_LONG_TEXT)
+
+        def fn(tx: Transaction) -> RebuyResult:
+            order = self._require_order(tx, order_id)
+            if order.status not in (OrderStatus.BOUGHT, OrderStatus.WAREHOUSE):
+                raise ConflictError(
+                    f"Перезаказ возможен только для выкупленного заказа до отправки; "
+                    f"{order_id} сейчас «{label(order.status)}»."
+                )
+            if order.shipment_id:
+                raise ConflictError(f"Заказ {order_id} уже в отправке {order.shipment_id}.")
+            if not order.is_charged:
+                raise ConflictError(
+                    f"По заказу {order_id} не записано списание — перезаказ невозможен."
+                )
+            new_link = order.source_url if link is UNSET else link
+            if (
+                purchase_price == order.purchase_price
+                and client_price == order.client_price
+                and new_link == order.source_url
+            ):
+                return RebuyResult(order=order, already_done=True)
+
+            delta = client_price - order.charged_amount_krw
+            client = self._ledger.load_client(tx) if delta else None
+            now = self._clock.now()
+            seq = order.rebuy_count + 1
+            history = order.purchases or [
+                _purchase(
+                    order.purchase_price,
+                    order.client_price,
+                    order.source_url,
+                    order.timestamp("bought_at"),
+                )
+            ]
+            history = [*history[:-1], {**history[-1], "replaced_at": now}]
+            history.append(_purchase(purchase_price, client_price, new_link, now, reason))
+            profit = client_price - purchase_price
+            fields: dict[str, Any] = {
+                "status": OrderStatus.BOUGHT.value,
+                "purchase_price": purchase_price,
+                "client_price": client_price,
+                "profit": profit,
+                "charged_amount_krw": client_price,
+                "purchases": history,
+                "rebuy_count": seq,
+                "bought_at": now,
+                "updated_at": now,
+                "updated_by": actor.id,
+            }
+            if link is not UNSET:
+                fields["source_url"] = link
+            self._orders.update(tx, order_id, fields)
+
+            change = None
+            if client is not None:
+                change = self._ledger.apply(
+                    tx,
+                    client,
+                    entry_id=f"order_rebuy_{order_id}_{seq}",
+                    type=LedgerType.ORDER_REBUY,
+                    amount_krw=-delta,
+                    actor=actor,
+                    now=now,
+                    order_id=order_id,
+                    comment=f"Перезаказ: {format_krw(order.client_price or 0)} → "
+                    f"{format_krw(client_price)}",
+                )
+            self._auditor.record(
+                tx,
+                actor,
+                now,
+                action="order.rebuy",
+                entity_type="order",
+                entity_id=order_id,
+                before={
+                    "status": order.status_raw,
+                    "purchase_price": order.purchase_price,
+                    "client_price": order.client_price,
+                    "source_url": order.source_url,
+                },
+                after={
+                    "purchase_price": purchase_price,
+                    "client_price": client_price,
+                    "source_url": new_link,
+                    "delta_krw": -delta,
+                },
+            )
+            lines = [reason] if reason else []
+            if client_price != order.client_price:
+                lines.append(
+                    f"Цена: {format_krw(order.client_price or 0)} → {format_krw(client_price)}"
+                )
+            self._events.record(
+                tx,
+                actor,
+                now,
+                EventType.ORDER_REBOUGHT,
+                f"Заказ {order_id} перезаказан",
+                body="\n".join(lines) or "Товар выкуплен заново в другом магазине.",
+                order_ids=[order_id],
+                amount_krw=-delta if delta else None,
+            )
+            rebought = replace(
+                order,
+                status=OrderStatus.BOUGHT,
+                status_raw=OrderStatus.BOUGHT.value,
+                purchase_price=purchase_price,
+                client_price=client_price,
+                profit=profit,
+                charged_amount_krw=client_price,
+                source_url=new_link,
+                purchases=history,
+                rebuy_count=seq,
+                timestamps={**order.timestamps, "bought_at": now, "updated_at": now},
+            )
+            return RebuyResult(order=rebought, already_done=False, change=change)
+
+        try:
+            return self._db.run_transaction(fn)
+        except DocumentExistsError:
+            raise ConflictError(
+                f"Перезаказ по заказу {order_id} уже проведён. Обновите данные и повторите."
+            ) from None
 
     # --- helpers -----------------------------------------------------------
 
@@ -740,3 +981,35 @@ class OrderService:
 
 def _fmt(amount: int | None) -> str:
     return format_krw(amount) if amount is not None else "—"
+
+
+def _ids(ids: Sequence[str], limit: int = 6) -> str:
+    shown = ", ".join(ids[:limit])
+    return f"{shown} и ещё {len(ids) - limit}" if len(ids) > limit else shown
+
+
+def _describe(order: Order) -> str:
+    parts = [order.title or "Заказ", f"размер {order.size}" if order.size else None]
+    return " · ".join(p for p in parts if p)
+
+
+def _purchase(
+    purchase_price: int | None,
+    client_price: int | None,
+    source_url: str | None,
+    at: datetime | None,
+    note: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "purchase_price": purchase_price,
+        "client_price": client_price,
+        "source_url": source_url,
+        "bought_at": at,
+        "note": note,
+    }
+
+
+_STATUS_EVENTS = {
+    OrderStatus.WAREHOUSE: (EventType.ORDER_WAREHOUSE, "Прибыл на склад"),
+    OrderStatus.DELIVERED: (EventType.ORDER_DELIVERED, "Доставлен"),
+}

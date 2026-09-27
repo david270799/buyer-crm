@@ -19,6 +19,11 @@ from crm.storage.firestore import FirestoreDatabase
 logger = logging.getLogger(__name__)
 
 
+# Lists, filters and search in the Mini App read the whole `orders`
+# collection; this keeps that to at most one full read per minute.
+ORDERS_SCAN_CACHE_SECONDS = 60
+
+
 def create_database(settings: Settings) -> FirestoreDatabase:
     if os.environ.get("FIRESTORE_EMULATOR_HOST"):
         from google.cloud.firestore_v1 import Client
@@ -29,7 +34,11 @@ def create_database(settings: Settings) -> FirestoreDatabase:
             os.environ["FIRESTORE_EMULATOR_HOST"],
             project,
         )
-        return FirestoreDatabase(Client(project=project))
+        return FirestoreDatabase(
+            Client(project=project),
+            scan_cache_seconds=ORDERS_SCAN_CACHE_SECONDS,
+            cached_collections=("orders",),
+        )
 
     import firebase_admin
     from firebase_admin import credentials, firestore
@@ -43,7 +52,11 @@ def create_database(settings: Settings) -> FirestoreDatabase:
         if settings.firebase_storage_bucket:
             options["storageBucket"] = settings.firebase_storage_bucket
         app = firebase_admin.initialize_app(_credentials(settings, credentials), options or None)
-    return FirestoreDatabase(firestore.client(app))
+    return FirestoreDatabase(
+        firestore.client(app),
+        scan_cache_seconds=ORDERS_SCAN_CACHE_SECONDS,
+        cached_collections=("orders",),
+    )
 
 
 def _credentials(settings: Settings, credentials):

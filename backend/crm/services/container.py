@@ -4,6 +4,8 @@ from crm.repositories import (
     AuditRepository,
     ClientRepository,
     CounterRepository,
+    EventReadsRepository,
+    EventRepository,
     LedgerRepository,
     OrderRepository,
     SettingsRepository,
@@ -11,6 +13,7 @@ from crm.repositories import (
 )
 from crm.services.auth import RoleResolver
 from crm.services.common import Auditor, Clock, SystemClock
+from crm.services.events import EventRecorder, EventService
 from crm.services.finance_service import FinanceService
 from crm.services.image_service import ImageService
 from crm.services.ledger import BalanceLedger
@@ -27,6 +30,7 @@ class Services:
     shipments: ShipmentService
     finance: FinanceService
     roles: RoleResolver
+    events: EventService
     # None when no file storage is configured (uploads are then refused).
     images: ImageService | None = None
 
@@ -47,15 +51,18 @@ def build_services(
     auditor = Auditor(db, AuditRepository())
     ledger = BalanceLedger(clients_repo, ledger_repo)
     sequences = SequenceAllocator(db, CounterRepository())
+    events_repo = EventRepository()
+    recorder = EventRecorder(db, events_repo)
 
     return Services(
-        orders=OrderService(db, clock, orders_repo, ledger, sequences, auditor),
+        orders=OrderService(db, clock, orders_repo, ledger, sequences, auditor, recorder),
         shipments=ShipmentService(
-            db, clock, orders_repo, shipments_repo, sequences, ledger, auditor
+            db, clock, orders_repo, shipments_repo, sequences, ledger, auditor, recorder
         ),
         finance=FinanceService(
-            db, clock, clients_repo, ledger_repo, settings_repo, ledger, auditor
+            db, clock, clients_repo, ledger_repo, settings_repo, ledger, auditor, recorder
         ),
         roles=RoleResolver(db, clients_repo, admin_ids),
+        events=EventService(db, clock, events_repo, EventReadsRepository()),
         images=ImageService(blob_storage, clock) if blob_storage is not None else None,
     )

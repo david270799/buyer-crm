@@ -31,6 +31,17 @@ async def buy(
     await answer(message, fmt.buy_result(result, audience))
 
 
+async def rebuy(
+    message: Message, command: CommandObject, services: Services, actor: Actor, audience: Role
+) -> None:
+    order_id, purchase, price, link, reason = parsing.parse_rebuy(command.args)
+    extra = {"source_url": link} if link else {}
+    result = await asyncio.to_thread(
+        lambda: services.orders.rebuy(actor, order_id, purchase, price, reason=reason, **extra)
+    )
+    await answer(message, fmt.rebuy_result(result, audience))
+
+
 async def cancel(
     message: Message, command: CommandObject, services: Services, actor: Actor
 ) -> None:
@@ -52,5 +63,6 @@ def build() -> Router:
     router.message.register(order, Command("order"), HasRole(Role.ADMIN, Role.CLIENT))
     router.message.register(buy, Command("buy"), HasRole(Role.ADMIN))
     router.message.register(cancel, Command("cancel"), HasRole(Role.ADMIN))
+    router.message.register(rebuy, Command("rebuy"), HasRole(Role.ADMIN))
     router.message.register(status, Command("status"), HasRole(Role.ADMIN))
     return router

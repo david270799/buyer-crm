@@ -1,6 +1,7 @@
 """Database implementation on top of google-cloud-firestore (via firebase-admin)."""
 
 import random
+import threading
 import time
 import uuid
 from collections.abc import Callable, Sequence
@@ -49,6 +50,39 @@ def _translate(exc: BaseException) -> StorageError | None:
     return None
 
 
+class _ScanCache:
+    """Short-lived copy of whole-collection reads (`scan`).
+
+    Every transaction that writes to the collection bumps the generation, so
+    the CRM's own changes are visible immediately; edits made elsewhere (the
+    Firebase console) show up once the entry expires. A scan that started
+    before a write never stores its (older) result.
+    """
+
+    def __init__(self, ttl_seconds: float):
+        self.ttl = ttl_seconds
+        self.lock = threading.Lock()
+        self.generation = 0
+        self.rows: list[tuple[str, Doc]] | None = None
+        self.loaded_at = 0.0
+
+    def fresh(self) -> list[tuple[str, Doc]] | None:
+        with self.lock:
+            if self.rows is not None and time.monotonic() - self.loaded_at < self.ttl:
+                return list(self.rows)
+            return None
+
+    def store(self, generation: int, rows: list[tuple[str, Doc]]) -> None:
+        with self.lock:
+            if generation == self.generation:
+                self.rows, self.loaded_at = rows, time.monotonic()
+
+    def invalidate(self) -> None:
+        with self.lock:
+            self.generation += 1
+            self.rows = None
+
+
 class FirestoreDatabase:
     def __init__(
         self,
@@ -56,11 +90,18 @@ class FirestoreDatabase:
         max_attempts: int = 5,
         contention_rounds: int = 4,
         backoff_base_seconds: float = 0.2,
+        scan_cache_seconds: float = 0,
+        cached_collections: Sequence[str] = (),
     ):
         self._client = client
         self._max_attempts = max_attempts
         self._contention_rounds = contention_rounds
         self._backoff_base = backoff_base_seconds
+        self._scan_caches = (
+            {name: _ScanCache(scan_cache_seconds) for name in cached_collections}
+            if scan_cache_seconds > 0
+            else {}
+        )
 
     @property
     def client(self) -> Client:
@@ -105,6 +146,19 @@ class FirestoreDatabase:
         query = self._build_query(collection, filters, order_by, limit)
         return [(snap.id, snap.to_dict()) for snap in query.stream()]
 
+    def scan(self, collection: str) -> list[tuple[str, Doc]]:
+        cache = self._scan_caches.get(collection)
+        if cache is None:
+            return self.query(collection)
+        rows = cache.fresh()
+        if rows is not None:
+            return rows
+        with cache.lock:
+            generation = cache.generation
+        rows = self.query(collection)
+        cache.store(generation, rows)
+        return list(rows)
+
     def list_ids(self, collection: str) -> list[str]:
         return [ref.id for ref in self._client.collection(collection).list_documents()]
 
@@ -130,10 +184,11 @@ class FirestoreDatabase:
 
     def _run_once(self, fn: Callable[[Transaction], T]) -> T:
         transaction = self._client.transaction(max_attempts=self._max_attempts)
+        touched: set[str] = set()
 
         @transactional
         def _run(txn):
-            return fn(_FirestoreTransaction(self, txn))
+            return fn(_FirestoreTransaction(self, txn, touched))
 
         try:
             return _run(transaction)
@@ -144,6 +199,11 @@ class FirestoreDatabase:
             if translated is None:
                 raise
             raise translated from exc
+        finally:
+            # Conservative: any attempted write drops the cached scan.
+            for name in touched:
+                if name in self._scan_caches:
+                    self._scan_caches[name].invalidate()
 
 
 def _get_many(client: Client, refs: list, transaction) -> dict[str, Doc | None]:
@@ -156,9 +216,10 @@ def _get_many(client: Client, refs: list, transaction) -> dict[str, Doc | None]:
 
 
 class _FirestoreTransaction:
-    def __init__(self, db: FirestoreDatabase, txn):
+    def __init__(self, db: FirestoreDatabase, txn, touched: set[str]):
         self._db = db
         self._txn = txn
+        self._touched = touched
 
     def get(self, collection: str, doc_id: str) -> Doc | None:
         snapshot = self._db._ref(collection, doc_id).get(transaction=self._txn)
@@ -179,10 +240,13 @@ class _FirestoreTransaction:
         return [(snap.id, snap.to_dict()) for snap in query.stream(transaction=self._txn)]
 
     def create(self, collection: str, doc_id: str, data: Doc) -> None:
+        self._touched.add(collection)
         self._txn.create(self._db._ref(collection, doc_id), data)
 
     def set(self, collection: str, doc_id: str, data: Doc, merge: bool = False) -> None:
+        self._touched.add(collection)
         self._txn.set(self._db._ref(collection, doc_id), data, merge=merge)
 
     def update(self, collection: str, doc_id: str, data: Doc) -> None:
+        self._touched.add(collection)
         self._txn.update(self._db._ref(collection, doc_id), data)

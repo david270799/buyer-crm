@@ -19,8 +19,7 @@ STATUS_FLOW: tuple[OrderStatus, ...] = (
     OrderStatus.DELIVERED,
 )
 
-# Statuses in which the client_price has already been charged to the balance.
-# Used to interpret legacy orders written before charged_amount_krw existed.
+# Statuses after a successful /buy; their profit counts toward totals.
 CHARGED_STATUSES = frozenset(
     {OrderStatus.BOUGHT, OrderStatus.WAREHOUSE, OrderStatus.CARGO, OrderStatus.DELIVERED}
 )
@@ -81,6 +80,7 @@ class Source(StrEnum):
 class LedgerType(StrEnum):
     ORDER_CHARGE = "order_charge"
     ORDER_REFUND = "order_refund"
+    ORDER_REBUY = "order_rebuy"
     DEPOSIT = "deposit"
     ADJUSTMENT = "adjustment"
     SHIPPING_CHARGE = "shipping_charge"
@@ -89,6 +89,7 @@ class LedgerType(StrEnum):
 LEDGER_LABELS_RU: dict[LedgerType, str] = {
     LedgerType.ORDER_CHARGE: "Выкуп заказа",
     LedgerType.ORDER_REFUND: "Возврат за заказ",
+    LedgerType.ORDER_REBUY: "Перезаказ",
     LedgerType.DEPOSIT: "Пополнение",
     LedgerType.ADJUSTMENT: "Корректировка",
     LedgerType.SHIPPING_CHARGE: "Доставка",

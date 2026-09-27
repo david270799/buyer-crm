@@ -3,7 +3,7 @@ from crm.storage.memory import InMemoryDatabase
 from crm.tools import doctor
 
 
-def test_doctor_reads_legacy_data_without_writing(capsys):
+def test_doctor_reads_hand_made_data_without_writing(capsys):
     db = InMemoryDatabase()
     db.seed("client_info", "main_client", {"telegram_id": 2002, "name": "C", "balance": 1500.0})
     db.seed(
@@ -22,7 +22,7 @@ def test_doctor_reads_legacy_data_without_writing(capsys):
     assert report.problems == 0
     assert "максимальный номер: n125" in out
     assert "нераспознанный статус у 1 заказов" in out and "n125" in out
-    assert "без client_price" in out and "n7" in out
+    assert "списание не записано" in out and "n7" in out
     assert "next_id = 126" in out
     assert "…abcd" in out and "123:abcd" not in out
 

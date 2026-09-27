@@ -1,8 +1,8 @@
 """Typed views over Firestore documents.
 
-Parsing is lenient because `orders/n1..n125` and `client_info/main_client`
-were written before this code existed. Unknown fields are ignored here and
-are never deleted: services only ever update the fields they own.
+Parsing is lenient: documents may also be created or edited by hand in the
+Firebase console. Unknown fields are ignored here and are never deleted —
+services only ever update the fields they own.
 """
 
 from dataclasses import dataclass, field
@@ -10,7 +10,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from crm.domain.enums import CHARGED_STATUSES, LedgerType, OrderStatus, parse_status
+from crm.domain.enums import LedgerType, OrderStatus, parse_status
 from crm.domain.money import to_int_amount
 
 Doc = dict[str, Any]
@@ -65,8 +65,6 @@ class Order:
     profit: int | None = None
     # Amount of this order currently charged to the client balance.
     charged_amount_krw: int = 0
-    # False for legacy orders where charged_amount_krw is inferred from status.
-    charge_is_explicit: bool = True
     cargo_code: str | None = None
     shipment_id: str | None = None
     photo_url: str | None = None
@@ -77,6 +75,9 @@ class Order:
     client_comment: str | None = None
     internal_comment: str | None = None
     attention_required: bool = False
+    # Admin only: every purchase attempt (first buy and each re-purchase).
+    purchases: list[Doc] = field(default_factory=list)
+    rebuy_count: int = 0
     timestamps: dict[str, datetime] = field(default_factory=dict)
     created_by: str | None = None
     updated_by: str | None = None
@@ -87,15 +88,10 @@ class Order:
         client_price = to_int_amount(data.get("client_price"))
         purchase_price = to_int_amount(data.get("purchase_price"))
 
-        if data.get("charged_amount_krw") is not None:
-            charged = to_int_amount(data["charged_amount_krw"]) or 0
-            explicit = True
-        else:
-            # Legacy order: the old /buy set status=bought and subtracted
-            # client_price from the balance, so any "bought or later" status
-            # means client_price was charged.
-            charged = (client_price or 0) if status in CHARGED_STATUSES else 0
-            explicit = False
+        # Only this CRM charges orders, and it always records what it charged.
+        # A missing value (e.g. a document typed in the Firebase console) means
+        # nothing was charged: money never moves on a guess.
+        charged = to_int_amount(data.get("charged_amount_krw")) or 0
 
         profit = to_int_amount(data.get("profit"))
         if profit is None and client_price is not None and purchase_price is not None:
@@ -117,7 +113,6 @@ class Order:
             client_price=client_price,
             profit=profit,
             charged_amount_krw=charged,
-            charge_is_explicit=explicit,
             cargo_code=_str_or_none(data.get("cargo_code")),
             shipment_id=_str_or_none(data.get("shipment_id")),
             photo_url=_str_or_none(data.get("photo_url")),
@@ -128,6 +123,8 @@ class Order:
             client_comment=_str_or_none(data.get("client_comment")),
             internal_comment=_str_or_none(data.get("internal_comment")),
             attention_required=bool(data.get("attention_required", False)),
+            purchases=[dict(p) for p in data.get("purchases") or [] if isinstance(p, dict)],
+            rebuy_count=_int_or_none(data.get("rebuy_count")) or 0,
             timestamps=timestamps,
             created_by=_str_or_none(data.get("created_by")),
             updated_by=_str_or_none(data.get("updated_by")),
@@ -141,10 +138,6 @@ class Order:
     @property
     def is_charged(self) -> bool:
         return self.charged_amount_krw > 0
-
-    def legacy_charge_fields(self) -> Doc:
-        """Fields that persist an inferred legacy charge the first time the order is written."""
-        return {} if self.charge_is_explicit else {"charged_amount_krw": self.charged_amount_krw}
 
     def timestamp(self, name: str) -> datetime | None:
         return self.timestamps.get(name)

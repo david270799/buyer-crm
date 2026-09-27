@@ -115,6 +115,9 @@ class InMemoryDatabase:
             rows.sort(key=lambda row: row[1][order_by.field], reverse=order_by.descending)
         return rows[:limit] if limit is not None else rows
 
+    def scan(self, collection: str) -> list[tuple[str, Doc]]:
+        return self.query(collection)
+
     def list_ids(self, collection: str) -> list[str]:
         with self._lock:
             return sorted(self._docs[collection])

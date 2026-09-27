@@ -18,7 +18,7 @@ from crm.domain.timeutil import format_date, format_datetime
 from crm.domain.views import order_view
 from crm.services.finance_service import BalanceView, LedgerResult
 from crm.services.ledger import BalanceChange
-from crm.services.order_service import BulkResult, BuyResult, CancelResult
+from crm.services.order_service import BulkResult, BuyResult, CancelResult, RebuyResult
 from crm.services.shipment_service import ShipmentUpdateResult, ShipResult
 
 
@@ -122,6 +122,25 @@ def buy_result(result: BuyResult, audience: Role) -> str:
         lines.append(f"Цена: {_money(order.client_price)}")
     if result.change:
         lines.append(_balance_line(result.change.balance_before, result.change.balance_after))
+    return "\n".join(lines)
+
+
+def rebuy_result(result: RebuyResult, audience: Role) -> str:
+    order = result.order
+    if result.already_done:
+        return f"ℹ️ Заказ <b>{e(order.id)}</b> уже выкуплен с этими данными — ничего не изменилось."
+    lines = [f"🔁 Заказ <b>{e(order.id)}</b> перезаказан"]
+    if audience is Role.ADMIN:
+        lines.append(
+            f"Закупка: {_money(order.purchase_price)} · Клиенту: {_money(order.client_price)} · "
+            f"Прибыль: {_money(order.profit)}"
+        )
+    else:
+        lines.append(f"Цена: {_money(order.client_price)}")
+    if result.change:
+        lines.append(_balance_line(result.change.balance_before, result.change.balance_after))
+    else:
+        lines.append("Цена для клиента не изменилась — баланс тот же.")
     return "\n".join(lines)
 
 
@@ -308,7 +327,8 @@ def history(entries: list[LedgerEntry]) -> str:
 
 ADMIN_HELP = """<b>Команды администратора</b>
 /buy 5 140000 170000 — выкуп: закупка, цена клиенту (списывает баланс один раз)
-/cancel 5 — отмена (возвращает списанное один раз)
+/cancel 5 — отмена (возвращает списанное один раз; после отправки отмены нет)
+/rebuy 5 150000 185000 [ссылка] [причина] — перезаказ в другом магазине (разница по цене)
 /status warehouse 5 7 12 — статус нескольких заказов (warehouse, cargo, delivered)
 /cargo TRACK123 5 10 18 — отправка: создаёт shipment, ставит статус «Отправлен»
 /shipcost 1 95000 — стоимость доставки отправки #1 (списывается с баланса)

@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from crm.domain.enums import LedgerType
 from crm.domain.errors import ConflictError, ValidationError
+from crm.domain.events import EventType
 from crm.domain.models import GeneralSettings, LedgerEntry
 from crm.domain.money import (
     MAX_AMOUNT_KRW,
@@ -14,6 +15,7 @@ from crm.domain.money import (
 )
 from crm.repositories import ClientRepository, LedgerRepository, SettingsRepository
 from crm.services.common import Actor, Auditor, Clock, require_admin
+from crm.services.events import EventRecorder
 from crm.services.ledger import BalanceChange, BalanceLedger
 from crm.storage import Database, Transaction
 
@@ -58,6 +60,7 @@ class FinanceService:
         settings: SettingsRepository,
         ledger: BalanceLedger,
         auditor: Auditor,
+        events: EventRecorder,
     ):
         self._db = db
         self._clock = clock
@@ -66,6 +69,7 @@ class FinanceService:
         self._settings = settings
         self._ledger = ledger
         self._auditor = auditor
+        self._events = events
 
     # --- reads (admin and client) -------------------------------------------
 
@@ -143,6 +147,14 @@ class FinanceService:
                 before={"krw_per_usd": str(before.krw_per_usd) if before.krw_per_usd else None},
                 after={"krw_per_usd": str(krw_per_usd)},
             )
+            self._events.record(
+                tx,
+                actor,
+                now,
+                EventType.RATE,
+                "Обновлён курс доллара",
+                body=f"1 $ = {krw_per_usd.normalize():,f} ₩",
+            )
             return GeneralSettings(krw_per_usd=krw_per_usd, updated_at=now, updated_by=actor.id)
 
         return self._db.run_transaction(fn)
@@ -195,6 +207,26 @@ class FinanceService:
                 before={"balance": change.balance_before},
                 after={"balance": change.balance_after, "transaction_id": change.entry_id},
             )
+            if type is LedgerType.DEPOSIT:
+                self._events.record(
+                    tx,
+                    actor,
+                    now,
+                    EventType.DEPOSIT,
+                    "Баланс пополнен",
+                    body=comment,
+                    amount_krw=amount_krw,
+                )
+            else:
+                self._events.record(
+                    tx,
+                    actor,
+                    now,
+                    EventType.ADJUSTMENT,
+                    "Корректировка баланса",
+                    body=comment,
+                    amount_krw=amount_krw,
+                )
             entry = LedgerEntry(
                 id=change.entry_id,
                 type=type,

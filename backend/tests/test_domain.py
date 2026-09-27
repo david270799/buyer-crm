@@ -104,7 +104,7 @@ def test_parse_status_aliases():
     assert parse_status(3) is None
 
 
-def test_legacy_order_parsing():
+def test_lenient_order_parsing():
     order = Order.from_doc(
         "n3",
         {
@@ -119,23 +119,20 @@ def test_legacy_order_parsing():
     assert order.purchase_price == 100_000
     assert order.client_price == 120_000
     assert order.profit == 20_000
-    assert order.charged_amount_krw == 120_000 and not order.charge_is_explicit
-    assert order.legacy_charge_fields() == {"charged_amount_krw": 120_000}
     assert order.cargo_code is None
 
 
-@pytest.mark.parametrize("status", ["new", "cancelled", "что-то"])
-def test_legacy_order_not_charged_outside_charged_statuses(status):
+@pytest.mark.parametrize("status", ["new", "bought", "delivered", "что-то"])
+def test_missing_charge_means_nothing_was_charged(status):
     order = Order.from_doc("n1", {"status": status, "client_price": 5})
-    assert order.charged_amount_krw == 0
+    assert order.charged_amount_krw == 0 and not order.is_charged
 
 
-def test_explicit_charge_wins_over_inference():
+def test_recorded_charge_is_read():
     order = Order.from_doc(
-        "n1", {"status": "warehouse", "client_price": 5, "charged_amount_krw": 0}
+        "n1", {"status": "warehouse", "client_price": 5, "charged_amount_krw": 5}
     )
-    assert order.charged_amount_krw == 0 and order.charge_is_explicit
-    assert order.legacy_charge_fields() == {}
+    assert order.charged_amount_krw == 5 and order.is_charged
 
 
 def test_client_info_parsing():

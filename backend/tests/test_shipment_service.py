@@ -115,7 +115,7 @@ def test_second_shipment_gets_next_number(db, services, admin):
     assert result.shipment.shipment_number == 2
 
 
-def test_legacy_cargo_order_without_shipment_is_attached(db, services, admin):
+def test_cargo_order_without_shipment_is_attached(db, services, admin):
     seed_order(db, "n7", status="cargo", client_price=50_000, cargo_code="OLD1")
 
     result = services.shipments.ship_orders(admin, ["7"], "NEW1")
@@ -123,7 +123,6 @@ def test_legacy_cargo_order_without_shipment_is_attached(db, services, admin):
     assert result.added == ["n7"]
     order = db.get("orders", "n7")
     assert order["cargo_code"] == "NEW1"
-    assert order["charged_amount_krw"] == 50_000  # legacy charge persisted
 
 
 def test_shipment_details_are_stored_and_cost_is_charged_once(db, services, admin):

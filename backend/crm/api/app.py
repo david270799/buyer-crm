@@ -40,6 +40,7 @@ from crm.domain.errors import (
     PermissionDeniedError,
     ValidationError,
 )
+from crm.domain.events import Event
 from crm.domain.models import LedgerEntry, Order
 from crm.domain.timeutil import BUSINESS_TZ
 from crm.domain.views import ledger_view, order_view, shipment_view
@@ -106,6 +107,13 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
 class BuyIn(BaseModel):
     purchase_price: int = Field(ge=0)
     client_price: int = Field(gt=0)
+
+
+class RebuyIn(BaseModel):
+    purchase_price: int = Field(ge=0)
+    client_price: int = Field(gt=0)
+    source_url: str | None = None
+    reason: str | None = Field(default=None, max_length=2000)
 
 
 class NewOrderIn(BaseModel):
@@ -191,6 +199,20 @@ def order_json(order: Order, role: Role) -> dict[str, Any]:
     view["title"] = order.title
     view["status_label"] = STATUS_LABELS_RU.get(order.status) if order.status else None
     return view
+
+
+def event_json(event: Event) -> dict[str, Any]:
+    return {
+        "id": event.id,
+        "type": event.type.value if event.type else None,
+        "important": event.important,
+        "title": event.title,
+        "body": event.body,
+        "order_ids": event.order_ids,
+        "shipment_id": event.shipment_id,
+        "amount_krw": event.amount_krw,
+        "created_at": event.created_at,
+    }
 
 
 def change_json(change: BalanceChange | None) -> dict[str, Any] | None:
@@ -373,7 +395,8 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
                 shipment = shipment_view(found, p.role)
             except NotFoundError:
                 shipment = None
-        return {"order": order_json(order, p.role), "shipment": shipment}
+        history = [event_json(e) for e in services.events.for_order(p.actor, order.id)]
+        return {"order": order_json(order, p.role), "shipment": shipment, "history": history}
 
     @app.get("/api/shipments")
     def list_shipments(p: Any_, limit: Annotated[int, Query(ge=1, le=200)] = 50) -> dict[str, Any]:
@@ -392,6 +415,26 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
     def transactions(p: Any_, limit: Annotated[int, Query(ge=1, le=100)] = 50) -> dict[str, Any]:
         entries = services.finance.history(p.actor, limit=limit)
         return {"items": _ledger_items(services, p, entries)}
+
+    @app.get("/api/events")
+    def list_events(
+        p: Any_,
+        important: bool = False,
+        before: datetime | None = None,
+        limit: Annotated[int, Query(ge=1, le=100)] = 30,
+    ) -> dict[str, Any]:
+        items = services.events.feed(p.actor, important_only=important, before=before, limit=limit)
+        return {"items": [event_json(e) for e in items]}
+
+    @app.get("/api/events/unread")
+    def unread_events(p: Any_) -> dict[str, int]:
+        unread = services.events.unread(p.actor)
+        return {"important": unread.important, "total": unread.total}
+
+    @app.post("/api/events/read")
+    def read_events(p: Any_) -> dict[str, bool]:
+        services.events.mark_read(p.actor)
+        return {"ok": True}
 
     # --- admin: orders ----------------------------------------------------
 
@@ -418,6 +461,18 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
     @app.post("/api/orders/{order_id}/buy")
     def buy(order_id: str, body: BuyIn, p: Admin) -> dict[str, Any]:
         result = services.orders.buy(p.actor, order_id, body.purchase_price, body.client_price)
+        return {
+            "order": order_json(result.order, p.role),
+            "already_done": result.already_done,
+            "change": change_json(result.change),
+        }
+
+    @app.post("/api/orders/{order_id}/rebuy")
+    def rebuy(order_id: str, body: RebuyIn, p: Admin) -> dict[str, Any]:
+        extra = {"source_url": body.source_url} if "source_url" in body.model_fields_set else {}
+        result = services.orders.rebuy(
+            p.actor, order_id, body.purchase_price, body.client_price, reason=body.reason, **extra
+        )
         return {
             "order": order_json(result.order, p.role),
             "already_done": result.already_done,

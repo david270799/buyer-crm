@@ -404,3 +404,54 @@ def test_static_frontend_is_served(db, clock, client_doc, tmp_path):
     assert page.status_code == 200 and "CRM" in page.text
     assert client.get("/api/me").status_code == 401
     assert client.get("/api/me").headers["cache-control"] == "no-store"
+
+
+def test_rebuy_endpoint_and_history(db, api):
+    seed_order(db, "n5", brand="Nike", source_url="https://shop-a.kr/1")
+    api("POST", "/api/orders/5/buy", json={"purchase_price": 140_000, "client_price": 170_000})
+
+    rebuy = api(
+        "POST",
+        "/api/orders/5/rebuy",
+        json={
+            "purchase_price": 150_000,
+            "client_price": 185_000,
+            "source_url": "https://shop-b.kr/2",
+            "reason": "Магазин отменил заказ",
+        },
+    ).json()
+    assert rebuy["change"]["amount_krw"] == -15_000
+    assert rebuy["order"]["source_url"] == "https://shop-b.kr/2"
+    assert len(rebuy["order"]["purchases"]) == 2
+    assert balance(db) == START_BALANCE - 185_000
+
+    client_view = api("GET", "/api/orders/n5", who=CLIENT_TG).json()
+    assert [h["type"] for h in client_view["history"]] == ["order_rebought", "order_bought"]
+    assert "purchases" not in client_view["order"] and "rebuy_count" not in client_view["order"]
+    assert (
+        api(
+            "POST",
+            "/api/orders/5/rebuy",
+            who=CLIENT_TG,
+            json={"purchase_price": 1, "client_price": 2},
+        ).status_code
+        == 403
+    )
+
+
+def test_notifications_feed_and_read_state(db, api):
+    seed_order(db, "n5")
+    api("POST", "/api/orders/5/buy", json={"purchase_price": 1, "client_price": 10})
+    api("POST", "/api/orders/5/cancel")
+
+    assert api("GET", "/api/events/unread", who=CLIENT_TG).json() == {"important": 1, "total": 2}
+    feed = api("GET", "/api/events", who=CLIENT_TG).json()["items"]
+    assert [e["type"] for e in feed] == ["order_cancelled", "order_bought"]
+    important = api("GET", "/api/events", who=CLIENT_TG, params={"important": "true"}).json()
+    assert [e["type"] for e in important["items"]] == ["order_cancelled"]
+    older = api("GET", "/api/events", who=CLIENT_TG, params={"before": feed[0]["created_at"]})
+    assert [e["type"] for e in older.json()["items"]] == ["order_bought"]
+
+    assert api("POST", "/api/events/read", who=CLIENT_TG).json() == {"ok": True}
+    assert api("GET", "/api/events/unread", who=CLIENT_TG).json()["total"] == 0
+    assert api("GET", "/api/events/unread").json()["total"] == 2  # admin separate

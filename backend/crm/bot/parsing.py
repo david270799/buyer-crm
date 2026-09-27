@@ -21,6 +21,10 @@ SHIPCOST_USAGE = (
     "Формат: /shipcost <отправка> <стоимость>\nПример: /shipcost 18 95000 или "
     "/shipcost SHP-2026-018 95000"
 )
+REBUY_USAGE = (
+    "Формат: /rebuy <номер> <закупка> <цена клиенту> [ссылка] [причина для клиента]\n"
+    "Пример: /rebuy 5 150000 185000 https://shop.kr/item Магазин отменил заказ"
+)
 RATE_USAGE = "Формат: /rate <KRW за 1 USD>\nПример: /rate 1350"
 
 
@@ -95,3 +99,16 @@ def parse_shipcost(args: str | None) -> tuple[str, int]:
     if len(tokens) != 2:
         raise ValidationError(SHIPCOST_USAGE)
     return tokens[0], parse_krw(tokens[1])
+
+
+def parse_rebuy(args: str | None) -> tuple[str, int, int, str | None, str | None]:
+    parts = (args or "").split(maxsplit=3)
+    if len(parts) < 3:
+        raise ValidationError(REBUY_USAGE)
+    order_id = normalize_order_id(parts[0])
+    purchase, price = parse_krw(parts[1]), parse_krw(parts[2])
+    rest = parts[3].strip() if len(parts) > 3 else ""
+    link = None
+    if rest.lower().startswith(("http://", "https://")):
+        link, _, rest = rest.partition(" ")
+    return order_id, purchase, price, link, rest.strip() or None

@@ -110,3 +110,32 @@ def test_memory_transaction_retries_when_reads_go_stale():
 
     assert attempts == [1, 10]
     assert db.get("c", "doc")["value"] == 11
+
+
+def test_firestore_scan_cache_is_dropped_by_our_writes_and_expires():
+    import os
+    import time
+    import uuid
+
+    if not os.environ.get("FIRESTORE_EMULATOR_HOST"):
+        pytest.skip("FIRESTORE_EMULATOR_HOST is not set")
+    from google.cloud.firestore_v1 import Client
+
+    from crm.storage.firestore import FirestoreDatabase
+
+    client = Client(project=f"demo-cache-{uuid.uuid4().hex[:10]}")
+    db = FirestoreDatabase(client, scan_cache_seconds=0.5, cached_collections=("orders",))
+    db.run_transaction(lambda tx: tx.set("orders", "n1", {"v": 1}))
+    assert [i for i, _ in db.scan("orders")] == ["n1"]
+
+    client.collection("orders").document("n2").set({"v": 2})  # written outside the CRM
+    assert [i for i, _ in db.scan("orders")] == ["n1"]  # served from cache
+
+    db.run_transaction(lambda tx: tx.update("orders", "n1", {"v": 10}))  # our write
+    rows = dict(db.scan("orders"))
+    assert rows["n1"] == {"v": 10} and "n2" in rows
+
+    client.collection("orders").document("n3").set({"v": 3})
+    time.sleep(0.6)
+    assert sorted(dict(db.scan("orders"))) == ["n1", "n2", "n3"]  # expired, re-read
+    assert [i for i, _ in db.scan("shipments")] == []  # uncached collections read directly

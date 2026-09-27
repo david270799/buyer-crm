@@ -291,3 +291,16 @@ async def test_shipcost_command_charges_difference(db, bot_env):
     assert "Баланс не изменился" in again
     assert balance(db) == START_BALANCE - 95_000
     assert "Доставка SHP-2026-001" in history
+
+
+async def test_rebuy_command(db, bot_env):
+    seed_order(db, "n5")
+    await bot_env("/buy 5 140000 170000")
+
+    (reply,) = await bot_env("/rebuy 5 150000 185000 https://shop-b.kr/1 Магазин отменил заказ")
+    (group_reply,) = await bot_env("/rebuy 5 150000 190000", chat_id=GROUP_ID)
+
+    assert "перезаказан" in reply and "Закупка: ₩ 150,000" in reply
+    assert "₩ 830,000 → <b>₩ 815,000</b>" in reply
+    assert "Закупка" not in group_reply and "150,000" not in group_reply
+    assert balance(db) == START_BALANCE - 190_000

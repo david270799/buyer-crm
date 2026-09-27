@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 ADMIN_COMMANDS = [
     BotCommand(command="buy", description="Выкуп: /buy 5 140000 170000"),
     BotCommand(command="cancel", description="Отмена с возвратом: /cancel 5"),
+    BotCommand(command="rebuy", description="Перезаказ: /rebuy 5 150000 185000"),
     BotCommand(command="status", description="Статус: /status warehouse 5 7"),
     BotCommand(command="cargo", description="Отправка: /cargo TRACK 5 10"),
     BotCommand(command="shipcost", description="Стоимость доставки: /shipcost 1 95000"),
