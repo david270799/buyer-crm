@@ -42,3 +42,37 @@ jobs:
       # test runs twice: on the in-memory fake and on the real emulator.
       - name: Tests (in-memory + Firestore emulator)
         run: firebase emulators:exec --only firestore --project demo-buyer-crm "cd backend && python -m pytest -q"
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [backend, web]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the production image
+        run: docker build -t buyer-crm .
+      - name: Smoke test (demo mode, no secrets)
+        run: |
+          docker run -d --name crm -p 8080:8080 -e RUN_BOT=0 buyer-crm python -m crm.server --demo
+          curl -fsS --retry 30 --retry-all-errors --retry-delay 2 http://localhost:8080/api/config
+          curl -fsS http://localhost:8080/ | grep -q "<title>Buyer CRM</title>"
+          curl -fsS -H "Authorization: demo client" http://localhost:8080/api/overview | grep -q '"balance"'
+          docker rm -f crm

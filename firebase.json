@@ -12,5 +12,8 @@
       "enabled": false
     },
     "singleProjectMode": false
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }

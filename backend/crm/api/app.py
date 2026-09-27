@@ -13,6 +13,7 @@ comes from RoleResolver (admins from env, the client from Firestore).
 """
 
 import logging
+import mimetypes
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -50,6 +51,10 @@ from crm.services.shipment_service import ShipmentDetails, ShipmentUpdate
 from crm.storage import TransactionContentionError
 
 logger = logging.getLogger(__name__)
+
+# Slim containers have no /etc/mime.types; with `nosniff` a wrong type could
+# stop browsers from showing local (demo) photos.
+mimetypes.add_type("image/webp", ".webp")
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 IdempotencyKey = Annotated[str, Field(pattern=r"^[A-Za-z0-9_.:-]{8,80}$")]

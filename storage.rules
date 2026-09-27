@@ -1,0 +1,12 @@
+rules_version = '2';
+
+// Photos are uploaded by the backend (Admin SDK bypasses rules) and read
+// through download-token URLs, which also bypass rules. Nothing else is
+// allowed from browsers.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

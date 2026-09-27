@@ -392,8 +392,14 @@ def test_demo_login_only_in_demo_mode(db, clock, client_doc):
 
 def test_static_frontend_is_served(db, clock, client_doc, tmp_path):
     (tmp_path / "index.html").write_text("<html>CRM</html>")
+    media = tmp_path / "media"
+    media.mkdir()
+    (media / "p.webp").write_bytes(b"RIFF")
     services = build_services(db, frozenset({ADMIN_TG}), clock)
-    client = TestClient(create_app(services, ApiConfig(bot_token=BOT_TOKEN, static_dir=tmp_path)))
+    client = TestClient(
+        create_app(services, ApiConfig(bot_token=BOT_TOKEN, static_dir=tmp_path, media_dir=media))
+    )
+    assert client.get("/media/p.webp").headers["content-type"] == "image/webp"
     page = client.get("/")
     assert page.status_code == 200 and "CRM" in page.text
     assert client.get("/api/me").status_code == 401

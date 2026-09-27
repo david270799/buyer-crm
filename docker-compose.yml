@@ -1,0 +1,26 @@
+# VPS deployment: the CRM behind Caddy, which obtains an HTTPS certificate
+# automatically (Telegram Mini Apps require HTTPS). See docs/deploy.md.
+services:
+  crm:
+    build: .
+    env_file: .env
+    environment:
+      FIREBASE_CREDENTIALS: /secrets/service-account.json
+    volumes:
+      - ./secrets/service-account.json:/secrets/service-account.json:ro
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    command: caddy reverse-proxy --from ${DOMAIN:?set DOMAIN in .env} --to crm:8080
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+    depends_on:
+      - crm
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
