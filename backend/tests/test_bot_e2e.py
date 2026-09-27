@@ -254,25 +254,29 @@ async def test_admin_replies_in_group_use_client_visibility(db, bot_env):
     assert "Закупка: ₩ 90,000" in private_buy
 
 
-async def test_demo_data_supports_the_whole_flow():
+def test_demo_data_is_consistent_and_realistic():
     from crm.demo import DEMO_BALANCE, create_demo_database
-    from crm.services.container import build_services
+    from crm.storage.blobs import MemoryBlobStorage
 
-    db = create_demo_database(client_telegram_id=CLIENT_TG)
-    services = build_services(db, frozenset({ADMIN_TG}))
-    admin = services.roles.resolve(ADMIN_TG)
-    assert services.roles.resolve(CLIENT_TG) is not None
+    blobs = MemoryBlobStorage()
+    db = create_demo_database(client_telegram_id=CLIENT_TG, blob_storage=blobs)
 
-    from crm.services.common import Actor
-
-    actor = Actor.telegram(ADMIN_TG, admin)
-    services.orders.buy(actor, "121", 150_000, 180_000)
-    services.shipments.ship_orders(actor, ["123", "124", "125"], "DEMO123")
-    services.orders.cancel(actor, "122")
-
-    assert db.get("client_info", "main_client")["balance"] == DEMO_BALANCE - 180_000
-    assert db.get("orders", "n124")["shipment_id"].startswith("SHP-")
-    assert services.orders.cancel(actor, "121").refunded_krw == 180_000
+    entries = [data for _, data in db.query("transactions")]
+    assert DEMO_BALANCE + sum(e["amount_krw"] for e in entries) == balance(db)
+    assert {e["type"] for e in entries} == {
+        "deposit",
+        "order_charge",
+        "order_refund",
+        "shipping_charge",
+    }
+    statuses = {doc_id: data["status"] for doc_id, data in db.query("orders")}
+    assert statuses["n117"] == "cancelled" and statuses["n118"] == "delivered"
+    assert statuses["n120"] == "cargo" and statuses["n124"] == "new"
+    assert len(db.query("shipments")) == 2
+    assert db.get("orders", "n125")["attention_required"] is True
+    assert db.get("orders", "n118")["photo_url"].endswith(".webp")
+    assert len(blobs.files) == 2 * 9
+    assert db.get("client_info", "main_client")["telegram_id"] == CLIENT_TG
 
 
 async def test_shipcost_command_charges_difference(db, bot_env):

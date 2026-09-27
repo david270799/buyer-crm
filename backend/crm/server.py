@@ -50,9 +50,9 @@ def build_app(settings: Settings, demo: bool):
 
         admin_ids = settings.admin_ids or frozenset({DEMO_ADMIN_ID})
         client_id = _demo_client_id()
-        db = create_demo_database(client_id)
         media_dir = Path(tempfile.mkdtemp(prefix="crm-demo-media-"))
         blobs = LocalBlobStorage(media_dir)
+        db = create_demo_database(client_id, blob_storage=blobs)
         logger.warning("ДЕМО-РЕЖИМ: данные в памяти, Firebase не используется.")
     else:
         from crm.firebase import create_blob_storage, create_database
