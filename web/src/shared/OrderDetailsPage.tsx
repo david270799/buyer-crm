@@ -1,4 +1,4 @@
-import { AlertTriangle, Copy, ExternalLink, MessageSquare, Package } from "lucide-react";
+import { AlertTriangle, Copy, MessageSquare, Package } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -120,16 +120,6 @@ export function OrderDetailsPage({ adminPanel }: { adminPanel?: (order: Order) =
                   <dt>Трек-номер</dt>
                   <dd>
                     <CopyText text={order.cargo_code} />
-                  </dd>
-                </>
-              )}
-              {order.source_url && (
-                <>
-                  <dt>Ссылка</dt>
-                  <dd>
-                    <a href={order.source_url} target="_blank" rel="noopener noreferrer" className="link">
-                      Открыть <ExternalLink size={12} style={{ verticalAlign: -1 }} />
-                    </a>
                   </dd>
                 </>
               )}

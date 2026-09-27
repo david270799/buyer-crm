@@ -230,7 +230,7 @@ export function RebuySheet({ order, onClose }: { order: Order; onClose: () => vo
           <MoneyInput value={price} onChange={setPrice} />
         </Field>
         <div className="full">
-          <Field label="Ссылка на новый магазин">
+          <Field label="Ссылка на новый магазин" hint="Видите только вы">
             <input className="input" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://" />
           </Field>
         </div>
@@ -706,7 +706,7 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
         <Field label="Размер">
           <input className="input" value={form.size} onChange={(e) => set("size", e.target.value)} />
         </Field>
-        <Field label="Ссылка">
+        <Field label="Ссылка" hint="Видите только вы">
           <input className="input" value={form.source_url} onChange={(e) => set("source_url", e.target.value)} placeholder="https://" />
         </Field>
         {editablePrices && (

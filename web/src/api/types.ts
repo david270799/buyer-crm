@@ -14,11 +14,11 @@ export interface Order {
   shipment_id: string | null;
   photo_url: string | null;
   thumbnail_url: string | null;
-  source_url: string | null;
   client_comment: string | null;
   attention_required: boolean;
   timestamps: Record<string, string>;
   // Admin only
+  source_url?: string | null;
   purchase_price?: number | null;
   profit?: number | null;
   charged_amount_krw?: number;

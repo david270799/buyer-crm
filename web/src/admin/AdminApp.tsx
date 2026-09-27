@@ -143,7 +143,7 @@ function NewOrderPage() {
           <Field label="Размер">
             <input className="input" value={form.size} onChange={(e) => set("size", e.target.value)} placeholder="270" />
           </Field>
-          <Field label="Ссылка">
+          <Field label="Ссылка" hint="Видите только вы">
             <input className="input" value={form.source_url} onChange={(e) => set("source_url", e.target.value)} placeholder="https://" />
           </Field>
           <Field label="Закупка">

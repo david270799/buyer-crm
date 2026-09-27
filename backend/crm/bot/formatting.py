@@ -73,8 +73,8 @@ def order_details(order: Order, role: Role) -> str:
         lines.append(f"Трек: <code>{e(view['cargo_code'])}</code>")
     if view["shipment_id"]:
         lines.append(f"Отправка: {e(view['shipment_id'])}")
-    if view["source_url"]:
-        lines.append(f"Ссылка: {e(view['source_url'])}")
+    if role is Role.ADMIN and view["source_url"]:
+        lines.append(f"🔒 Ссылка: {e(view['source_url'])}")
     if view["attention_required"]:
         lines.append("⚠️ <b>Требуется внимание</b>")
     if view["client_comment"]:

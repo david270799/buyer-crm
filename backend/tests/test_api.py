@@ -21,6 +21,7 @@ from crm.storage.blobs import MemoryBlobStorage
 
 BOT_TOKEN = "123456:TEST-token"
 ADMIN_ONLY_KEYS = {
+    "source_url",
     "purchase_price",
     "profit",
     "internal_comment",
@@ -133,8 +134,14 @@ def test_roles(api):
 
 
 def test_client_sees_no_admin_fields_anywhere(db, api):
-    seed_order(db, "n5", status="new", brand="Nike")
+    seed_order(db, "n5", status="new", brand="Nike", source_url="https://shop-a.kr/1")
     api("POST", "/api/orders/n5/buy", json={"purchase_price": 140_000, "client_price": 170_000})
+    rebuy = {
+        "purchase_price": 141_000,
+        "client_price": 170_000,
+        "source_url": "https://shop-b.kr/2",
+    }
+    api("POST", "/api/orders/n5/rebuy", json={**rebuy, "reason": "Нет в наличии"})
     api("PATCH", "/api/orders/n5", json={"internal_comment": "секрет", "client_comment": "ок"})
     api("POST", "/api/shipments", json={"order_ids": ["5"], "shipping_cost_krw": 50_000})
 
@@ -147,6 +154,7 @@ def test_client_sees_no_admin_fields_anywhere(db, api):
             "/api/shipments",
             "/api/shipments/1",
             "/api/transactions",
+            "/api/events",
         )
     ]
 
@@ -154,6 +162,7 @@ def test_client_sees_no_admin_fields_anywhere(db, api):
     assert leaked == set()
     assert "секрет" not in json.dumps(responses, ensure_ascii=False)
     assert "140000" not in json.dumps(responses)
+    assert "shop-" not in json.dumps(responses)  # product links are the buyer's own
     order = responses[2]["order"]
     assert order["client_price"] == 170_000 and order["client_comment"] == "ок"
 
@@ -427,7 +436,7 @@ def test_rebuy_endpoint_and_history(db, api):
 
     client_view = api("GET", "/api/orders/n5", who=CLIENT_TG).json()
     assert [h["type"] for h in client_view["history"]] == ["order_rebought", "order_bought"]
-    assert "purchases" not in client_view["order"] and "rebuy_count" not in client_view["order"]
+    assert not {"purchases", "rebuy_count", "source_url"} & set(client_view["order"])
     assert (
         api(
             "POST",

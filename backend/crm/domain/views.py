@@ -22,12 +22,12 @@ CLIENT_ORDER_FIELDS = (
     "shipment_id",
     "photo_url",
     "thumbnail_url",
-    "source_url",
     "client_comment",
     "attention_required",
 )
 
 ADMIN_ONLY_ORDER_FIELDS = (
+    "source_url",  # where the item was bought: the buyer's own reference
     "purchase_price",
     "profit",
     "charged_amount_krw",

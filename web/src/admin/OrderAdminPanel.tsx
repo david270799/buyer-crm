@@ -1,4 +1,4 @@
-import { Ban, Pencil, Repeat, ShoppingBag, Truck, Warehouse } from "lucide-react";
+import { Ban, ExternalLink, Pencil, Repeat, ShoppingBag, Truck, Warehouse } from "lucide-react";
 import { useState } from "react";
 
 import { useBulkStatus } from "../api/hooks";
@@ -9,7 +9,7 @@ import { bulkSummary, BuySheet, CancelConfirm, EditOrderSheet, RebuySheet, Shipm
 
 type Dialog = "buy" | "cancel" | "edit" | "ship" | "rebuy" | null;
 
-function shopName(url: string | null): string {
+function shopName(url: string | null | undefined): string {
   if (!url) return "без ссылки";
   try {
     return new URL(url).hostname.replace(/^www\./, "");
@@ -52,6 +52,16 @@ export function OrderAdminPanel({ order }: { order: Order }) {
           <dd className={profit !== null && profit < 0 ? "negative" : ""}>{krw(profit)}</dd>
           <dt>Списано с баланса</dt>
           <dd>{krw(order.charged_amount_krw ?? 0)}</dd>
+          {order.source_url && (
+            <>
+              <dt>Ссылка</dt>
+              <dd style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                <a href={order.source_url} target="_blank" rel="noopener noreferrer" className="link">
+                  {shopName(order.source_url)} <ExternalLink size={12} style={{ verticalAlign: -1 }} />
+                </a>
+              </dd>
+            </>
+          )}
         </dl>
         {purchases.length > 1 && (
           <div className="stack" style={{ gap: 6 }}>
