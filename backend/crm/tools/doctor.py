@@ -50,6 +50,12 @@ def check_config(settings: Settings, report: Report) -> None:
         report.ok(f"ADMIN_TELEGRAM_IDS: {sorted(settings.admin_ids)}")
     else:
         report.fail("ADMIN_TELEGRAM_IDS не задан")
+    if settings.firebase_storage_bucket:
+        report.ok(f"FIREBASE_STORAGE_BUCKET: {settings.firebase_storage_bucket}")
+    else:
+        report.warn("FIREBASE_STORAGE_BUCKET не задан — фото заказов не сохраняются")
+    if not settings.gemini_api_key:
+        report.warn("GEMINI_API_KEY не задан — заказы по фото без распознавания модели")
     if settings.allowed_chat_ids:
         report.info(f"ALLOWED_CHAT_IDS: {sorted(settings.allowed_chat_ids)}")
     else:
@@ -63,7 +69,10 @@ def check_client(db: Database, settings: Settings, report: Report) -> None:
     print("client_info/main_client")
     raw = db.get("client_info", "main_client")
     if raw is None:
-        report.fail("документ не найден — финансовые операции работать не будут")
+        report.fail(
+            "документ не найден — добавьте бота в группу и ответьте /setclient "
+            "на сообщение клиента (или /setclient <ID>)"
+        )
         return
     client = ClientInfo.from_doc("main_client", raw)
     if client.telegram_id is None:
@@ -157,9 +166,27 @@ def check_settings(db: Database, report: Report) -> None:
         report.ok(f"krw_per_usd = {settings.krw_per_usd}")
 
 
-def run(db: Database, settings: Settings) -> Report:
+def check_gemini(settings: Settings, report: Report) -> None:
+    from crm.services.recognition import RecognitionError, create_recognizer
+
+    recognizer = create_recognizer(settings.gemini_api_key, settings.gemini_model)
+    if recognizer is None:
+        return
+    print("Gemini")
+    try:
+        recognizer.check()
+    except RecognitionError as exc:
+        report.fail(f"{recognizer.engine}: {exc}")
+    else:
+        report.ok(f"ключ подходит, модель {recognizer.engine} доступна")
+
+
+def run(db: Database, settings: Settings, *, live: bool = False) -> Report:
+    """`live` also calls external services (Gemini) to check the keys."""
     report = Report()
     check_config(settings, report)
+    if live:
+        check_gemini(settings, report)
     check_client(db, settings, report)
     max_order = check_orders(db, report)
     check_counters(db, max_order, report)
@@ -175,7 +202,7 @@ def main() -> None:
         from crm.firebase import create_database
 
         db = create_database(settings)
-        report = run(db, settings)
+        report = run(db, settings, live=True)
     except ConfigurationError as exc:
         print(f"❌ {exc.user_message}", file=sys.stderr)
         sys.exit(2)

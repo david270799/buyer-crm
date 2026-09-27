@@ -84,11 +84,8 @@ def load_settings(env: Mapping[str, str] | None = None, *, require_bot: bool = T
     )
     if settings.mini_app_url and not settings.mini_app_url.startswith("https://"):
         raise ConfigurationError("MINI_APP_URL должен начинаться с https:// (требование Telegram).")
-    if require_bot:
-        if not settings.bot_token:
-            raise ConfigurationError("Не задан BOT_TOKEN (токен от @BotFather).")
-        if not settings.admin_ids:
-            raise ConfigurationError(
-                "Не задан ADMIN_TELEGRAM_IDS. Узнать свой ID можно командой /whoami у бота."
-            )
+    # ADMIN_TELEGRAM_IDS may be empty on the very first start: the bot then gives
+    # nobody access and answers /start and /whoami with the person's Telegram ID.
+    if require_bot and not settings.bot_token:
+        raise ConfigurationError("Не задан BOT_TOKEN (токен от @BotFather).")
     return settings

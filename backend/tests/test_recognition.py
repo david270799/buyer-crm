@@ -198,3 +198,20 @@ def test_no_key_means_caption_only():
 )
 def test_size_patterns(caption, sizes):
     assert find_sizes(caption) == sizes
+
+
+def test_key_check_uses_the_model_endpoint():
+    seen = []
+
+    def handler(request):
+        seen.append((request.method, str(request.url)))
+        status = 200 if request.headers.get("x-goog-api-key") == "test-key" else 400
+        return httpx.Response(status, json={"name": "models/gemini-test"})
+
+    recognizer(handler).check()
+    assert seen == [("GET", "https://generativelanguage.googleapis.com/v1beta/models/gemini-test")]
+    bad = GeminiRecognizer(
+        "wrong", "gemini-test", client=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+    with pytest.raises(RecognitionError):
+        bad.check()

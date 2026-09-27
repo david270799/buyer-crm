@@ -13,10 +13,13 @@ from decimal import Decimal
 
 from PIL import Image, ImageDraw, ImageFont
 
-from crm.domain.enums import OrderStatus
+from crm.domain.enums import OrderStatus, Role
 from crm.services.common import Actor
 from crm.services.container import build_services
+from crm.services.image_service import ORDER_PHOTOS_FOLDER
+from crm.services.intake_service import IncomingOrder
 from crm.services.order_service import OrderUpdate
+from crm.services.recognition import Recognition
 from crm.services.shipment_service import ShipmentDetails
 from crm.storage.blobs import BlobStorage
 from crm.storage.memory import InMemoryDatabase
@@ -25,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 DEMO_BALANCE = 0
 DEMO_DEPOSIT = 8_000_000
+DEMO_GROUP_ID = -1001000000001
 
 # id, brand, model, size, purchase, client price, tint
 _ORDERS = [
@@ -75,6 +79,20 @@ def _placeholder(brand: str, model: str, tint: tuple[int, int, int]) -> bytes:
         draw.text(((size - width) / 2, y), text, fill=ink, font=font)
     buffer = io.BytesIO()
     image.save(buffer, format="JPEG", quality=92)
+    return buffer.getvalue()
+
+
+def _shop_screenshot(brand: str, model: str) -> bytes:
+    """A wide "shop screenshot": the intake turns it into a square with white margins."""
+    image = Image.open(io.BytesIO(_placeholder(brand, model, (200, 204, 210)))).resize((1200, 1200))
+    wide = Image.new("RGB", (1600, 900), (246, 246, 244))
+    wide.paste(image.resize((820, 820)), (40, 40))
+    draw = ImageDraw.Draw(wide)
+    font = ImageFont.load_default(size=44)
+    for i, line in enumerate((brand, model, "KRW 229,000", "Size: 270")):
+        draw.text((920, 120 + i * 90), line, fill=(40, 40, 44), font=font)
+    buffer = io.BytesIO()
+    wide.save(buffer, format="JPEG", quality=90)
     return buffer.getvalue()
 
 
@@ -174,5 +192,32 @@ def create_demo_database(
         ),
     )
     services.orders.update_details(admin, "n124", OrderUpdate(client_comment="Ищем по лучшей цене"))
-    logger.info("Demo data ready: %s orders", len(_ORDERS))
+
+    # An order that came in as a photo in the group, recognised by Gemini.
+    clock.advance(hours=5)
+    sender = Actor.telegram(client_telegram_id, Role.CLIENT) if client_telegram_id else admin
+    photo = None
+    if services.images is not None:
+        screenshot = _shop_screenshot("New Balance", "2002R Rain Cloud")
+        photo = services.images.store(sender, screenshot, folder=ORDER_PHOTOS_FOLDER)
+    caption = "270 https://store.example.kr/nb-2002r-rain-cloud"
+    services.intake.accept(
+        sender,
+        IncomingOrder(
+            chat_id=DEMO_GROUP_ID,
+            message_id=4021,
+            caption=caption,
+            photo=photo,
+            recognition=Recognition(
+                brand="New Balance",
+                model="2002R 'Protection Pack Rain Cloud'",
+                category="кроссовки",
+                size="270",
+                link="https://store.example.kr/nb-2002r-rain-cloud",
+                confidence=0.91,
+                engine="gemini-2.5-flash (демо)",
+            ),
+        ),
+    )
+    logger.info("Demo data ready: %s orders", len(_ORDERS) + 1)
     return db

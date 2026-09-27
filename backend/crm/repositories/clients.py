@@ -18,3 +18,12 @@ class ClientRepository:
             self.main_client_id,
             {"balance": balance, "balance_updated_at": now},
         )
+
+    def set_identity(
+        self, tx: Transaction, telegram_id: int, name: str | None, now: datetime, *, create: bool
+    ) -> None:
+        """Who the client is. Never touches the balance of an existing client."""
+        data: dict = {"telegram_id": telegram_id, "name": name, "updated_at": now}
+        if create:
+            data.update(balance=0, balance_updated_at=now, created_at=now)
+        tx.set(self.collection, self.main_client_id, data, merge=True)

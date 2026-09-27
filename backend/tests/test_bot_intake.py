@@ -312,3 +312,48 @@ async def test_added_to_group_by_a_stranger_leaves(db, env):
     await e["added_by"](555)
     assert any(isinstance(m, LeaveChat) for m in e["session"].sent)
     assert e["session"].messages(GROUP) == []
+
+
+async def test_setclient_by_reply_keeps_the_balance(db, env):
+    e = env(FakeGemini())
+    client_message = Message(
+        message_id=7,
+        date=datetime.now(timezone.utc),
+        chat=Chat(id=GROUP, type="supergroup"),
+        from_user=User(id=3003, is_bot=False, first_name="Ким", last_name="Мин"),
+        text="привет",
+    )
+    await e["text"]("/setclient", reply_to=client_message)
+
+    client = db.get("client_info", "main_client")
+    assert client["telegram_id"] == 3003 and client["name"] == "Ким Мин"
+    assert client["balance"] == START_BALANCE  # never touched
+    assert e["services"].roles.resolve(3003).value == "client"  # recognised at once
+    assert e["services"].roles.resolve(CLIENT_TG) is None
+    assert "Раньше был" in e["session"].messages(GROUP)[-1].text
+
+
+async def test_setclient_rules(db, env):
+    e = env(FakeGemini())
+    await e["text"](f"/setclient {ADMIN_TG}")
+    assert "администратора" in e["session"].messages(GROUP)[-1].text
+    await e["text"]("/setclient 3003", user_id=CLIENT_TG)  # the client cannot
+    await e["text"]("/setclient abc")
+    assert "Ответьте командой /setclient" in e["session"].messages(GROUP)[-1].text
+    assert db.get("client_info", "main_client")["telegram_id"] == CLIENT_TG
+
+
+def test_setclient_creates_a_missing_client_with_zero_balance(db, services, admin):
+    from crm.storage.memory import InMemoryDatabase
+
+    # The client_doc fixture seeded one; remove it (there is no delete in the storage port).
+    if isinstance(db, InMemoryDatabase):
+        db._docs["client_info"].clear()
+    else:
+        db.client.collection("client_info").document("main_client").delete()
+
+    change = services.clients.set_client(admin, 3003, "Ким")
+
+    assert change.before is None
+    stored = db.get("client_info", "main_client")
+    assert stored["telegram_id"] == 3003 and stored["balance"] == 0

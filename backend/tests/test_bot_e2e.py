@@ -278,7 +278,10 @@ def test_demo_data_is_consistent_and_realistic():
     assert len(db.query("shipments")) == 2
     assert db.get("orders", "n125")["attention_required"] is True
     assert db.get("orders", "n118")["photo_url"].endswith(".webp")
-    assert len(blobs.files) == 2 * 9
+    assert len(blobs.files) == 2 * 10  # 9 seeded orders + 1 that came in as a photo
+    intake = db.get("orders", "n126")
+    assert intake["status"] == "new" and intake["recognition"]["brand"] == "New Balance"
+    assert intake["size"] == "270" and intake["source_url"].startswith("https://")
     assert db.get("client_info", "main_client")["telegram_id"] == CLIENT_TG
 
 

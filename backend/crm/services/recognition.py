@@ -230,6 +230,16 @@ class GeminiRecognizer:
         self._backoff = backoff_seconds
         self.engine = model
 
+    def check(self) -> None:
+        """Cheap key/model check (no recognition, no cost); raises RecognitionError."""
+        url = API_URL.format(model=self._model).removesuffix(":generateContent")
+        try:
+            response = self._client.get(url, headers={"x-goog-api-key": self._api_key})
+        except httpx.HTTPError as exc:
+            raise RecognitionError(f"нет связи с Gemini ({type(exc).__name__})") from None
+        if response.status_code != 200:
+            raise RecognitionError(_http_error(response))
+
     def request_body(self, image: bytes, text: str | None) -> dict[str, Any]:
         caption = (text or "").strip() or "(подписи нет)"
         return {

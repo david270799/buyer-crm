@@ -38,6 +38,7 @@ ADMIN_COMMANDS = [
     BotCommand(command="adjust", description="Корректировка баланса"),
     BotCommand(command="rate", description="Курс KRW/USD"),
     BotCommand(command="add", description="Принять фото как заказ (ответом на фото)"),
+    BotCommand(command="setclient", description="Указать клиента (ответом на его сообщение)"),
     BotCommand(command="notify", description="Уведомления в личку"),
     BotCommand(command="help", description="Все команды"),
 ]
@@ -82,6 +83,11 @@ async def run_bot(
                 "Скопируйте актуальный токен из @BotFather."
             ) from None
         logger.info("Bot @%s started; admins: %s", me.username, sorted(settings.admin_ids))
+        if not settings.admin_ids:
+            logger.warning(
+                "ADMIN_TELEGRAM_IDS не задан: доступа нет ни у кого. Напишите боту /whoami, "
+                "впишите свой ID в .env (ADMIN_TELEGRAM_IDS=...) и перезапустите."
+            )
         if not me.can_read_all_group_messages:
             logger.warning(
                 "Privacy mode is on: in groups the bot sees order photos only if it is a group "

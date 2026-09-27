@@ -23,6 +23,7 @@ from crm.domain.notifications import (
 )
 from crm.domain.timeutil import format_date, format_datetime
 from crm.domain.views import order_view
+from crm.services.client_service import ClientChange
 from crm.services.finance_service import BalanceView, LedgerResult
 from crm.services.ledger import BalanceChange
 from crm.services.order_service import BulkResult, BuyResult, CancelResult, RebuyResult
@@ -379,6 +380,23 @@ def notify_settings(settings: NotificationSettings, client_has_telegram: bool) -
     return "\n".join(lines)
 
 
+def client_set(change: ClientChange) -> str:
+    after = change.after
+    who = (
+        f"{e(after.name)} (<code>{after.telegram_id}</code>)"
+        if after.name
+        else (f"<code>{after.telegram_id}</code>")
+    )
+    lines = [f"✅ Клиент: {who}"]
+    before = change.before
+    if before is None:
+        lines.append("Карточка клиента создана, баланс ₩ 0.")
+    elif before.telegram_id != after.telegram_id:
+        lines.append(f"Раньше был: <code>{before.telegram_id}</code>. Баланс не изменён.")
+    lines.append("Клиент может открыть CRM кнопкой в личке с ботом (сначала /start).")
+    return "\n".join(lines)
+
+
 INTAKE_FAILED = "⚠️ Не получилось принять это фото. Отправьте его, пожалуйста, ещё раз."
 
 GROUP_WELCOME = (
@@ -449,6 +467,7 @@ ADMIN_HELP = """<b>Команды администратора</b>
 /rate 1350 — курс KRW за 1 USD
 /notify — уведомления в личку (выкл / мне / клиенту; важные / все)
 /add — ответом на фото: принять его как заказ
+/setclient — ответом на сообщение клиента: указать, кто клиент
 Фото товара в личку боту (или пересланное) — новый заказ
 /whoami — ваш Telegram ID"""
 

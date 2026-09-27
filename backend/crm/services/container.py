@@ -13,6 +13,7 @@ from crm.repositories import (
     ShipmentRepository,
 )
 from crm.services.auth import RoleResolver
+from crm.services.client_service import ClientService
 from crm.services.common import Auditor, Clock, SystemClock
 from crm.services.events import EventRecorder, EventService
 from crm.services.finance_service import FinanceService
@@ -37,6 +38,7 @@ class Services:
     events: EventService
     notifications: NotificationService
     intake: IntakeService
+    clients: ClientService
     # None when no file storage is configured (uploads are then refused).
     images: ImageService | None = None
     # None without GEMINI_API_KEY: orders are still accepted, fields stay empty.
@@ -62,6 +64,7 @@ def build_services(
     sequences = SequenceAllocator(db, CounterRepository())
     events_repo = EventRepository()
     recorder = EventRecorder(db, events_repo)
+    roles = RoleResolver(db, clients_repo, admin_ids)
 
     return Services(
         orders=OrderService(db, clock, orders_repo, ledger, sequences, auditor, recorder),
@@ -71,11 +74,12 @@ def build_services(
         finance=FinanceService(
             db, clock, clients_repo, ledger_repo, settings_repo, ledger, auditor, recorder
         ),
-        roles=RoleResolver(db, clients_repo, admin_ids),
+        roles=roles,
         events=EventService(db, clock, events_repo, EventReadsRepository()),
         notifications=NotificationService(
             db, clock, events_repo, settings_repo, clients_repo, recorder, auditor, admin_ids
         ),
+        clients=ClientService(db, clock, clients_repo, roles, auditor),
         intake=IntakeService(
             db, clock, orders_repo, IntakeRepository(), sequences, auditor, recorder
         ),

@@ -25,6 +25,21 @@ export interface Order {
   internal_comment?: string | null;
   purchases?: Purchase[];
   rebuy_count?: number;
+  recognition?: Recognition | null;
+  source_chat_id?: number | null;
+  source_message_id?: number | null;
+}
+
+/** What Gemini read from the client's photo (admin only). */
+export interface Recognition {
+  engine: string | null;
+  recognized: boolean;
+  brand: string | null;
+  model: string | null;
+  category: string | null;
+  size: string | null;
+  confidence: number | null;
+  error: string | null;
 }
 
 export interface Purchase {

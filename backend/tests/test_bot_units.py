@@ -100,13 +100,17 @@ def test_load_settings():
     "env",
     [
         {"ADMIN_TELEGRAM_IDS": "1"},
-        {"BOT_TOKEN": "t"},
         {"BOT_TOKEN": "t", "ADMIN_TELEGRAM_IDS": "abc"},
     ],
 )
 def test_load_settings_errors(env):
     with pytest.raises(ConfigurationError):
         load_settings(env)
+
+
+def test_first_start_without_admins_is_allowed():
+    # Nobody has access yet; the bot tells people their ID via /whoami.
+    assert load_settings({"BOT_TOKEN": "t"}).admin_ids == frozenset()
 
 
 def test_load_settings_without_bot():

@@ -1,14 +1,23 @@
+import asyncio
+
 from aiogram import F, Router
 from aiogram.enums import ChatType
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
 
 from crm.bot import formatting as fmt
+from crm.bot.access import HasRole
 from crm.bot.handlers.reply import answer
 from crm.config import Settings
 from crm.domain.enums import Role
+from crm.services.common import Actor
+from crm.services.container import Services
 
 _STRANGER_TEXT = "Это закрытая CRM-система.\nВаш Telegram ID: <code>{user_id}</code>"
+SETCLIENT_USAGE = (
+    "Ответьте командой /setclient на любое сообщение клиента в группе\n"
+    "или укажите ID: <code>/setclient 123456789 Имя</code>"
+)
 
 
 def _open_app_keyboard(settings: Settings | None) -> InlineKeyboardMarkup | None:
@@ -48,9 +57,27 @@ async def whoami(message: Message, role: Role | None) -> None:
     )
 
 
+async def setclient(
+    message: Message, command: CommandObject, services: Services, actor: Actor
+) -> None:
+    """/setclient in reply to the client's message, or /setclient <id> [имя]."""
+    target = message.reply_to_message
+    if target is not None and target.from_user is not None and not command.args:
+        telegram_id, name = target.from_user.id, target.from_user.full_name
+    else:
+        parts = (command.args or "").split(maxsplit=1)
+        if not parts or not parts[0].isdigit():
+            await answer(message, SETCLIENT_USAGE)
+            return
+        telegram_id, name = int(parts[0]), parts[1] if len(parts) > 1 else None
+    change = await asyncio.to_thread(services.clients.set_client, actor, telegram_id, name)
+    await answer(message, fmt.client_set(change))
+
+
 def build() -> Router:
     router = Router(name="common")
     router.message.register(start, CommandStart())
     router.message.register(start, Command("help"))
     router.message.register(whoami, Command("whoami"), F.from_user)
+    router.message.register(setclient, Command("setclient"), HasRole(Role.ADMIN))
     return router

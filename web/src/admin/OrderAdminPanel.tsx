@@ -1,8 +1,8 @@
-import { Ban, ExternalLink, Pencil, Repeat, ShoppingBag, Truck, Warehouse } from "lucide-react";
+import { Ban, ExternalLink, Pencil, Repeat, ShoppingBag, Sparkles, Truck, Warehouse } from "lucide-react";
 import { useState } from "react";
 
 import { useBulkStatus } from "../api/hooks";
-import type { Order, OrderStatus } from "../api/types";
+import type { Order, OrderStatus, Recognition } from "../api/types";
 import { errorText, useToast } from "../components/ui";
 import { date, krw } from "../lib/format";
 import { bulkSummary, BuySheet, CancelConfirm, EditOrderSheet, RebuySheet, ShipmentSheet } from "./sheets";
@@ -16,6 +16,38 @@ function shopName(url: string | null | undefined): string {
   } catch {
     return url;
   }
+}
+
+/** t.me link to the client's message in a supergroup, when the order came from one. */
+function telegramLink(order: Order): string | null {
+  const chat = order.source_chat_id ? String(order.source_chat_id) : "";
+  if (!chat.startsWith("-100") || !order.source_message_id) return null;
+  return `https://t.me/c/${chat.slice(4)}/${order.source_message_id}`;
+}
+
+function RecognitionInfo({ recognition, link }: { recognition: Recognition; link: string | null }) {
+  const percent = recognition.confidence !== null ? Math.round(recognition.confidence * 100) : null;
+  let text: string;
+  if (!recognition.engine) text = `Без распознавания: ${recognition.error ?? "Gemini не подключён"}`;
+  else if (recognition.recognized) text = `Распознано Gemini${percent !== null ? ` · уверенность ${percent}%` : ""}`;
+  else text = "Gemini не уверен — впишите бренд и модель вручную";
+  return (
+    <div className="row small muted" style={{ gap: 8, alignItems: "flex-start" }}>
+      <Sparkles size={16} style={{ flex: "none", marginTop: 1 }} />
+      <div className="grow">
+        {text}
+        {recognition.category ? ` · ${recognition.category}` : ""}
+        {link && (
+          <>
+            {" · "}
+            <a href={link} target="_blank" rel="noopener noreferrer" className="link">
+              сообщение в Telegram <ExternalLink size={12} style={{ verticalAlign: -1 }} />
+            </a>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function OrderAdminPanel({ order }: { order: Order }) {
@@ -63,6 +95,7 @@ export function OrderAdminPanel({ order }: { order: Order }) {
             </>
           )}
         </dl>
+        {order.recognition && <RecognitionInfo recognition={order.recognition} link={telegramLink(order)} />}
         {purchases.length > 1 && (
           <div className="stack" style={{ gap: 6 }}>
             <div className="small muted">Закупки ({purchases.length})</div>
