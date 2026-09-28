@@ -7,6 +7,7 @@ import type {
   BulkResult,
   DeletePreview,
   DeleteResult,
+  PhotoRecognition,
   LedgerItem,
   Me,
   NotificationSettings,
@@ -96,6 +97,7 @@ export const useSettings = () =>
         krw_per_usd: number | null;
         updated_at: string | null;
         uploads_enabled: boolean;
+        recognition_enabled?: boolean;
         notifications: NotificationSettings;
       }>("/api/settings"),
   });
@@ -297,6 +299,11 @@ export const useSetNotifications = () => {
     onSuccess: () => client.invalidateQueries({ queryKey: keys.settings }),
   });
 };
+
+/** Gemini reads an uploaded photo; the answer only fills the form, nothing is saved. */
+export function recognizePhoto(photo_url: string): Promise<PhotoRecognition> {
+  return post<PhotoRecognition>("/api/recognize", { photo_url });
+}
 
 export async function uploadImage(file: File): Promise<{ photo_url: string; thumbnail_url: string }> {
   const form = new FormData();

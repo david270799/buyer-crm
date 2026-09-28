@@ -1,8 +1,9 @@
-import { Camera, Loader2 } from "lucide-react";
+import { Camera, Loader2, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
+  recognizePhoto,
   uploadImage,
   useBulkStatus,
   useBulkUpdate,
@@ -18,7 +19,7 @@ import {
   useUpdateOrder,
   useUpdateShipment,
 } from "../api/hooks";
-import type { BulkResult, Order, OrderStatus, Shipment } from "../api/types";
+import type { BulkResult, Order, OrderStatus, PhotoRecognition, Shipment } from "../api/types";
 import { Confirm, errorText, Field, MoneyInput, Sheet, Switch, useToast } from "../components/ui";
 import { krw, STATUS_LABEL, todayKey } from "../lib/format";
 
@@ -63,11 +64,51 @@ export interface PhotoValue {
   thumbnail_url: string | null;
 }
 
-export function PhotoInput({ value, onChange }: { value: PhotoValue; onChange: (v: PhotoValue) => void }) {
+/** Fields Gemini is sure about, for filling a form; empty strings are left out. */
+export function recognizedFields(r: PhotoRecognition): { brand?: string; model?: string; size?: string } {
+  const fields: { brand?: string; model?: string; size?: string } = {};
+  if (r.brand) fields.brand = r.brand;
+  if (r.model) fields.model = r.model;
+  if (r.size) fields.size = r.size;
+  return fields;
+}
+
+function recognitionToast(r: PhotoRecognition): string {
+  if (r.not_a_product) return "Gemini: на фото не товар — впишите данные вручную";
+  if (!r.recognized) return "Gemini не уверен — впишите бренд и модель вручную";
+  const name = [r.brand, r.model].filter(Boolean).join(" ");
+  return `Gemini: ${name}${r.size ? ` · размер ${r.size}` : ""}`;
+}
+
+export function PhotoInput({
+  value,
+  onChange,
+  onRecognized,
+}: {
+  value: PhotoValue;
+  onChange: (v: PhotoValue) => void;
+  /** Shows the "Распознать" button: Gemini reads the photo and fills the form. */
+  onRecognized?: (r: PhotoRecognition) => void;
+}) {
   const settings = useSettings();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState(false);
   const enabled = settings.data?.uploads_enabled ?? true;
+  const canRecognize = Boolean(onRecognized && settings.data?.recognition_enabled && value.photo_url);
+  const recognize = async () => {
+    if (!value.photo_url || !onRecognized) return;
+    setReading(true);
+    try {
+      const result = await recognizePhoto(value.photo_url);
+      onRecognized(result);
+      toast(recognitionToast(result), result.recognized ? undefined : "error");
+    } catch (error) {
+      toast(errorText(error), "error");
+    } finally {
+      setReading(false);
+    }
+  };
   return (
     <div className="upload">
       <div className="preview">
@@ -102,8 +143,18 @@ export function PhotoInput({ value, onChange }: { value: PhotoValue; onChange: (
             }}
           />
         </label>
+        {canRecognize && (
+          <button type="button" className="btn small" onClick={recognize} disabled={reading || busy}>
+            {reading ? <Loader2 className="spin" size={14} /> : <Sparkles size={14} />}
+            {reading ? "Распознаём…" : "Распознать (Gemini)"}
+          </button>
+        )}
         <div className="tiny faint">
-          {enabled ? "Сожмём до WebP ~100 КБ, пропорции сохранятся" : "Хранилище фото не настроено"}
+          {!enabled
+            ? "Хранилище фото не настроено"
+            : canRecognize
+              ? "Gemini впишет бренд, модель и размер — проверьте перед сохранением"
+              : "Сожмём до WebP, пропорции сохранятся"}
         </div>
       </div>
     </div>
@@ -762,7 +813,11 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
       <div className="form-grid two">
         <div className="full field">
           <span>Фото</span>
-          <PhotoInput value={form.photo} onChange={(photo) => set("photo", photo)} />
+          <PhotoInput
+            value={form.photo}
+            onChange={(photo) => set("photo", photo)}
+            onRecognized={(r) => setForm((f) => ({ ...f, ...recognizedFields(r) }))}
+          />
         </div>
         <Field label="Бренд">
           <input className="input" value={form.brand} onChange={(e) => set("brand", e.target.value)} />

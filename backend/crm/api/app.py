@@ -154,6 +154,11 @@ class BulkStatusIn(BaseModel):
     status: str
 
 
+class RecognizeIn(BaseModel):
+    photo_url: str
+    text: str | None = None
+
+
 class BulkDeleteIn(BaseModel):
     order_ids: OrderIds
 
@@ -617,6 +622,9 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "krw_per_usd": _rate(current.krw_per_usd),
             "updated_at": current.updated_at,
             "uploads_enabled": services.images is not None,
+            "recognition_enabled": bool(
+                services.photo_recognition and services.photo_recognition.enabled
+            ),
             "notifications": notifications_json(
                 p.actor, services.notifications.get_settings(p.actor)
             ),
@@ -632,6 +640,22 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
     def set_rate(body: RateIn, p: Admin) -> dict[str, Any]:
         updated = services.finance.set_rate(p.actor, body.krw_per_usd)
         return {"krw_per_usd": _rate(updated.krw_per_usd), "updated_at": updated.updated_at}
+
+    @app.post("/api/recognize")
+    def recognize_photo(body: RecognizeIn, p: Admin) -> dict[str, Any]:
+        if services.photo_recognition is None:
+            raise ConfigurationError("Распознавание не подключено.")
+        result = services.photo_recognition.recognize(p.actor, body.photo_url, body.text)
+        return {
+            "recognized": result.recognized,
+            "brand": result.brand,
+            "model": result.model,
+            "size": result.size,
+            "category": result.category,
+            "confidence": result.confidence,
+            "not_a_product": result.not_a_product,
+            "engine": result.engine,
+        }
 
     @app.post("/api/images")
     def upload_image(p: Admin, file: Annotated[UploadFile, File()]) -> dict[str, Any]:

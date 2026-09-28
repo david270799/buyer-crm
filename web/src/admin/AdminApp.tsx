@@ -16,7 +16,7 @@ import { OrderDetailsPage } from "../shared/OrderDetailsPage";
 import { EditButton, ShipmentDetailsPage, ShipmentsPage } from "../shared/ShipmentsPages";
 import { OrderAdminPanel } from "./OrderAdminPanel";
 import { AdminOrdersPage } from "./OrdersPage";
-import { MoneySheet, PhotoInput, type PhotoValue, ShipmentEditSheet, useBalance } from "./sheets";
+import { MoneySheet, PhotoInput, type PhotoValue, recognizedFields, ShipmentEditSheet, useBalance } from "./sheets";
 
 const NAV: NavItem[] = [
   { to: "/", label: "Сводка", icon: LayoutGrid },
@@ -132,7 +132,11 @@ function NewOrderPage() {
         <div className="form-grid two">
           <div className="full field">
             <span>Фото</span>
-            <PhotoInput value={photo} onChange={setPhoto} />
+            <PhotoInput
+              value={photo}
+              onChange={setPhoto}
+              onRecognized={(r) => setForm((f) => ({ ...f, ...recognizedFields(r) }))}
+            />
           </div>
           <Field label="Бренд">
             <input className="input" value={form.brand} onChange={(e) => set("brand", e.target.value)} placeholder="Nike" />

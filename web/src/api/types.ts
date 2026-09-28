@@ -151,6 +151,16 @@ export interface BulkResult {
   skipped: { order_id: string; reason: string }[];
 }
 
+export interface PhotoRecognition {
+  recognized: boolean;
+  brand: string | null;
+  model: string | null;
+  size: string | null;
+  category: string | null;
+  confidence: number;
+  not_a_product: boolean;
+}
+
 export interface DeletePreview {
   orders: Order[];
   refund_krw: number;
