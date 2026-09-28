@@ -15,7 +15,7 @@ function isActive(item: NavItem, pathname: string): boolean {
   return item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
 }
 
-/** Telegram's native back button on nested screens (/orders/n5 → /orders). */
+/** Telegram's native back button on nested screens (/orders/N5 → /orders). */
 function useTelegramBack() {
   const { pathname } = useLocation();
   const navigate = useNavigate();

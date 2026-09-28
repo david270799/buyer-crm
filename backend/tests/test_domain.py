@@ -21,32 +21,32 @@ from crm.domain.views import ADMIN_ONLY_ORDER_FIELDS, order_view
 @pytest.mark.parametrize(
     "token, expected",
     [
-        ("5", "n5"),
-        ("n5", "n5"),
-        ("N5", "n5"),
-        ("n05", "n5"),
-        ("#125", "n125"),
-        (" 7 ", "n7"),
+        ("5", "N5"),
+        ("N5", "N5"),
+        ("N5", "N5"),
+        ("N05", "N5"),
+        ("#125", "N125"),
+        (" 7 ", "N7"),
     ],
 )
 def test_normalize_order_id(token, expected):
     assert normalize_order_id(token) == expected
 
 
-@pytest.mark.parametrize("token", ["0", "n0", "x5", "5a", "", "n-1", "12345678"])
+@pytest.mark.parametrize("token", ["0", "N0", "x5", "5a", "", "n-1", "12345678"])
 def test_normalize_order_id_rejects(token):
     with pytest.raises(ValidationError):
         normalize_order_id(token)
 
 
 def test_parse_order_ids_dedupes_and_reports_invalid():
-    assert parse_order_ids(["5", "n5", "7", "abc", "N7"]) == (["n5", "n7"], ["abc"])
+    assert parse_order_ids(["5", "N5", "7", "abc", "N7"]) == (["N5", "N7"], ["abc"])
 
 
 def test_order_number():
-    assert order_number("n125") == 125
+    assert order_number("N125") == 125
     assert order_number("SHP-1") is None
-    assert order_number("n05") is None  # not a canonical document ID
+    assert order_number("N05") is None  # not a canonical document ID
 
 
 def test_tracking_code():
@@ -106,7 +106,7 @@ def test_parse_status_aliases():
 
 def test_lenient_order_parsing():
     order = Order.from_doc(
-        "n3",
+        "N3",
         {
             "order_id": 3,
             "status": "bought",
@@ -124,13 +124,13 @@ def test_lenient_order_parsing():
 
 @pytest.mark.parametrize("status", ["new", "bought", "delivered", "что-то"])
 def test_missing_charge_means_nothing_was_charged(status):
-    order = Order.from_doc("n1", {"status": status, "client_price": 5})
+    order = Order.from_doc("N1", {"status": status, "client_price": 5})
     assert order.charged_amount_krw == 0 and not order.is_charged
 
 
 def test_recorded_charge_is_read():
     order = Order.from_doc(
-        "n1", {"status": "warehouse", "client_price": 5, "charged_amount_krw": 5}
+        "N1", {"status": "warehouse", "client_price": 5, "charged_amount_krw": 5}
     )
     assert order.charged_amount_krw == 5 and order.is_charged
 
@@ -149,7 +149,7 @@ def test_settings_parsing():
 
 def test_client_view_hides_internal_fields():
     order = Order.from_doc(
-        "n5",
+        "N5",
         {
             "status": "bought",
             "purchase_price": 140_000,

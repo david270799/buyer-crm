@@ -113,7 +113,7 @@ def check_orders(db: Database, report: Report) -> int:
             float_prices.append(doc_id)
 
     max_number = max(numbers, default=0)
-    report.info(f"максимальный номер: n{max_number}" if numbers else "заказов nN нет")
+    report.info(f"максимальный номер: N{max_number}" if numbers else "заказов N… нет")
     report.info("статусы: " + ", ".join(f"{k}: {v}" for k, v in statuses.most_common()))
     report.info("тип поля order_id: " + ", ".join(f"{k}: {v}" for k, v in id_field_types.items()))
     if unknown:
@@ -124,7 +124,7 @@ def check_orders(db: Database, report: Report) -> int:
     else:
         report.ok("все статусы распознаны")
     if non_canonical:
-        report.warn(f"документы с ID не формата nN: {', '.join(non_canonical[:15])}")
+        report.warn(f"документы с ID не формата N…: {', '.join(non_canonical[:15])}")
     if bought_without_charge:
         report.warn(
             "статус «выкуплен» и дальше, но списание не записано (заказ добавлен не через CRM): "
@@ -144,7 +144,7 @@ def check_counters(db: Database, max_order: int, report: Report) -> None:
         )
     elif orders_counter.get("next_id", 0) <= max_order:
         report.warn(
-            f"counters/orders.next_id = {orders_counter.get('next_id')} ≤ n{max_order}; "
+            f"counters/orders.next_id = {orders_counter.get('next_id')} ≤ N{max_order}; "
             "занятые номера будут пропущены автоматически"
         )
     else:

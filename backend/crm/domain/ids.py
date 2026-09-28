@@ -1,11 +1,11 @@
-"""Order ID normalisation: `5`, `n5`, `N05`, `#5` all mean document `n5`."""
+"""Order ID normalisation: `5`, `n5`, `N05`, `#5` all mean document `N5`."""
 
 import re
 
 from crm.domain.errors import ValidationError
 
 _ORDER_TOKEN_RE = re.compile(r"^[nN#№]?0*([1-9]\d{0,6})$")
-_ORDER_DOC_ID_RE = re.compile(r"^n([1-9]\d*)$")
+_ORDER_DOC_ID_RE = re.compile(r"^N([1-9]\d*)$")
 _SPLIT_RE = re.compile(r"[\s,;]+")
 _TRACKING_RE = re.compile(r"^[A-Z0-9][A-Z0-9-]{2,63}$")
 
@@ -13,8 +13,8 @@ _TRACKING_RE = re.compile(r"^[A-Z0-9][A-Z0-9-]{2,63}$")
 def normalize_order_id(token: str) -> str:
     match = _ORDER_TOKEN_RE.match(token.strip())
     if not match:
-        raise ValidationError(f"Некорректный номер заказа: «{token}». Пример: 5 или n5.")
-    return f"n{match.group(1)}"
+        raise ValidationError(f"Некорректный номер заказа: «{token}». Пример: 5 или N5.")
+    return f"N{match.group(1)}"
 
 
 def order_number(order_id: str) -> int | None:
@@ -24,7 +24,7 @@ def order_number(order_id: str) -> int | None:
 
 
 def make_order_id(number: int) -> str:
-    return f"n{number}"
+    return f"N{number}"
 
 
 def normalize_tracking_code(raw: str) -> str:

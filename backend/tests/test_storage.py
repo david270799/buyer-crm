@@ -125,19 +125,19 @@ def test_firestore_scan_cache_is_dropped_by_our_writes_and_expires():
 
     client = Client(project=f"demo-cache-{uuid.uuid4().hex[:10]}")
     db = FirestoreDatabase(client, scan_cache_seconds=0.5, cached_collections=("orders",))
-    db.run_transaction(lambda tx: tx.set("orders", "n1", {"v": 1}))
-    assert [i for i, _ in db.scan("orders")] == ["n1"]
+    db.run_transaction(lambda tx: tx.set("orders", "N1", {"v": 1}))
+    assert [i for i, _ in db.scan("orders")] == ["N1"]
 
-    client.collection("orders").document("n2").set({"v": 2})  # written outside the CRM
-    assert [i for i, _ in db.scan("orders")] == ["n1"]  # served from cache
+    client.collection("orders").document("N2").set({"v": 2})  # written outside the CRM
+    assert [i for i, _ in db.scan("orders")] == ["N1"]  # served from cache
 
-    db.run_transaction(lambda tx: tx.update("orders", "n1", {"v": 10}))  # our write
+    db.run_transaction(lambda tx: tx.update("orders", "N1", {"v": 10}))  # our write
     rows = dict(db.scan("orders"))
-    assert rows["n1"] == {"v": 10} and "n2" in rows
+    assert rows["N1"] == {"v": 10} and "N2" in rows
 
-    client.collection("orders").document("n3").set({"v": 3})
+    client.collection("orders").document("N3").set({"v": 3})
     time.sleep(0.6)
-    assert sorted(dict(db.scan("orders"))) == ["n1", "n2", "n3"]  # expired, re-read
+    assert sorted(dict(db.scan("orders"))) == ["N1", "N2", "N3"]  # expired, re-read
     assert [i for i, _ in db.scan("shipments")] == []  # uncached collections read directly
 
 

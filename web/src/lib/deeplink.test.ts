@@ -4,8 +4,8 @@ import { deepLinkPath } from "./deeplink";
 
 describe("deep links from notifications", () => {
   it("opens orders, shipments and the feed", () => {
-    expect(deepLinkPath("?open=order%3An5")).toBe("/orders/n5");
-    expect(deepLinkPath("?open=order:N125")).toBe("/orders/n125");
+    expect(deepLinkPath("?open=order%3AN5")).toBe("/orders/N5");
+    expect(deepLinkPath("?open=order:n125")).toBe("/orders/N125");
     expect(deepLinkPath("?v=2&open=shipment%3ASHP-2026-001")).toBe("/shipments/SHP-2026-001");
     expect(deepLinkPath("?open=notifications")).toBe("/notifications");
   });

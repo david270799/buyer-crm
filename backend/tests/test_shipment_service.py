@@ -27,20 +27,20 @@ def _bought(db, *order_ids, status="bought"):
 
 
 def test_cargo_creates_shipment_and_marks_orders(db, services, admin):
-    _bought(db, "n5", "n10")
-    _bought(db, "n18", status="warehouse")
+    _bought(db, "N5", "N10")
+    _bought(db, "N18", status="warehouse")
 
-    result = services.shipments.ship_orders(admin, ["5", "n10", "18", "23"], "trk123")
+    result = services.shipments.ship_orders(admin, ["5", "N10", "18", "23"], "trk123")
 
     assert result.created
-    assert result.added == ["n5", "n10", "n18"]
-    assert result.not_found == ["n23"]
+    assert result.added == ["N5", "N10", "N18"]
+    assert result.not_found == ["N23"]
     shipment = db.get("shipments", "SHP-2026-001")
     assert shipment["shipment_number"] == 1
     assert shipment["tracking_code"] == "TRK123"
-    assert shipment["order_ids"] == ["n5", "n10", "n18"]
+    assert shipment["order_ids"] == ["N5", "N10", "N18"]
     assert shipment["created_by"] == admin.id
-    for order_id in ("n5", "n10", "n18"):
+    for order_id in ("N5", "N10", "N18"):
         order = db.get("orders", order_id)
         assert order["status"] == "cargo"
         assert order["shipment_id"] == "SHP-2026-001"
@@ -52,7 +52,7 @@ def test_cargo_creates_shipment_and_marks_orders(db, services, admin):
 
 
 def test_repeating_cargo_command_changes_nothing(db, services, admin):
-    _bought(db, "n5", "n10")
+    _bought(db, "N5", "N10")
     services.shipments.ship_orders(admin, ["5", "10"], "TRK123")
     audit_before = len(audit_actions(db))
 
@@ -60,45 +60,45 @@ def test_repeating_cargo_command_changes_nothing(db, services, admin):
 
     assert not again.created
     assert again.added == []
-    assert again.already_in_shipment == ["n5", "n10"]
+    assert again.already_in_shipment == ["N5", "N10"]
     assert again.shipment.id == "SHP-2026-001"
     assert len(db.query("shipments")) == 1
     assert len(audit_actions(db)) == audit_before
 
 
 def test_same_tracking_code_extends_existing_shipment(db, services, admin):
-    _bought(db, "n5", "n6")
+    _bought(db, "N5", "N6")
     services.shipments.ship_orders(admin, ["5"], "TRK123")
 
     result = services.shipments.ship_orders(admin, ["5", "6"], "TRK123")
 
     assert not result.created
-    assert result.added == ["n6"]
-    assert result.already_in_shipment == ["n5"]
-    assert db.get("shipments", "SHP-2026-001")["order_ids"] == ["n5", "n6"]
-    assert db.get("orders", "n6")["shipment_id"] == "SHP-2026-001"
+    assert result.added == ["N6"]
+    assert result.already_in_shipment == ["N5"]
+    assert db.get("shipments", "SHP-2026-001")["order_ids"] == ["N5", "N6"]
+    assert db.get("orders", "N6")["shipment_id"] == "SHP-2026-001"
 
 
 def test_cargo_skips_orders_that_cannot_be_shipped(db, services, admin):
-    seed_order(db, "n1", status="new")
-    seed_order(db, "n2", status="cancelled")
-    seed_order(db, "n3", status="delivered", client_price=1)
-    _bought(db, "n4")
+    seed_order(db, "N1", status="new")
+    seed_order(db, "N2", status="cancelled")
+    seed_order(db, "N3", status="delivered", client_price=1)
+    _bought(db, "N4")
     services.shipments.ship_orders(admin, ["4"], "OTHER1")
-    _bought(db, "n5")
+    _bought(db, "N5")
 
     result = services.shipments.ship_orders(admin, ["1", "2", "3", "4", "5"], "TRK123")
 
-    assert result.added == ["n5"]
+    assert result.added == ["N5"]
     reasons = dict(result.skipped)
-    assert set(reasons) == {"n1", "n2", "n3", "n4"}
-    assert "SHP-2026-001" in reasons["n4"]
-    assert db.get("orders", "n1")["status"] == "new"
-    assert db.get("orders", "n4")["shipment_id"] == "SHP-2026-001"
+    assert set(reasons) == {"N1", "N2", "N3", "N4"}
+    assert "SHP-2026-001" in reasons["N4"]
+    assert db.get("orders", "N1")["status"] == "new"
+    assert db.get("orders", "N4")["shipment_id"] == "SHP-2026-001"
 
 
 def test_nothing_to_ship_creates_no_shipment(db, services, admin):
-    seed_order(db, "n1", status="new")
+    seed_order(db, "N1", status="new")
 
     result = services.shipments.ship_orders(admin, ["1", "2"], "TRK123")
 
@@ -108,7 +108,7 @@ def test_nothing_to_ship_creates_no_shipment(db, services, admin):
 
 
 def test_second_shipment_gets_next_number(db, services, admin):
-    _bought(db, "n1", "n2")
+    _bought(db, "N1", "N2")
     services.shipments.ship_orders(admin, ["1"], "TRK-A")
     result = services.shipments.ship_orders(admin, ["2"], "TRK-B")
     assert result.shipment.id == "SHP-2026-002"
@@ -116,17 +116,17 @@ def test_second_shipment_gets_next_number(db, services, admin):
 
 
 def test_cargo_order_without_shipment_is_attached(db, services, admin):
-    seed_order(db, "n7", status="cargo", client_price=50_000, cargo_code="OLD1")
+    seed_order(db, "N7", status="cargo", client_price=50_000, cargo_code="OLD1")
 
     result = services.shipments.ship_orders(admin, ["7"], "NEW1")
 
-    assert result.added == ["n7"]
-    order = db.get("orders", "n7")
+    assert result.added == ["N7"]
+    order = db.get("orders", "N7")
     assert order["cargo_code"] == "NEW1"
 
 
 def test_shipment_details_are_stored_and_cost_is_charged_once(db, services, admin):
-    _bought(db, "n1")
+    _bought(db, "N1")
     shipped_on = datetime(2026, 9, 12, 1, 0, tzinfo=timezone.utc)
     details = ShipmentDetails(
         box_number="B-18",
@@ -146,7 +146,7 @@ def test_shipment_details_are_stored_and_cost_is_charged_once(db, services, admi
     assert shipment["shipping_charged_krw"] == 95_000
     assert shipment["shipment_date"] == shipped_on
     assert shipment["comment"] == "Хрупкое"
-    assert db.get("orders", "n1").get("cargo_code") is None
+    assert db.get("orders", "N1").get("cargo_code") is None
     assert balance(db) == START_BALANCE - 95_000
     entry = ledger_entries(db)[f"shipping_charge_{result.shipment.id}_1"]
     assert entry["type"] == "shipping_charge"
@@ -156,7 +156,7 @@ def test_shipment_details_are_stored_and_cost_is_charged_once(db, services, admi
 
 
 def test_repeating_cargo_with_cost_does_not_charge_again(db, services, admin):
-    _bought(db, "n1", "n2")
+    _bought(db, "N1", "N2")
     details = ShipmentDetails(shipping_cost_krw=50_000)
     services.shipments.ship_orders(admin, ["1"], "TRK1", details)
 
@@ -168,7 +168,7 @@ def test_repeating_cargo_with_cost_does_not_charge_again(db, services, admin):
 
 
 def test_changing_shipping_cost_charges_only_the_difference(db, services, admin):
-    _bought(db, "n1")
+    _bought(db, "N1")
     shipment = services.shipments.ship_orders(
         admin, ["1"], "TRK1", ShipmentDetails(shipping_cost_krw=50_000)
     ).shipment
@@ -198,7 +198,7 @@ def test_changing_shipping_cost_charges_only_the_difference(db, services, admin)
 
 
 def test_cost_added_later_is_charged(db, services, admin):
-    _bought(db, "n1")
+    _bought(db, "N1")
     shipment = services.shipments.ship_orders(admin, ["1"], "TRK1").shipment
     assert balance(db) == START_BALANCE
 
@@ -208,7 +208,7 @@ def test_cost_added_later_is_charged(db, services, admin):
 
 
 def test_update_details_without_money(db, services, admin):
-    _bought(db, "n1", "n2")
+    _bought(db, "N1", "N2")
     shipment = services.shipments.ship_orders(admin, ["1", "2"], "TRK1").shipment
 
     result = services.shipments.update_shipment(
@@ -217,14 +217,14 @@ def test_update_details_without_money(db, services, admin):
 
     assert result.shipping_change is None
     assert result.shipment.tracking_code == "NEW-TRK"
-    assert db.get("orders", "n1")["cargo_code"] == "NEW-TRK"
-    assert db.get("orders", "n2")["cargo_code"] == "NEW-TRK"
+    assert db.get("orders", "N1")["cargo_code"] == "NEW-TRK"
+    assert db.get("orders", "N2")["cargo_code"] == "NEW-TRK"
     assert db.get("shipments", shipment.id)["box_number"] == "7"
     assert ledger_entries(db) == {}
 
 
 def test_update_tracking_to_one_used_elsewhere_is_refused(db, services, admin):
-    _bought(db, "n1", "n2")
+    _bought(db, "N1", "N2")
     services.shipments.ship_orders(admin, ["1"], "TRK1")
     second = services.shipments.ship_orders(admin, ["2"], "TRK2").shipment
     with pytest.raises(ConflictError, match="SHP-2026-001"):
@@ -245,7 +245,7 @@ def test_update_shipment_validation(db, services, admin, client_actor):
 
 
 def test_ledger_still_reconstructs_balance_with_shipping(db, services, admin):
-    _bought(db, "n1")
+    _bought(db, "N1")
     shipment = services.shipments.ship_orders(
         admin, ["1"], "TRK1", ShipmentDetails(shipping_cost_krw=40_000)
     ).shipment
@@ -258,7 +258,7 @@ def test_ledger_still_reconstructs_balance_with_shipping(db, services, admin):
 def test_duplicate_tracking_in_data_is_reported(db, services, admin):
     seed(db, "shipments", "SHP-2026-001", {"tracking_code": "DUP1", "order_ids": []})
     seed(db, "shipments", "SHP-2026-002", {"tracking_code": "DUP1", "order_ids": []})
-    _bought(db, "n1")
+    _bought(db, "N1")
     with pytest.raises(ConflictError, match="нескольких отправках"):
         services.shipments.ship_orders(admin, ["1"], "DUP1")
 
@@ -280,18 +280,18 @@ def test_ship_requires_admin(db, services, client_actor):
 
 
 def test_get_shipment_returns_orders(db, services, client_actor, admin):
-    _bought(db, "n1", "n2")
+    _bought(db, "N1", "N2")
     services.shipments.ship_orders(admin, ["1", "2"], "TRK123")
 
     shipment, orders = services.shipments.get_shipment(client_actor, "shp-2026-001")
 
     assert shipment.tracking_code == "TRK123"
-    assert sorted(order.id for order in orders) == ["n1", "n2"]
+    assert sorted(order.id for order in orders) == ["N1", "N2"]
     assert [s.id for s in services.shipments.list_shipments(client_actor)] == ["SHP-2026-001"]
 
 
 def test_shipment_reference_by_number(db, services, admin, client_actor):
-    _bought(db, "n1")
+    _bought(db, "N1")
     services.shipments.ship_orders(admin, ["1"], "TRK1")
     shipment, _ = services.shipments.get_shipment(client_actor, "#1")
     assert shipment.id == "SHP-2026-001"

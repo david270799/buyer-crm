@@ -10,7 +10,7 @@ from crm.services.shipment_service import ShipmentDetails
 pytestmark = pytest.mark.usefixtures("client_doc")
 
 
-def _bought(db, services, admin, order_id="n5", purchase=140_000, price=170_000):
+def _bought(db, services, admin, order_id="N5", purchase=140_000, price=170_000):
     seed_order(db, order_id, brand="Nike", model="Dunk", source_url="https://shop-a.kr/1")
     services.orders.buy(admin, order_id, purchase, price)
 
@@ -26,9 +26,9 @@ def test_rebuy_with_higher_price_charges_only_the_difference(db, services, admin
     assert not result.already_done
     assert result.change.amount_krw == -15_000
     assert balance(db) == START_BALANCE - 185_000
-    entry = ledger_entries(db)["order_rebuy_n5_1"]
+    entry = ledger_entries(db)["order_rebuy_N5_1"]
     assert entry["type"] == "order_rebuy" and entry["amount_krw"] == -15_000
-    order = db.get("orders", "n5")
+    order = db.get("orders", "N5")
     assert order["status"] == "bought"  # bought again, not at the warehouse any more
     assert (order["purchase_price"], order["client_price"], order["profit"]) == (
         150_000,
@@ -57,7 +57,7 @@ def test_rebuy_with_same_client_price_moves_no_money(db, services, admin):
     assert result.change is None
     assert balance(db) == START_BALANCE - 170_000
     assert [k for k in ledger_entries(db) if k.startswith("order_rebuy")] == []
-    assert db.get("orders", "n5")["profit"] == 25_000
+    assert db.get("orders", "N5")["profit"] == 25_000
 
 
 def test_repeating_the_same_rebuy_changes_nothing(db, services, admin):
@@ -68,7 +68,7 @@ def test_repeating_the_same_rebuy_changes_nothing(db, services, admin):
 
     assert again.already_done
     assert balance(db) == START_BALANCE - 185_000
-    assert db.get("orders", "n5")["rebuy_count"] == 1
+    assert db.get("orders", "N5")["rebuy_count"] == 1
 
 
 def test_second_rebuy_gets_its_own_ledger_entry(db, services, admin):
@@ -77,9 +77,9 @@ def test_second_rebuy_gets_its_own_ledger_entry(db, services, admin):
     services.orders.rebuy(admin, "5", 155_000, 190_000)
 
     entries = ledger_entries(db)
-    assert entries["order_rebuy_n5_1"]["amount_krw"] == -15_000
-    assert entries["order_rebuy_n5_2"]["amount_krw"] == -5_000
-    assert len(db.get("orders", "n5")["purchases"]) == 3
+    assert entries["order_rebuy_N5_1"]["amount_krw"] == -15_000
+    assert entries["order_rebuy_N5_2"]["amount_krw"] == -5_000
+    assert len(db.get("orders", "N5")["purchases"]) == 3
     assert START_BALANCE + sum(e["amount_krw"] for e in entries.values()) == balance(db)
 
 
@@ -93,7 +93,7 @@ def test_cancel_after_rebuy_refunds_what_is_charged_now(db, services, admin):
 
 @pytest.mark.parametrize("status", ["new", "cancelled", "cargo", "delivered"])
 def test_rebuy_is_refused_outside_bought_and_warehouse(db, services, admin, status):
-    seed_order(db, "n5", status=status, client_price=10, charged_amount_krw=10)
+    seed_order(db, "N5", status=status, client_price=10, charged_amount_krw=10)
     with pytest.raises(ConflictError):
         services.orders.rebuy(admin, "5", 1, 2)
     assert balance(db) == START_BALANCE
@@ -105,7 +105,7 @@ def test_rebuy_is_refused_for_shipped_orders_and_unrecorded_charges(db, services
     with pytest.raises(ConflictError):
         services.orders.rebuy(admin, "5", 1, 2)
 
-    seed_order(db, "n6", status="bought", client_price=100)  # no charge recorded
+    seed_order(db, "N6", status="bought", client_price=100)  # no charge recorded
     with pytest.raises(ConflictError, match="не записано"):
         services.orders.rebuy(admin, "6", 1, 2)
 

@@ -39,12 +39,12 @@ def incoming(message_id=10, caption=f"42 {LINK}", recognition=None, photo=PHOTO)
 
 
 def test_client_photo_becomes_a_new_order(db, services, client):
-    seed_order(db, "n125")
+    seed_order(db, "N125")
 
     result = services.intake.accept(client, incoming())
 
     order = result.order
-    assert not result.already_done and order.id == "n126"
+    assert not result.already_done and order.id == "N126"
     assert order.status.value == "new"
     assert (order.brand, order.model, order.size) == ("Nike", "Dunk Low 'Panda'", "42")
     assert order.source_url == LINK
@@ -52,7 +52,7 @@ def test_client_photo_becomes_a_new_order(db, services, client):
     assert (order.source_chat_id, order.source_message_id) == (GROUP, 10)
     assert order.client_comment is None  # the caption was only the size and the link
     assert order.charged_amount_krw == 0 and balance(db) == START_BALANCE
-    stored = db.get("orders", "n126")
+    stored = db.get("orders", "N126")
     assert stored["created_by"] == f"tg:{CLIENT_TG}"
     assert stored["recognition"]["engine"] == "gemini-test"
     assert stored["recognition"]["confidence"] == 0.93

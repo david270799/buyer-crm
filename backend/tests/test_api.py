@@ -134,15 +134,15 @@ def test_roles(api):
 
 
 def test_client_sees_no_admin_fields_anywhere(db, api):
-    seed_order(db, "n5", status="new", brand="Nike", source_url="https://shop-a.kr/1")
-    api("POST", "/api/orders/n5/buy", json={"purchase_price": 140_000, "client_price": 170_000})
+    seed_order(db, "N5", status="new", brand="Nike", source_url="https://shop-a.kr/1")
+    api("POST", "/api/orders/N5/buy", json={"purchase_price": 140_000, "client_price": 170_000})
     rebuy = {
         "purchase_price": 141_000,
         "client_price": 170_000,
         "source_url": "https://shop-b.kr/2",
     }
-    api("POST", "/api/orders/n5/rebuy", json={**rebuy, "reason": "Нет в наличии"})
-    api("PATCH", "/api/orders/n5", json={"internal_comment": "секрет", "client_comment": "ок"})
+    api("POST", "/api/orders/N5/rebuy", json={**rebuy, "reason": "Нет в наличии"})
+    api("PATCH", "/api/orders/N5", json={"internal_comment": "секрет", "client_comment": "ок"})
     api("POST", "/api/shipments", json={"order_ids": ["5"], "shipping_cost_krw": 50_000})
 
     responses = [
@@ -150,7 +150,7 @@ def test_client_sees_no_admin_fields_anywhere(db, api):
         for path in (
             "/api/overview",
             "/api/orders",
-            "/api/orders/n5",
+            "/api/orders/N5",
             "/api/shipments",
             "/api/shipments/1",
             "/api/transactions",
@@ -171,9 +171,9 @@ def test_client_sees_no_admin_fields_anywhere(db, api):
     "method, path, body",
     [
         ("POST", "/api/orders", {"brand": "x"}),
-        ("PATCH", "/api/orders/n5", {"brand": "x"}),
-        ("POST", "/api/orders/n5/buy", {"purchase_price": 1, "client_price": 2}),
-        ("POST", "/api/orders/n5/cancel", None),
+        ("PATCH", "/api/orders/N5", {"brand": "x"}),
+        ("POST", "/api/orders/N5/buy", {"purchase_price": 1, "client_price": 2}),
+        ("POST", "/api/orders/N5/cancel", None),
         ("POST", "/api/orders/bulk/status", {"order_ids": ["5"], "status": "warehouse"}),
         ("POST", "/api/orders/bulk/update", {"order_ids": ["5"], "attention_required": True}),
         ("POST", "/api/shipments", {"order_ids": ["5"]}),
@@ -186,10 +186,10 @@ def test_client_sees_no_admin_fields_anywhere(db, api):
     ],
 )
 def test_client_cannot_change_anything(db, api, method, path, body):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
     response = api(method, path, who=CLIENT_TG, json=body)
     assert response.status_code == 403
-    assert db.get("orders", "n5")["status"] == "new"
+    assert db.get("orders", "N5")["status"] == "new"
     assert balance(db) == START_BALANCE
 
 
@@ -197,7 +197,7 @@ def test_client_cannot_change_anything(db, api, method, path, body):
 
 
 def test_buy_twice_charges_once_and_reports_change(db, api):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
     first = api(
         "POST", "/api/orders/5/buy", json={"purchase_price": 140_000, "client_price": 170_000}
     )
@@ -219,7 +219,7 @@ def test_buy_twice_charges_once_and_reports_change(db, api):
 
 
 def test_create_order_with_buy_now_and_cancel(db, api):
-    for order_id in ("n1", "n125"):
+    for order_id in ("N1", "N125"):
         seed_order(db, order_id)
     created = api(
         "POST",
@@ -233,13 +233,13 @@ def test_create_order_with_buy_now_and_cancel(db, api):
             "buy_now": True,
         },
     ).json()
-    assert created["order"]["id"] == "n126" and created["order"]["status"] == "bought"
+    assert created["order"]["id"] == "N126" and created["order"]["status"] == "bought"
     assert created["change"]["amount_krw"] == -130_000
 
-    cancelled = api("POST", "/api/orders/n126/cancel").json()
+    cancelled = api("POST", "/api/orders/N126/cancel").json()
     assert cancelled["refunded_krw"] == 130_000
     assert balance(db) == START_BALANCE
-    assert api("POST", "/api/orders/n126/cancel").json()["already_done"] is True
+    assert api("POST", "/api/orders/N126/cancel").json()["already_done"] is True
 
 
 def test_buy_now_requires_prices(api):
@@ -248,30 +248,30 @@ def test_buy_now_requires_prices(api):
 
 
 def test_list_and_bulk_actions(db, api):
-    for order_id in ("n1", "n2", "n3"):
+    for order_id in ("N1", "N2", "N3"):
         seed_order(db, order_id, status="bought", client_price=10, charged_amount_krw=10)
 
     status = api(
         "POST", "/api/orders/bulk/status", json={"order_ids": ["1", "2", "9"], "status": "склад"}
     )
-    assert status.json()["updated"] == ["n1", "n2"] and status.json()["not_found"] == ["n9"]
+    assert status.json()["updated"] == ["N1", "N2"] and status.json()["not_found"] == ["N9"]
     marked = api(
         "POST",
         "/api/orders/bulk/update",
-        json={"order_ids": ["n3"], "attention_required": True, "client_comment": "Задержка"},
+        json={"order_ids": ["N3"], "attention_required": True, "client_comment": "Задержка"},
     )
-    assert marked.json()["updated"] == ["n3"]
+    assert marked.json()["updated"] == ["N3"]
 
     listed = api("GET", "/api/orders", params={"status": "warehouse"}).json()
-    assert [o["id"] for o in listed["items"]] == ["n2", "n1"] and listed["total"] == 2
+    assert [o["id"] for o in listed["items"]] == ["N2", "N1"] and listed["total"] == 2
     attention = api("GET", "/api/orders", params={"attention": "true"}).json()
-    assert [o["id"] for o in attention["items"]] == ["n3"]
+    assert [o["id"] for o in attention["items"]] == ["N3"]
     assert attention["items"][0]["status_label"] == "Выкуплен"
     assert api("GET", "/api/orders", params={"status": "бред"}).status_code == 422
 
 
 def test_shipment_create_and_cost_change(db, api):
-    for order_id in ("n5", "n7"):
+    for order_id in ("N5", "N7"):
         seed_order(db, order_id, status="warehouse", client_price=10, charged_amount_krw=10)
 
     created = api(
@@ -289,7 +289,7 @@ def test_shipment_create_and_cost_change(db, api):
     ).json()
     shipment = created["shipment"]
     assert (
-        created["created"] and created["added"] == ["n5", "n7"] and created["not_found"] == ["n8"]
+        created["created"] and created["added"] == ["N5", "N7"] and created["not_found"] == ["N8"]
     )
     assert shipment["tracking_code"] == "TRK-1" and shipment["order_count"] == 2
     assert shipment["shipment_date"].startswith("2026-09-12T00:00:00+09:00") or shipment[
@@ -305,8 +305,8 @@ def test_shipment_create_and_cost_change(db, api):
     assert balance(db) == START_BALANCE - 100_000
 
     detail = api("GET", "/api/shipments/1").json()
-    assert [o["id"] for o in detail["orders"]] == ["n5", "n7"]
-    order = api("GET", "/api/orders/n5").json()
+    assert [o["id"] for o in detail["orders"]] == ["N5", "N7"]
+    order = api("GET", "/api/orders/N5").json()
     assert order["shipment"]["id"] == shipment["id"]
 
 
@@ -324,7 +324,7 @@ def test_deposit_is_idempotent_per_key(db, api):
 
 
 def test_adjust_rate_overview_and_history(db, api):
-    seed_order(db, "n5", brand="Nike", model="Dunk", thumbnail_url="https://img/t.webp")
+    seed_order(db, "N5", brand="Nike", model="Dunk", thumbnail_url="https://img/t.webp")
     api("POST", "/api/orders/5/buy", json={"purchase_price": 100, "client_price": 150})
     api(
         "POST",
@@ -344,7 +344,7 @@ def test_adjust_rate_overview_and_history(db, api):
     history = api("GET", "/api/transactions", who=CLIENT_TG).json()["items"]
     assert [item["type"] for item in history] == ["adjustment", "order_charge"]
     assert history[1]["order"] == {
-        "id": "n5",
+        "id": "N5",
         "title": "Nike Dunk",
         "thumbnail_url": "https://img/t.webp",
     }
@@ -355,7 +355,7 @@ def test_errors_have_readable_messages(db, api):
     missing = api("GET", "/api/orders/404")
     assert missing.status_code == 404
     assert missing.json() == {
-        "error": {"code": "NotFoundError", "message": "Заказ n404 не найден."}
+        "error": {"code": "NotFoundError", "message": "Заказ N404 не найден."}
     }
     invalid = api("POST", "/api/orders/5/buy", json={"purchase_price": "много"})
     assert invalid.status_code == 422 and "Traceback" not in invalid.text
@@ -417,7 +417,7 @@ def test_static_frontend_is_served(db, clock, client_doc, tmp_path):
 
 
 def test_rebuy_endpoint_and_history(db, api):
-    seed_order(db, "n5", brand="Nike", source_url="https://shop-a.kr/1")
+    seed_order(db, "N5", brand="Nike", source_url="https://shop-a.kr/1")
     api("POST", "/api/orders/5/buy", json={"purchase_price": 140_000, "client_price": 170_000})
 
     rebuy = api(
@@ -435,7 +435,7 @@ def test_rebuy_endpoint_and_history(db, api):
     assert len(rebuy["order"]["purchases"]) == 2
     assert balance(db) == START_BALANCE - 185_000
 
-    client_view = api("GET", "/api/orders/n5", who=CLIENT_TG).json()
+    client_view = api("GET", "/api/orders/N5", who=CLIENT_TG).json()
     assert [h["type"] for h in client_view["history"]] == ["order_rebought", "order_bought"]
     assert not {"purchases", "rebuy_count", "source_url"} & set(client_view["order"])
     assert (
@@ -450,7 +450,7 @@ def test_rebuy_endpoint_and_history(db, api):
 
 
 def test_notifications_feed_and_read_state(db, api):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
     api("POST", "/api/orders/5/buy", json={"purchase_price": 1, "client_price": 10})
     api("POST", "/api/orders/5/cancel")
 

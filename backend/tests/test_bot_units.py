@@ -19,22 +19,22 @@ from crm.storage.memory import InMemoryDatabase
 
 
 def test_parse_buy():
-    assert parsing.parse_buy("5 140,000 170000") == ("n5", 140_000, 170_000)
+    assert parsing.parse_buy("5 140,000 170000") == ("N5", 140_000, 170_000)
     for bad in (None, "5 140000", "5 1 2 3", "x 1 2"):
         with pytest.raises(ValidationError):
             parsing.parse_buy(bad)
 
 
 def test_parse_status_in_any_position():
-    assert parsing.parse_status_command("warehouse 5 7") == (OrderStatus.WAREHOUSE, ["n5", "n7"])
-    assert parsing.parse_status_command("5,7 склад") == (OrderStatus.WAREHOUSE, ["n5", "n7"])
+    assert parsing.parse_status_command("warehouse 5 7") == (OrderStatus.WAREHOUSE, ["N5", "N7"])
+    assert parsing.parse_status_command("5,7 склад") == (OrderStatus.WAREHOUSE, ["N5", "N7"])
     for bad in ("5 7", "warehouse", "warehouse cargo 5", "warehouse 5 x"):
         with pytest.raises(ValidationError):
             parsing.parse_status_command(bad)
 
 
 def test_parse_cargo():
-    assert parsing.parse_cargo("TRACK 5 n10, 18") == ("TRACK", ["n5", "n10", "n18"])
+    assert parsing.parse_cargo("TRACK 5 N10, 18") == ("TRACK", ["N5", "N10", "N18"])
     with pytest.raises(ValidationError, match="Некорректные номера"):
         parsing.parse_cargo("TRACK 5 abc")
     with pytest.raises(ValidationError):
@@ -72,7 +72,7 @@ def test_balance_text():
 
 
 def test_error_texts_never_leak_internals():
-    assert user_text(NotFoundError("Заказ n1 не найден.")) == "❌ Заказ n1 не найден."
+    assert user_text(NotFoundError("Заказ N1 не найден.")) == "❌ Заказ N1 не найден."
     assert user_text(TransactionContentionError("x")) == CONTENTION_TEXT
     assert user_text(RuntimeError("google.api_core secret path")) == INTERNAL_ERROR_TEXT
 
@@ -159,14 +159,14 @@ def test_audience_is_client_outside_private_admin_chat():
 
 
 def test_parse_rebuy():
-    assert parsing.parse_rebuy("5 150,000 185000") == ("n5", 150_000, 185_000, None, None)
-    assert parsing.parse_rebuy("n5 1 2 https://shop.kr/x Магазин отменил") == (
-        "n5",
+    assert parsing.parse_rebuy("5 150,000 185000") == ("N5", 150_000, 185_000, None, None)
+    assert parsing.parse_rebuy("N5 1 2 https://shop.kr/x Магазин отменил") == (
+        "N5",
         1,
         2,
         "https://shop.kr/x",
         "Магазин отменил",
     )
-    assert parsing.parse_rebuy("5 1 2 Нет в наличии") == ("n5", 1, 2, None, "Нет в наличии")
+    assert parsing.parse_rebuy("5 1 2 Нет в наличии") == ("N5", 1, 2, None, "Нет в наличии")
     with pytest.raises(ValidationError):
         parsing.parse_rebuy("5 1")

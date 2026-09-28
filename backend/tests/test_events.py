@@ -24,21 +24,21 @@ def types(db):
 
 
 def test_buy_and_cancel_are_recorded(db, services, admin):
-    seed_order(db, "n5", brand="Nike", model="Dunk", size="270")
+    seed_order(db, "N5", brand="Nike", model="Dunk", size="270")
 
     services.orders.buy(admin, "5", 140_000, 170_000)
     services.orders.cancel(admin, "5")
 
     bought, cancelled = events(db)
     assert bought["type"] == "order_bought" and bought["important"] is False
-    assert bought["order_ids"] == ["n5"] and bought["amount_krw"] == -170_000
+    assert bought["order_ids"] == ["N5"] and bought["amount_krw"] == -170_000
     assert "Nike Dunk" in bought["body"] and "170,000" in bought["body"]
     assert cancelled["type"] == "order_cancelled" and cancelled["important"] is True
     assert cancelled["amount_krw"] == 170_000 and "Возврат" in cancelled["body"]
 
 
 def test_events_never_contain_purchase_price_or_internal_comment(db, services, admin):
-    seed_order(db, "n5", brand="Nike", internal_comment="секрет")
+    seed_order(db, "N5", brand="Nike", internal_comment="секрет")
     services.orders.buy(admin, "5", 123_456, 170_000)
     services.orders.update_details(admin, "5", OrderUpdate(internal_comment="продавец молчит"))
     services.orders.rebuy(admin, "5", 111_111, 180_000, reason="Нет в наличии")
@@ -49,7 +49,7 @@ def test_events_never_contain_purchase_price_or_internal_comment(db, services, a
 
 
 def test_failed_operation_records_no_event(db, services, admin):
-    seed_order(db, "n5", status="cancelled")
+    seed_order(db, "N5", status="cancelled")
     with pytest.raises(ConflictError):
         services.orders.buy(admin, "5", 1, 2)
     assert events(db) == []
@@ -57,7 +57,7 @@ def test_failed_operation_records_no_event(db, services, admin):
 
 def test_create_and_bulk_status(db, services, admin):
     created = services.orders.create_order(admin, NewOrder(brand="Adidas", model="Samba"))
-    for order_id in ("n7", "n8"):
+    for order_id in ("N7", "N8"):
         seed_order(db, order_id, status="bought", client_price=1, charged_amount_krw=1)
 
     services.orders.set_status(admin, ["7", "8", "9"], OrderStatus.WAREHOUSE)
@@ -65,13 +65,13 @@ def test_create_and_bulk_status(db, services, admin):
 
     first, warehouse = events(db)
     assert first["type"] == "order_created" and first["order_ids"] == [created.id]
-    assert warehouse["type"] == "order_warehouse" and warehouse["order_ids"] == ["n7", "n8"]
-    assert warehouse["title"] == "Прибыл на склад: n7, n8"
+    assert warehouse["type"] == "order_warehouse" and warehouse["order_ids"] == ["N7", "N8"]
+    assert warehouse["title"] == "Прибыл на склад: N7, N8"
 
 
 def test_comments_and_attention(db, services, admin):
-    seed_order(db, "n5")
-    seed_order(db, "n6")
+    seed_order(db, "N5")
+    seed_order(db, "N6")
 
     services.orders.update_details(admin, "5", OrderUpdate(brand="Nike", size="270"))  # no news
     services.orders.update_details(admin, "5", OrderUpdate(client_comment="Задержка 2 дня"))
@@ -84,11 +84,11 @@ def test_comments_and_attention(db, services, admin):
     assert comment["type"] == "comment" and comment["body"] == "Задержка 2 дня"
     assert comment["important"] is False
     assert attention["type"] == "attention" and attention["important"] is True
-    assert attention["order_ids"] == ["n5", "n6"] and attention["body"] == "Нужен ответ"
+    assert attention["order_ids"] == ["N5", "N6"] and attention["body"] == "Нужен ответ"
 
 
 def test_shipment_events(db, services, admin):
-    for order_id in ("n1", "n2"):
+    for order_id in ("N1", "N2"):
         seed_order(db, order_id, status="warehouse", client_price=1, charged_amount_krw=1)
 
     shipment = services.shipments.ship_orders(
@@ -103,7 +103,7 @@ def test_shipment_events(db, services, admin):
 
     sent, cost, updated = events(db)
     assert sent["type"] == "shipment_sent" and sent["important"] is True
-    assert sent["shipment_id"] == shipment.id and sent["order_ids"] == ["n1", "n2"]
+    assert sent["shipment_id"] == shipment.id and sent["order_ids"] == ["N1", "N2"]
     assert "TRK1" in sent["body"] and "50,000" in sent["body"]
     assert sent["amount_krw"] == -50_000
     assert cost["type"] == "shipping_cost" and cost["amount_krw"] == -10_000
@@ -119,7 +119,7 @@ def test_finance_events(db, services, admin):
 
 
 def test_rebuy_event_is_important_and_explains_the_price(db, services, admin):
-    seed_order(db, "n5", brand="Nike")
+    seed_order(db, "N5", brand="Nike")
     services.orders.buy(admin, "5", 140_000, 170_000)
     services.orders.rebuy(admin, "5", 150_000, 185_000, reason="Магазин отменил заказ")
 
@@ -132,7 +132,7 @@ def test_rebuy_event_is_important_and_explains_the_price(db, services, admin):
 
 def test_feed_filters_and_pages(db, services, admin, client_actor):
     for i in range(1, 8):
-        seed_order(db, f"n{i}")
+        seed_order(db, f"N{i}")
         services.orders.buy(admin, str(i), 1, 10)  # normal
         services.orders.cancel(admin, str(i))  # important
 
@@ -148,8 +148,8 @@ def test_feed_filters_and_pages(db, services, admin, client_actor):
 
 
 def test_order_history(db, services, admin, client_actor):
-    seed_order(db, "n5")
-    seed_order(db, "n6")
+    seed_order(db, "N5")
+    seed_order(db, "N6")
     services.orders.buy(admin, "5", 1, 10)
     services.orders.buy(admin, "6", 1, 10)
     services.orders.update_details(admin, "5", OrderUpdate(client_comment="ок"))
@@ -159,7 +159,7 @@ def test_order_history(db, services, admin, client_actor):
 
 
 def test_unread_counts_per_user(db, services, admin, client_actor, clock):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
     services.orders.buy(admin, "5", 1, 10)
     services.orders.cancel(admin, "5")
 

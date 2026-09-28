@@ -213,12 +213,12 @@ def env(db, clock):
 
 
 async def test_photo_in_group_becomes_an_order_silently(db, env):
-    seed_order(db, "n125")
+    seed_order(db, "N125")
     e = env(FakeGemini())
 
     await e["photo"]("42 https://shop.example.kr/item/7")
 
-    order = db.get("orders", "n126")
+    order = db.get("orders", "N126")
     assert order["status"] == "new" and order["brand"] == "Nike" and order["size"] == "42"
     assert order["source_url"] == "https://shop.example.kr/item/7"
     assert order["photo_url"].endswith(".webp") and len(e["blobs"].files) == 2
@@ -305,7 +305,7 @@ async def test_not_an_order_goes_to_the_admin_and_add_forces_it(db, env):
 
 
 async def test_photos_sent_together_keep_their_order(db, env):
-    seed_order(db, "n125")
+    seed_order(db, "N125")
     e = env(FakeGemini(slow_first=0.3))  # the first photo is recognised last
 
     first, second, third = (next(_ids) for _ in range(3))
@@ -315,9 +315,9 @@ async def test_photos_sent_together_keep_their_order(db, env):
         e["photo"]("третья 43", message_id=third),
     )
 
-    new_ids = [i for i in db.list_ids("orders") if i != "n125"]
+    new_ids = [i for i in db.list_ids("orders") if i != "N125"]
     by_message = {db.get("orders", i)["source_message_id"]: i for i in new_ids}
-    assert [by_message[m] for m in (first, second, third)] == ["n126", "n127", "n128"]
+    assert [by_message[m] for m in (first, second, third)] == ["N126", "N127", "N128"]
 
 
 async def test_without_gemini_the_caption_is_used(db, env):

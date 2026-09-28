@@ -40,7 +40,7 @@ def enable(services, admin, recipient="admins", level="important"):
 
 
 def test_off_by_default_nothing_is_sent_and_backlog_is_skipped(db, services, admin):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
     services.orders.buy(admin, "5", 140_000, 170_000)
 
     assert services.notifications.due().deliveries == []
@@ -51,7 +51,7 @@ def test_off_by_default_nothing_is_sent_and_backlog_is_skipped(db, services, adm
 
 
 def test_events_before_switching_on_are_never_sent(db, services, admin):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
     services.orders.buy(admin, "5", 140_000, 170_000)  # pending, sender not running yet
     enable(services, admin, level="all")
     services.orders.cancel(admin, "5")
@@ -63,7 +63,7 @@ def test_events_before_switching_on_are_never_sent(db, services, admin):
 
 
 def test_important_level_skips_normal_events(db, services, admin):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
     enable(services, admin)
     services.orders.buy(admin, "5", 140_000, 170_000)
     services.orders.cancel(admin, "5")
@@ -77,7 +77,7 @@ def test_important_level_skips_normal_events(db, services, admin):
 
 
 def test_client_recipient_uses_the_client_telegram_id(db, services, admin):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
     enable(services, admin, recipient="client", level="all")
     services.orders.buy(admin, "5", 140_000, 170_000)
 
@@ -86,7 +86,7 @@ def test_client_recipient_uses_the_client_telegram_id(db, services, admin):
 
 def test_client_without_telegram_id_gets_nothing(db, services, admin):
     seed(db, "client_info", "main_client", {"name": "Клиент", "balance": 1_000_000})
-    seed_order(db, "n5")
+    seed_order(db, "N5")
     enable(services, admin, recipient="client", level="all")
     services.orders.buy(admin, "5", 140_000, 170_000)
 
@@ -96,7 +96,7 @@ def test_client_without_telegram_id_gets_nothing(db, services, admin):
 
 
 def test_stale_events_are_skipped(db, services, admin, clock):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
     enable(services, admin, level="all")
     services.orders.buy(admin, "5", 140_000, 170_000)
     clock.current += timedelta(hours=25)  # e.g. the bot was down for a day
@@ -109,7 +109,7 @@ def test_stale_events_are_skipped(db, services, admin, clock):
 
 
 def _single(services, db, admin):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
     enable(services, admin, level="all")
     services.orders.buy(admin, "5", 140_000, 170_000)
     [delivery] = services.notifications.due().deliveries
@@ -209,11 +209,11 @@ def test_a_failing_listener_never_breaks_the_operation(db, services, admin):
         raise RuntimeError("boom")
 
     services.notifications.listen(broken)
-    seed_order(db, "n5")
+    seed_order(db, "N5")
 
     services.orders.buy(admin, "5", 140_000, 170_000)
 
-    assert db.get("orders", "n5")["status"] == "bought"
+    assert db.get("orders", "N5")["status"] == "bought"
 
 
 # --- the sender ----------------------------------------------------------------
@@ -259,7 +259,7 @@ def _notifier(session, services, url="https://crm.example.com"):
 
 async def test_sender_delivers_text_with_mini_app_button(db, services, admin):
     session = FakeTelegram()
-    seed_order(db, "n5", brand="Nike")
+    seed_order(db, "N5", brand="Nike")
     enable(services, admin)
     services.orders.buy(admin, "5", 140_000, 170_000)
     services.orders.cancel(admin, "5")
@@ -268,10 +268,10 @@ async def test_sender_delivers_text_with_mini_app_button(db, services, admin):
 
     [message] = session.sent
     assert message.chat_id == ADMIN_TG
-    assert "n5" in message.text and "отмен" in message.text
+    assert "N5" in message.text and "отмен" in message.text
     assert "140" not in message.text  # purchase price never appears
     button = message.reply_markup.inline_keyboard[0][0]
-    assert button.web_app.url == "https://crm.example.com/?open=order%3An5"
+    assert button.web_app.url == "https://crm.example.com/?open=order%3AN5"
     assert await _notifier(session, services).run_once() == 0  # nothing twice
 
 
@@ -326,7 +326,7 @@ async def test_network_error_is_retried_on_the_next_round(db, services, admin):
 
 async def test_sender_wakes_up_when_an_event_is_recorded(db, services, admin):
     session = FakeTelegram()
-    seed_order(db, "n5")
+    seed_order(db, "N5")
     enable(services, admin, level="all")
     notifier = TelegramNotifier(
         _bot(session), services.notifications, None, poll_seconds=60, settle_seconds=0
@@ -347,11 +347,11 @@ async def test_sender_wakes_up_when_an_event_is_recorded(db, services, admin):
 
 
 def test_open_url_targets():
-    order = Event("e1", None, False, "t", None, order_ids=["n5"])
-    shipment = Event("e2", None, False, "t", None, order_ids=["n1", "n2"], shipment_id="SHP-1")
+    order = Event("e1", None, False, "t", None, order_ids=["N5"])
+    shipment = Event("e2", None, False, "t", None, order_ids=["N1", "N2"], shipment_id="SHP-1")
     general = Event("e3", None, False, "t", None)
 
-    assert open_url("https://crm.example.com", order) == "https://crm.example.com/?open=order%3An5"
+    assert open_url("https://crm.example.com", order) == "https://crm.example.com/?open=order%3AN5"
     assert (
         open_url("https://x.io/app?v=2", shipment) == "https://x.io/app?v=2&open=shipment%3ASHP-1"
     )

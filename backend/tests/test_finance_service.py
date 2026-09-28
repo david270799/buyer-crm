@@ -58,8 +58,8 @@ def test_adjust_needs_comment_and_can_be_negative(db, services, admin):
 
 
 def test_ledger_reconstructs_balance(db, services, admin):
-    seed_order(db, "n1")
-    seed_order(db, "n2")
+    seed_order(db, "N1")
+    seed_order(db, "N2")
     services.finance.deposit(admin, 2_000_000)
     services.orders.buy(admin, "1", 100_000, 150_000)
     services.orders.buy(admin, "2", 200_000, 260_000)

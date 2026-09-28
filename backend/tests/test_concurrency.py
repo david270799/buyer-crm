@@ -48,39 +48,39 @@ def _check_errors(db, errors):
 
 
 def test_parallel_buy_charges_once(db, services, admin):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
 
     results, errors = _run_parallel(lambda: services.orders.buy(admin, "5", 140_000, 170_000))
 
     _check_errors(db, errors)
     charges = [key for key in ledger_entries(db) if key.startswith("order_charge")]
-    assert charges == ["order_charge_n5"]
+    assert charges == ["order_charge_N5"]
     assert sum(not r.already_done for r in results) <= 1
     assert balance(db) == START_BALANCE - 170_000
 
 
 def test_parallel_cancel_refunds_once(db, services, admin):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
     services.orders.buy(admin, "5", 140_000, 170_000)
 
     results, errors = _run_parallel(lambda: services.orders.cancel(admin, "5"))
 
     _check_errors(db, errors)
     refunds = [key for key in ledger_entries(db) if key.startswith("order_refund")]
-    assert refunds == ["order_refund_n5"]
+    assert refunds == ["order_refund_N5"]
     assert sum(r.refunded_krw for r in results) <= 170_000
     assert balance(db) == START_BALANCE
 
 
 def test_parallel_order_creation_never_duplicates_ids(db, services, admin):
-    seed_order(db, "n125")
+    seed_order(db, "N125")
 
     results, errors = _run_parallel(lambda: services.orders.create_order(admin, NewOrder()))
 
     _check_errors(db, errors)
     ids = [order.id for order in results]
     assert len(ids) == len(set(ids)) == WORKERS - len(errors)
-    stored = sorted(i for i in db.list_ids("orders") if i != "n125")
+    stored = sorted(i for i in db.list_ids("orders") if i != "N125")
     assert stored == sorted(ids)
     assert db.get("counters", "orders")["next_id"] > max(int(i[1:]) for i in ids)
 
@@ -102,13 +102,13 @@ def test_parallel_deposits_on_different_keys_all_apply(db, services, admin):
 
 
 def test_parallel_identical_rebuys_move_the_difference_once(db, services, admin):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
     services.orders.buy(admin, "5", 140_000, 170_000)
 
     results, errors = _run_parallel(lambda: services.orders.rebuy(admin, "5", 150_000, 185_000))
 
     _check_errors(db, errors)
     rebuys = [key for key in ledger_entries(db) if key.startswith("order_rebuy")]
-    assert rebuys == ["order_rebuy_n5_1"]
+    assert rebuys == ["order_rebuy_N5_1"]
     assert sum(not r.already_done for r in results) <= 1
     assert balance(db) == START_BALANCE - 185_000

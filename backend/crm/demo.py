@@ -32,15 +32,15 @@ DEMO_GROUP_ID = -1001000000001
 
 # id, brand, model, size, purchase, client price, tint
 _ORDERS = [
-    ("n117", "Maison Kitsuné", "Fox Head Tee", "M", 62_000, 79_000, (214, 204, 190)),
-    ("n118", "New Balance", "990v6", "275", 210_000, 245_000, (196, 198, 196)),
-    ("n119", "Adidas", "Samba OG", "255", 118_000, 139_000, (206, 200, 186)),
-    ("n120", "Stone Island", "Soft Shell-R", "L", 480_000, 540_000, (180, 188, 176)),
-    ("n121", "Arc'teryx", "Beta LT", "M", 520_000, 590_000, (168, 180, 190)),
-    ("n122", "Nike", "Air Max 95", "270", 189_000, 219_000, (200, 196, 204)),
-    ("n123", "Salomon", "XT-6", "265", 205_000, 239_000, (190, 196, 184)),
-    ("n124", "Asics", "Gel-Kayano 14", "270", None, None, (204, 194, 184)),
-    ("n125", "Nike", "Dunk Low Panda", "260", None, None, (188, 188, 192)),
+    ("N1", "Maison Kitsuné", "Fox Head Tee", "M", 62_000, 79_000, (214, 204, 190)),
+    ("N2", "New Balance", "990v6", "275", 210_000, 245_000, (196, 198, 196)),
+    ("N3", "Adidas", "Samba OG", "255", 118_000, 139_000, (206, 200, 186)),
+    ("N4", "Stone Island", "Soft Shell-R", "L", 480_000, 540_000, (180, 188, 176)),
+    ("N5", "Arc'teryx", "Beta LT", "M", 520_000, 590_000, (168, 180, 190)),
+    ("N6", "Nike", "Air Max 95", "270", 189_000, 219_000, (200, 196, 204)),
+    ("N7", "Salomon", "XT-6", "265", 205_000, 239_000, (190, 196, 184)),
+    ("N8", "Asics", "Gel-Kayano 14", "270", None, None, (204, 194, 184)),
+    ("N9", "Nike", "Dunk Low Panda", "260", None, None, (188, 188, 192)),
 ]
 
 
@@ -146,7 +146,7 @@ def create_demo_database(
     clock.advance(days=1)
     services.orders.rebuy(
         admin,
-        "n123",
+        "N7",
         212_000,
         249_000,
         source_url="https://store.example.kr/salomon-xt6",
@@ -154,25 +154,25 @@ def create_demo_database(
     )
 
     clock.advance(days=1)
-    services.orders.cancel(admin, "n117")
-    services.orders.set_status(admin, ["n118", "n119", "n120", "n121"], OrderStatus.WAREHOUSE)
+    services.orders.cancel(admin, "N1")
+    services.orders.set_status(admin, ["N2", "N3", "N4", "N5"], OrderStatus.WAREHOUSE)
 
     clock.advance(days=3)
     first = services.shipments.ship_orders(
         admin,
-        ["n118", "n119"],
+        ["N2", "N3"],
         "KR100200300",
         ShipmentDetails(box_number="B-1", weight_kg=4.2, shipping_cost_krw=48_000),
     )
     clock.advance(days=6)
-    services.orders.set_status(admin, ["n118", "n119"], OrderStatus.DELIVERED)
+    services.orders.set_status(admin, ["N2", "N3"], OrderStatus.DELIVERED)
     assert first.shipment is not None
 
     clock.advance(days=2)
-    services.orders.set_status(admin, ["n122", "n123"], OrderStatus.WAREHOUSE)
+    services.orders.set_status(admin, ["N6", "N7"], OrderStatus.WAREHOUSE)
     services.shipments.ship_orders(
         admin,
-        ["n120", "n121"],
+        ["N4", "N5"],
         "KR100200417",
         ShipmentDetails(
             box_number="B-2",
@@ -184,14 +184,14 @@ def create_demo_database(
     clock.advance(days=1)
     services.orders.update_details(
         admin,
-        "n125",
+        "N9",
         OrderUpdate(
             attention_required=True,
             client_comment="Размер 260 закончился, есть 265 — подойдёт?",
             internal_comment="Продавец обещал ответ до пятницы",
         ),
     )
-    services.orders.update_details(admin, "n124", OrderUpdate(client_comment="Ищем по лучшей цене"))
+    services.orders.update_details(admin, "N8", OrderUpdate(client_comment="Ищем по лучшей цене"))
 
     # An order that came in as a photo in the group, recognised by Gemini.
     clock.advance(hours=5)

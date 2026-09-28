@@ -95,32 +95,32 @@ def bot_env(db, services, client_doc):
 
 
 async def test_admin_buy_command_charges_balance(db, bot_env):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
 
     (reply,) = await bot_env("/buy 5 140,000 170000")
 
-    assert "✅ Заказ <b>n5</b> выкуплен" in reply
+    assert "✅ Заказ <b>N5</b> выкуплен" in reply
     assert "₩ 830,000" in reply
     assert balance(db) == START_BALANCE - 170_000
 
 
 async def test_repeated_buy_command_reports_no_second_charge(db, bot_env):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
     await bot_env("/buy 5 140000 170000")
 
-    (reply,) = await bot_env("/buy n5 140000 170000")
+    (reply,) = await bot_env("/buy N5 140000 170000")
 
     assert "Повторного списания нет" in reply
     assert balance(db) == START_BALANCE - 170_000
 
 
 async def test_client_cannot_run_admin_commands(db, bot_env):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
 
     replies = await bot_env("/buy 5 1 2", user_id=CLIENT_TG, chat_id=GROUP_ID)
 
     assert replies == []
-    assert db.get("orders", "n5")["status"] == "new"
+    assert db.get("orders", "N5")["status"] == "new"
 
 
 async def test_stranger_is_ignored_in_group_and_gets_id_in_private(db, bot_env):
@@ -132,7 +132,7 @@ async def test_stranger_is_ignored_in_group_and_gets_id_in_private(db, bot_env):
 async def test_client_sees_order_without_purchase_price(db, bot_env):
     seed_order(
         db,
-        "n5",
+        "N5",
         status="bought",
         purchase_price=140_000,
         client_price=170_000,
@@ -151,14 +151,14 @@ async def test_client_sees_order_without_purchase_price(db, bot_env):
 
 
 async def test_cargo_command_reports_updated_and_missing(db, bot_env):
-    for order_id in ("n5", "n10"):
+    for order_id in ("N5", "N10"):
         seed_order(db, order_id, status="bought", client_price=1, charged_amount_krw=1)
 
     (reply,) = await bot_env("/cargo TRK777 5 10 23", chat_id=GROUP_ID)
 
     assert "SHP-2026-001" in reply
-    assert "✅ Обновлено: n5, n10" in reply
-    assert "⚠️ Не найдено: n23" in reply
+    assert "✅ Обновлено: N5, N10" in reply
+    assert "⚠️ Не найдено: N23" in reply
 
 
 async def test_validation_error_is_shown_without_stack_trace(db, bot_env):
@@ -169,7 +169,7 @@ async def test_validation_error_is_shown_without_stack_trace(db, bot_env):
 
 async def test_domain_error_message(db, bot_env):
     (reply,) = await bot_env("/cancel 404")
-    assert reply == "❌ Заказ n404 не найден."
+    assert reply == "❌ Заказ N404 не найден."
 
 
 async def test_deposit_is_idempotent_per_telegram_message(db, bot_env):
@@ -193,9 +193,9 @@ async def test_user_text_is_escaped(db, bot_env):
 
 
 async def test_status_command(db, bot_env):
-    seed_order(db, "n1", status="bought", client_price=1)
+    seed_order(db, "N1", status="bought", client_price=1)
     (reply,) = await bot_env("/status склад 1, 2")
-    assert "✅ Обновлено: n1" in reply and "Не найдено: n2" in reply
+    assert "✅ Обновлено: N1" in reply and "Не найдено: N2" in reply
 
 
 async def test_invalid_token_gives_clear_error_and_closes_session(services):
@@ -233,7 +233,7 @@ async def test_invalid_token_gives_clear_error_and_closes_session(services):
 async def test_admin_replies_in_group_use_client_visibility(db, bot_env):
     seed_order(
         db,
-        "n5",
+        "N5",
         status="bought",
         purchase_price=140_000,
         client_price=170_000,
@@ -241,7 +241,7 @@ async def test_admin_replies_in_group_use_client_visibility(db, bot_env):
         charged_amount_krw=170_000,
         internal_comment="секрет",
     )
-    seed_order(db, "n6")
+    seed_order(db, "N6")
 
     (order_reply,) = await bot_env("/order 5", chat_id=GROUP_ID)
     (buy_reply,) = await bot_env("/buy 6 90000 120000", chat_id=GROUP_ID)
@@ -273,20 +273,20 @@ def test_demo_data_is_consistent_and_realistic():
     event_types = {data["type"] for _, data in db.query("events")}
     assert {"order_rebought", "shipment_sent", "attention", "comment"} <= event_types
     statuses = {doc_id: data["status"] for doc_id, data in db.query("orders")}
-    assert statuses["n117"] == "cancelled" and statuses["n118"] == "delivered"
-    assert statuses["n120"] == "cargo" and statuses["n124"] == "new"
+    assert statuses["N1"] == "cancelled" and statuses["N2"] == "delivered"
+    assert statuses["N4"] == "cargo" and statuses["N8"] == "new"
     assert len(db.query("shipments")) == 2
-    assert db.get("orders", "n125")["attention_required"] is True
-    assert db.get("orders", "n118")["photo_url"].endswith(".webp")
+    assert db.get("orders", "N9")["attention_required"] is True
+    assert db.get("orders", "N2")["photo_url"].endswith(".webp")
     assert len(blobs.files) == 2 * 10  # 9 seeded orders + 1 that came in as a photo
-    intake = db.get("orders", "n126")
+    intake = db.get("orders", "N10")
     assert intake["status"] == "new" and intake["recognition"]["brand"] == "New Balance"
     assert intake["size"] == "270" and intake["source_url"].startswith("https://")
     assert db.get("client_info", "main_client")["telegram_id"] == CLIENT_TG
 
 
 async def test_shipcost_command_charges_difference(db, bot_env):
-    seed_order(db, "n5", status="bought", client_price=1, charged_amount_krw=1)
+    seed_order(db, "N5", status="bought", client_price=1, charged_amount_krw=1)
     await bot_env("/cargo TRK777 5")
 
     (first,) = await bot_env("/shipcost 1 95000")
@@ -300,7 +300,7 @@ async def test_shipcost_command_charges_difference(db, bot_env):
 
 
 async def test_rebuy_command(db, bot_env):
-    seed_order(db, "n5")
+    seed_order(db, "N5")
     await bot_env("/buy 5 140000 170000")
 
     (reply,) = await bot_env("/rebuy 5 150000 185000 https://shop-b.kr/1 Магазин отменил заказ")
