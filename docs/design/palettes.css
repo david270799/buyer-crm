@@ -1,0 +1,108 @@
+/* Цветовые варианты Mini App (дизайн тот же, меняются только цвета).
+   Сравнение: compare-*.png (Сейчас, A «Морской», B «Тёплый») и more-*.png (C–F).
+   Владелец вариант ещё не выбрал. Для C–F ниже точные значения; значения A и B не
+   сохранились — их можно снять пипеткой со скриншотов compare-*.png.
+   Применение: заменить значения этих переменных в :root в web/src/styles/app.css
+   (для «Ночь» — это тёмная тема; светлую тогда нужно подобрать отдельно). */
+
+/* C «Изумруд» */
+[data-palette="emerald"] {
+  --bg:#eef3ef;
+  --surface:#ffffff;
+  --surface-2:#e6efe8;
+  --surface-3:#d8e6dc;
+  --border:#dce7df;
+  --border-strong:#c5d6ca;
+  --text:#14231a;
+  --text-2:#5a6d61;
+  --text-3:#8da094;
+  --accent:#17603f;
+  --accent-hover:#114d32;
+  --accent-contrast:#ffffff;
+  --accent-soft:#dcede3;
+  --positive:#1f7a4d;
+  --positive-soft:#ddf0e5;
+  --negative:#b0392f;
+  --negative-soft:#f7e2de;
+  --warning:#946605;
+  --warning-soft:#f6edd6;
+  --info:#2d5f7a;
+  --info-soft:#e0ebf1;
+}
+
+/* D «Лаванда» */
+[data-palette="lavender"] {
+  --bg:#f3f1f8;
+  --surface:#ffffff;
+  --surface-2:#ece9f4;
+  --surface-3:#e1dcee;
+  --border:#e3dfee;
+  --border-strong:#d0c9e3;
+  --text:#1d1a2b;
+  --text-2:#65607a;
+  --text-3:#9993ad;
+  --accent:#5b3fa6;
+  --accent-hover:#4a318c;
+  --accent-contrast:#ffffff;
+  --accent-soft:#e8e2f6;
+  --positive:#2e7a55;
+  --positive-soft:#e0f0e7;
+  --negative:#b0394a;
+  --negative-soft:#f8e1e5;
+  --warning:#946605;
+  --warning-soft:#f6edd6;
+  --info:#3b5c93;
+  --info-soft:#e2e9f5;
+}
+
+/* E «Ночь» */
+[data-palette="night"] {
+  --bg:#0f1115;
+  --surface:#181b21;
+  --surface-2:#20242b;
+  --surface-3:#282d35;
+  --border:#272b33;
+  --border-strong:#373c46;
+  --text:#eceae4;
+  --text-2:#a4a19a;
+  --text-3:#76736d;
+  --accent:#d4a84b;
+  --accent-hover:#e6bd63;
+  --accent-contrast:#17140c;
+  --accent-soft:#302918;
+  --positive:#7fc49c;
+  --positive-soft:#1d2c24;
+  --negative:#e88f7d;
+  --negative-soft:#35211d;
+  --warning:#dcb567;
+  --warning-soft:#332a18;
+  --info:#9dbad6;
+  --info-soft:#1e2833;
+  --shadow:0 1px 2px rgba(0,0,0,.3);
+  color-scheme:dark;
+}
+
+/* F «Сеул» */
+[data-palette="seoul"] {
+  --bg:#f6f6f6;
+  --surface:#ffffff;
+  --surface-2:#f0f0f0;
+  --surface-3:#e6e6e6;
+  --border:#e7e7e7;
+  --border-strong:#d4d4d4;
+  --text:#161616;
+  --text-2:#666666;
+  --text-3:#9a9a9a;
+  --accent:#c8102e;
+  --accent-hover:#a50d26;
+  --accent-contrast:#ffffff;
+  --accent-soft:#fbe3e7;
+  --positive:#1f7a4d;
+  --positive-soft:#e0f1e7;
+  --negative:#c8102e;
+  --negative-soft:#fbe3e7;
+  --warning:#9a6a00;
+  --warning-soft:#f7eed6;
+  --info:#0047a0;
+  --info-soft:#e1ebf7;
+}

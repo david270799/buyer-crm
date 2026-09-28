@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Buyer CRM — установка и проверка</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 16mm 15mm; }
+  :root {
+    --ink: #1c1d21; --ink2: #50535b; --ink3: #7b7f88; --line: #e3e1db; --paper: #ffffff;
+    --soft: #f4f3ef; --accent: #243042; --blue: #2f6fb0; --blue-soft: #e8f0f9;
+    --warn: #8a5a00; --warn-soft: #fbf1dc; --bad: #9c2f24; --bad-soft: #f7e3e0;
+    --good: #256b3f; --good-soft: #e3f2e8;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font-family: "Liberation Sans", "DejaVu Sans", Arial, sans-serif; color: var(--ink);
+         font-size: 10.6pt; line-height: 1.48; background: var(--paper); }
+  h1 { font-size: 26pt; line-height: 1.12; margin: 0 0 8px; letter-spacing: -0.3px; }
+  h2 { font-size: 16pt; margin: 0 0 10px; padding-top: 2px; letter-spacing: -0.2px; }
+  h3 { font-size: 12pt; margin: 16px 0 6px; }
+  p { margin: 0 0 8px; }
+  ul, ol { margin: 0 0 8px; padding-left: 20px; }
+  li { margin: 2px 0; }
+  a { color: var(--blue); text-decoration: none; }
+  code, .mono { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 9.2pt; }
+  code { background: var(--soft); border-radius: 4px; padding: 1px 4px; }
+  pre { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 8.9pt; line-height: 1.45;
+        background: #1f2430; color: #e9edf3; border-radius: 8px; padding: 10px 12px; margin: 6px 0 10px;
+        white-space: pre-wrap; word-break: break-word; break-inside: avoid; }
+  pre .c { color: #9aa6b8; }
+  .section { break-before: page; }
+  .muted { color: var(--ink2); }
+  .small { font-size: 9.4pt; }
+  .tiny { font-size: 8.4pt; color: var(--ink3); }
+
+  /* cover */
+  .cover { padding-top: 26mm; }
+  .kicker { text-transform: uppercase; letter-spacing: 1.6px; font-size: 9pt; color: var(--ink3); margin-bottom: 10px; }
+  .lead { font-size: 12.5pt; color: var(--ink2); max-width: 150mm; }
+  .toc { margin-top: 12mm; border-top: 1px solid var(--line); }
+  .toc div { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid var(--line); }
+  .toc b { font-weight: 600; }
+
+  /* flow */
+  .flow { display: flex; align-items: stretch; gap: 6px; margin: 12px 0 6px; }
+  .flow .box { flex: 1; background: var(--soft); border-radius: 10px; padding: 9px 9px 8px; font-size: 9pt; }
+  .flow .box b { display: block; font-size: 9.6pt; margin-bottom: 2px; }
+  .flow .arrow { align-self: center; color: var(--ink3); font-size: 14pt; }
+  .flow .box.dark { background: var(--accent); color: #fff; }
+
+  /* steps */
+  .step { display: flex; gap: 12px; align-items: flex-start; margin: 10px 0; break-inside: avoid; }
+  .num { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff;
+         font-weight: 700; font-size: 10.5pt; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+  .step > div:not(.num) { flex: 1; min-width: 0; }
+  .step h3 { margin: 2px 0 4px; }
+
+  /* callouts */
+  .note { border-radius: 8px; padding: 9px 12px; margin: 8px 0 10px; font-size: 9.8pt; break-inside: avoid; }
+  .note.tip { background: var(--blue-soft); }
+  .note.warn { background: var(--warn-soft); }
+  .note.bad { background: var(--bad-soft); }
+  .note.good { background: var(--good-soft); }
+  .note b:first-child { margin-right: 4px; }
+
+  /* tables */
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 12px; font-size: 9.6pt; break-inside: auto; }
+  th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { font-size: 8.6pt; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ink3); font-weight: 600; }
+  tr { break-inside: avoid; }
+  td.k { white-space: nowrap; font-weight: 600; }
+
+  /* figures */
+  .figs { display: flex; gap: 10px; justify-content: center; margin: 8px 0 4px; break-inside: avoid; }
+  figure { margin: 0; text-align: center; break-inside: avoid; }
+  figure img { display: block; border-radius: 14px; border: 1px solid var(--line); background: #fff; }
+  .phone img { width: 52mm; }
+  .phone-sm img { width: 44mm; }
+  .wide img { width: 100%; border-radius: 8px; }
+  figcaption { font-size: 8.4pt; color: var(--ink2); margin-top: 5px; max-width: 56mm; margin-left: auto; margin-right: auto; }
+  .wide figcaption { max-width: none; }
+  .crop { overflow: hidden; border-radius: 14px; border: 1px solid var(--line); }
+  .crop img { border: 0; border-radius: 0; }
+
+  /* telegram mock */
+  .tg { background: #dfe7ee; border-radius: 12px; padding: 10px; font-size: 9.4pt; break-inside: avoid; }
+  .tg .title { font-size: 8.4pt; color: #5b6b7b; text-align: center; margin-bottom: 6px; }
+  .bubble { max-width: 78%; border-radius: 12px; padding: 6px 9px; margin: 5px 0; background: #fff;
+            box-shadow: 0 1px 0 rgba(0,0,0,0.06); line-height: 1.38; }
+  .bubble.out { margin-left: auto; background: #e1f7cf; }
+  .bubble .who { font-size: 8.4pt; font-weight: 700; color: #2f6fb0; margin-bottom: 2px; }
+  .bubble .who.bot { color: #a0522d; }
+  .bubble .photo { width: 42mm; height: 42mm; border-radius: 8px; display: block; margin-bottom: 4px; object-fit: cover; }
+  .bubble .photo.sm { width: 24mm; height: 24mm; }
+  .bubble .reply { border-left: 3px solid #2f6fb0; padding-left: 6px; margin-bottom: 4px; font-size: 8.4pt; color: #5b6b7b; }
+  .bubble .btn { display: block; text-align: center; margin-top: 6px; padding: 5px; border-radius: 8px; background: #eef3f8;
+                 color: #2f6fb0; font-weight: 600; font-size: 8.8pt; }
+  .tg-row { display: flex; gap: 10px; }
+  .tg-row > .tg { flex: 1; }
+
+  .two { display: flex; gap: 14px; }
+  .two > div { flex: 1; min-width: 0; }
+  .check li { list-style: none; margin-left: -18px; }
+  .check li::before { content: "☐ "; color: var(--ink3); }
+  .pill { display: inline-block; font-size: 8.4pt; padding: 1px 7px; border-radius: 99px; background: var(--soft); color: var(--ink2); }
+</style>
+</head>
+<body>
+
+<!-- ============================ COVER ============================ -->
+<div class="cover">
+  <div class="kicker">Buyer CRM · инструкция</div>
+  <h1>Установка и проверка</h1>
+  <p class="lead">Как за один вечер запустить CRM: Telegram-бот, распознавание заказов по фото через Gemini
+    и Mini App для вас и клиента. Сначала всё проверяется на вашем компьютере, потом при желании
+    переносится на постоянный сервер.</p>
+
+  <h3 style="margin-top:12mm">Как это работает</h3>
+  <div class="flow">
+    <div class="box"><b>Клиент</b>фото товара в группе, в подписи размер и ссылка</div>
+    <div class="arrow">→</div>
+    <div class="box"><b>Бот</b>фото → квадрат 1:1, WebP до 500 КБ, на диск сервера</div>
+    <div class="arrow">→</div>
+    <div class="box"><b>Gemini</b>бренд, модель, размер; если не уверен — пусто</div>
+    <div class="arrow">→</div>
+    <div class="box dark"><b>Заказ nN «Новый»</b>молча, в группу ни слова; вопросы — вам в личку</div>
+  </div>
+  <p class="small muted">Дальше как обычно: <code>/buy</code> списывает цену с баланса один раз, статусы, отправки,
+    колокольчик и уведомления в личку. Деньги никогда не двигаются от Gemini — только от ваших команд.</p>
+
+  <div class="toc">
+    <div><span><b>1.</b> Что понадобится</span><span class="muted">2</span></div>
+    <div><span><b>2.</b> Бот в @BotFather</span><span class="muted">2</span></div>
+    <div><span><b>3.</b> Где хранятся данные и копии</span><span class="muted">3</span></div>
+    <div><span><b>4.</b> Ключ Gemini</span><span class="muted">3</span></div>
+    <div><span><b>5.</b> Установка на компьютер</span><span class="muted">4</span></div>
+    <div><span><b>6.</b> Первый запуск и ваш Telegram ID</span><span class="muted">6</span></div>
+    <div><span><b>7.</b> Mini App на телефоне (HTTPS-туннель)</span><span class="muted">6</span></div>
+    <div><span><b>8.</b> Группа и клиент</span><span class="muted">7</span></div>
+    <div><span><b>9.</b> Проверка по шагам</span><span class="muted">8</span></div>
+    <div><span><b>10.</b> Как выглядит CRM</span><span class="muted">9</span></div>
+    <div><span><b>11.</b> Постоянная работа на сервере</span><span class="muted">11</span></div>
+    <div><span><b>12.</b> Команды бота</span><span class="muted">12</span></div>
+    <div><span><b>13.</b> Если что-то не так, безопасность</span><span class="muted">13</span></div>
+  </div>
+</div>
+
+<!-- ============================ 1-2 ============================ -->
+<div class="section">
+  <h2>1. Что понадобится</h2>
+  <div class="two">
+    <div>
+      <ul class="check">
+        <li>Ваш Telegram-аккаунт (вы — администратор).</li>
+        <li><b>Второй Telegram-аккаунт для проверки</b> — он будет «клиентом» на время тестов
+          (второй номер, аккаунт друга). Настоящего клиента подключите в конце.</li>
+        <li>Бот от @BotFather (у вас уже есть).</li>
+        <li>Ключ Gemini (бесплатный, шаг 4) — по желанию.</li>
+      </ul>
+    </div>
+    <div>
+      <ul class="check">
+        <li>Компьютер с Windows или macOS.</li>
+        <li>Python 3.11 или новее, Node.js 20 или новее, Git — установка ниже.</li>
+        <li>Доступ к репозиторию <code>david270799/buyer-crm</code> на GitHub.</li>
+        <li>Около 1–2 часов.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="note bad"><b>Ключи — только в файл <code>.env</code> на вашем компьютере или сервере.</b>
+    Никому их не пересылайте, в том числе в чат с ИИ. Если токен бота когда-то попал в переписку —
+    перевыпустите его (шаг 2).</div>
+
+  <h2 style="margin-top:14px">2. Бот в @BotFather</h2>
+  <div class="two">
+    <div>
+      <div class="step"><div class="num">1</div><div>
+        <h3>Токен</h3>
+        <p>Откройте <b>@BotFather</b> → <code>/mybots</code> → ваш бот → <b>API Token</b>.
+          Скопируйте токен — он понадобится в <code>.env</code> как <code>BOT_TOKEN</code>.
+          Если токен уже где-то светился, там же нажмите <b>Revoke current token</b> и возьмите новый.</p>
+      </div></div>
+      <div class="step"><div class="num">2</div><div>
+        <h3>Выключите Privacy Mode</h3>
+        <p>Отправьте <code>/setprivacy</code>, выберите бота, нажмите <b>Disable</b>.
+          Без этого Telegram не показывает боту обычные фото в группе, и заказы не будут приниматься.</p>
+        <p class="small muted">Если бот уже был в группе — после этого удалите его из группы и добавьте снова:
+          настройка применяется при входе в группу.</p>
+      </div></div>
+    </div>
+    <div>
+      <div class="tg">
+        <div class="title">пример · @BotFather</div>
+        <div class="bubble out">/setprivacy</div>
+        <div class="bubble">Choose a bot to change group messages settings.</div>
+        <div class="bubble out">@your_crm_bot</div>
+        <div class="bubble">'Enable' — your bot will only receive messages that either start with the '/' symbol or mention the bot by username.<br>'Disable' — your bot will receive all messages that people send to groups.</div>
+        <div class="bubble out">Disable</div>
+        <div class="bubble">Success! The new status is: <b>DISABLED</b>. /help</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 3-4 ============================ -->
+<div class="section">
+  <h2>3. Где хранятся данные и копии</h2>
+  <p>Отдельно ничего настраивать не нужно: CRM хранит всё <b>на том компьютере или сервере, где работает</b>,
+    в одной папке <code>data/</code> в проекте. Firebase, Google Cloud и платные тарифы не нужны.</p>
+  <table>
+    <tr><th style="width:34%">Что</th><th>Где</th></tr>
+    <tr><td class="k">База: заказы, деньги, история</td><td><code>data/crm.sqlite3</code> — один файл (SQLite)</td></tr>
+    <tr><td class="k">Фото заказов и отправок</td><td><code>data/media/</code> — квадратные WebP до ~0,5 МБ</td></tr>
+    <tr><td class="k">Резервные копии базы</td><td><code>data/backups/</code> — последние 14</td></tr>
+  </table>
+  <div class="step"><div class="num">1</div><div>
+    <h3>Копия каждую ночь — вам в Telegram</h3>
+    <p>В 4:00 по Сеулу бот сохраняет копию базы и <b>присылает её файлом вам в личку</b>. Так копия есть не только на
+      сервере: если сервер сломается, из этого файла восстанавливаются все заказы, деньги и история. Фото в копию не входят.
+      Сохраняйте эти файлы и никому их не пересылайте — в них все данные.</p>
+  </div></div>
+  <div class="step"><div class="num">2</div><div>
+    <h3>Копия вручную и восстановление</h3>
+<pre>python -m crm.tools.backup                     <span class="c"># сделать копию сейчас</span>
+python -m crm.tools.backup --list              <span class="c"># список копий</span>
+python -m crm.tools.backup --restore ФАЙЛ.gz   <span class="c"># восстановить (сервер остановлен)</span></pre>
+    <p class="small muted">Перед заменой копия проверяется, прежняя база остаётся рядом. Пока сервер запущен, восстановление
+      не выполнится — сначала остановите его (Ctrl+C).</p>
+  </div></div>
+  <div class="note tip"><b>Места хватает надолго.</b> База даже на тысячи заказов — десятки мегабайт; фото — около 0,5 МБ.
+    На 30 ГБ сервера помещаются десятки тысяч фото.</div>
+
+  <h2 style="margin-top:14px">4. Ключ Gemini</h2>
+  <div class="step"><div class="num">1</div><div>
+    <p>Откройте <a href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</a> своим Google-аккаунтом →
+      <b>Create API key</b> → выберите или создайте проект (любой, например «buyer-crm») → скопируйте ключ.
+      Это <code>GEMINI_API_KEY</code>. Новые ключи начинаются с <code>AQ.</code>, старые — с <code>AIza</code>; подходят оба.</p>
+    <p class="small muted">Модель по умолчанию — <code>gemini-2.5-flash</code>: быстрая и недорогая, на бесплатном лимите
+      хватает на десятки–сотни фото в день. Другую модель можно указать в <code>GEMINI_MODEL</code>.
+      На бесплатном тарифе Google может использовать запросы для улучшения своих продуктов; на платном — нет.</p>
+  </div></div>
+  <div class="note tip"><b>Без ключа тоже работает.</b> Заказы по фото всё равно создаются: размер и ссылка берутся из подписи,
+    бренд и модель вы вписываете сами. Ключ можно добавить позже.</div>
+</div>
+
+<!-- ============================ 5 ============================ -->
+<div class="section">
+  <h2>5. Установка на компьютер</h2>
+  <div class="step"><div class="num">1</div><div>
+    <h3>Программы</h3>
+    <ul>
+      <li><b>Python 3.12</b> — <a href="https://www.python.org/downloads/">python.org/downloads</a>.
+        На Windows при установке отметьте <b>Add python.exe to PATH</b>.</li>
+      <li><b>Node.js LTS</b> — <a href="https://nodejs.org">nodejs.org</a>.</li>
+      <li><b>Git</b> — <a href="https://git-scm.com/downloads">git-scm.com/downloads</a> (на macOS можно пропустить — поставится сам).</li>
+    </ul>
+  </div></div>
+
+  <div class="step"><div class="num">2</div><div>
+    <h3>Скачайте проект</h3>
+    <p>Вся новая работа сейчас в ветке <code>claude/optimistic-wozniak-przqge</code>.</p>
+<pre>git clone https://github.com/david270799/buyer-crm.git
+cd buyer-crm
+git checkout claude/optimistic-wozniak-przqge</pre>
+    <p class="small muted">Без Git: на GitHub переключите ветку на <code>claude/optimistic-wozniak-przqge</code> → <b>Code → Download ZIP</b> и распакуйте.</p>
+  </div></div>
+
+  <div class="step"><div class="num">3</div><div>
+    <h3>Соберите Mini App и поставьте зависимости</h3>
+    <div class="two">
+      <div>
+        <div class="small"><b>Windows</b> (PowerShell или «Командная строка»)</div>
+<pre>cd web
+npm install
+npm run build
+cd ..\backend
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt</pre>
+        <div class="tiny">Если <code>python</code> не найден — пишите <code>py</code>. Если PowerShell пишет, что выполнение
+          сценариев отключено: один раз <code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code> или используйте «Командную строку».</div>
+      </div>
+      <div>
+        <div class="small"><b>macOS</b> (Терминал)</div>
+<pre>cd web
+npm install
+npm run build
+cd ../backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt</pre>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="step"><div class="num">4</div><div>
+    <h3>Файл настроек <code>.env</code></h3>
+    <p>В корне проекта (папка <code>buyer-crm</code>) скопируйте <code>.env.example</code> в <code>.env</code> и откройте в блокноте:
+      Windows — <code>copy .env.example .env</code> и <code>notepad .env</code>; macOS — <code>cp .env.example .env</code> и <code>open -e .env</code>.
+      Заполните:</p>
+<pre><span class="c"># шаг 2</span>
+BOT_TOKEN=123456789:AA...
+<span class="c"># пока пусто — узнаем на шаге 6</span>
+ADMIN_TELEGRAM_IDS=
+<span class="c"># пока пусто — шаг 7</span>
+MINI_APP_URL=
+<span class="c"># шаг 4</span>
+GEMINI_API_KEY=AQ.Ab8...
+<span class="c"># уже стоит: данные в папке data/ (шаг 3)</span>
+STORAGE=sqlite</pre>
+    <p class="small muted">Значение пишите сразу после <code>=</code>, без кавычек и без комментариев в той же строке.
+      Остальные строки можно не трогать.</p>
+  </div></div>
+
+  <div class="note tip"><b>Хотите сначала просто посмотреть интерфейс?</b> В папке <code>backend</code> (с активированным
+    <code>.venv</code>) выполните <code>python -m crm.server --demo</code> и откройте <code>http://localhost:8080</code> —
+    это демо с примерами заказов в памяти, ключи не нужны, настоящая база не затрагивается.</div>
+</div>
+
+<!-- ============================ 6-7 ============================ -->
+<div class="section">
+  <h2>6. Первый запуск и ваш Telegram ID</h2>
+  <div class="step"><div class="num">1</div><div>
+    <h3>Проверка настроек</h3>
+    <p>В папке <code>backend</code> с активированным <code>.venv</code>:</p>
+<pre>python -m crm.tools.doctor</pre>
+    <p>Она ничего не меняет, только проверяет: папку данных, свободное место, копии, ключ Gemini, данные в базе.
+      До первого запуска она напишет «базы ещё нет — создастся при первом запуске» — это нормально. Нормально и ❌ про
+      <code>ADMIN_TELEGRAM_IDS</code> и <code>client_info/main_client</code> — их настроим дальше.</p>
+  </div></div>
+  <div class="step"><div class="num">2</div><div>
+    <h3>Запуск</h3>
+<pre>python -m crm.server</pre>
+    <p>В окне появятся <code>SQLite database: …/data/crm.sqlite3</code>, <code>Bot @… started</code> и
+      <code>Uvicorn running on http://0.0.0.0:8080</code>.
+      Окно не закрывайте: пока оно открыто, бот работает. Остановка — <b>Ctrl+C</b>.</p>
+    <p class="small muted">В новом окне терминала сначала снова перейдите в <code>buyer-crm/backend</code> и активируйте
+      <code>.venv</code> (команда <code>activate</code> из шага 5) — в начале строки появится <code>(.venv)</code>.</p>
+  </div></div>
+  <div class="step"><div class="num">3</div><div>
+    <h3>Ваш ID → администратор</h3>
+    <p>Напишите своему боту <code>/start</code> — он ответит «Это закрытая CRM-система. Ваш Telegram ID: …».
+      Впишите число в <code>.env</code>: <code>ADMIN_TELEGRAM_IDS=123456789</code>, остановите сервер (Ctrl+C) и запустите снова.
+      Теперь <code>/start</code> покажет список команд администратора.</p>
+  </div></div>
+
+  <h2 style="margin-top:14px">7. Mini App на телефоне (HTTPS-туннель)</h2>
+  <p>Telegram открывает Mini App только по адресу <b>https://</b>. Для проверки дома не нужен сервер —
+    хватит бесплатного туннеля Cloudflare: он даёт временный https-адрес к вашему компьютеру.</p>
+  <div class="step"><div class="num">1</div><div>
+    <p>Установите: Windows — <code>winget install --id Cloudflare.cloudflared</code>; macOS — <code>brew install cloudflared</code>.</p>
+  </div></div>
+  <div class="step"><div class="num">2</div><div>
+    <p>В <b>отдельном</b> окне (сервер из шага 6 продолжает работать):</p>
+<pre>cloudflared tunnel --url http://localhost:8080</pre>
+    <p>Скопируйте адрес вида <code>https://calm-river-1234.trycloudflare.com</code> из вывода.</p>
+  </div></div>
+  <div class="step"><div class="num">3</div><div>
+    <p>Впишите его в <code>.env</code>: <code>MINI_APP_URL=https://calm-river-1234.trycloudflare.com/</code> и перезапустите сервер.
+      Бот сам поставит кнопку <b>«CRM»</b> рядом с полем ввода в личке. Нажмите её — откроется панель администратора.</p>
+  </div></div>
+  <div class="note warn"><b>Адрес туннеля меняется</b> при каждом запуске <code>cloudflared</code>: тогда обновите
+    <code>MINI_APP_URL</code> и перезапустите сервер. Для постоянной работы — сервер с доменом (раздел 11).</div>
+</div>
+
+<!-- ============================ 8 ============================ -->
+<div class="section">
+  <h2>8. Группа и клиент</h2>
+  <p>В группе бот <b>ничего не пишет</b>: заказы принимает молча — от клиента и от его помощников.
+    Всё, что требует вашего внимания, приходит вам в личку.</p>
+  <div class="step"><div class="num">1</div><div>
+    <h3>Добавьте бота в группу — сами</h3>
+    <p>Для проверки создайте тестовую группу: вы + второй аккаунт («клиент»), при желании третий («помощник»).
+      Если вы админ группы, сначала выключите у себя <b>«Анонимность» (Remain anonymous)</b>: иначе Telegram не показывает,
+      что бота добавили вы, и бот выйдет (и напишет вам почему). Добавьте бота — в личку придёт <b>ID группы</b>
+      и предупреждение, если Privacy Mode ещё включён. Если бота добавит кто-то другой, он сразу выйдет из группы.</p>
+    <p class="small muted">Чтобы бот мог удалять из группы ваши служебные команды (<code>/setclient</code>, <code>/add</code>),
+      сделайте его администратором группы с правом «Удаление сообщений». Не обязательно.</p>
+  </div></div>
+  <div class="step"><div class="num">2</div><div>
+    <h3>Укажите клиента: <code>/setclient</code></h3>
+    <p>В группе <b>ответьте</b> (Reply) командой <code>/setclient</code> на любое сообщение <b>самого клиента</b> (не помощника).
+      Ответ придёт вам в личку. Только этот аккаунт сможет открывать CRM и видеть баланс; помощники могут
+      присылать заказы, но доступа к CRM не получат. Баланс существующего клиента команда не меняет.</p>
+  </div></div>
+  <div class="step"><div class="num">3</div><div>
+    <h3>Необязательно</h3>
+    <p>Чтобы бот работал только в этой группе, впишите присланный ID (число с минусом) в <code>.env</code>:
+      <code>ALLOWED_CHAT_IDS=-1001234567890</code> и перезапустите сервер.</p>
+  </div></div>
+
+  <div class="tg-row" style="margin-top:8px">
+    <div class="tg">
+      <div class="title">пример · группа (бот молчит)</div>
+      <div class="bubble"><div class="who">Клиент</div><img class="photo sm" src="img/n126-photo.jpg" alt="">270 https://store.example.kr/nb-2002r</div>
+      <div class="bubble"><div class="who" style="color:#2e8b57">Помощник клиента</div>вот ещё, размер пока уточняем</div>
+      <div class="bubble"><div class="who" style="color:#2e8b57">Помощник клиента</div><img class="photo sm" src="img/n126-photo.jpg" alt="" style="filter:hue-rotate(160deg) saturate(1.4)"><span class="tiny">(фото без подписи)</span></div>
+    </div>
+    <div class="tg">
+      <div class="title">пример · ваша личка с ботом</div>
+      <div class="bubble"><div class="who bot">CRM bot</div>✅ Бот добавлен в группу «Заказы».<br>В группу я ничего не пишу: заказы по фото принимаю молча, вопросы присылаю вам сюда.<br>ID группы: <span class="mono">-1001234567890</span></div>
+      <div class="bubble"><div class="who bot">CRM bot</div><img class="photo sm" src="img/n126-photo.jpg" alt="" style="filter:hue-rotate(160deg) saturate(1.4)">❓ <b>Заказ N2</b> — нужно проверить<br>• размер не указан<br>New Balance 2002R<br>Отправил: Помощник клиента<br>Сообщение: t.me/c/…</div>
+    </div>
+  </div>
+  <p class="tiny" style="margin-top:6px">Заказ N1 (клиент, размер и ссылка есть) принят молча — вопросов нет. Заказ N2 принят тоже,
+    но без размера — бот спросил вас. Широкий скриншот стал квадратом с белыми полями; ссылку из подписи видите только вы.</p>
+</div>
+
+<!-- ============================ 9 ============================ -->
+<div class="section">
+  <h2>9. Проверка по шагам</h2>
+  <p>Отмечайте по порядку. Всё, что делает «клиент», — со второго аккаунта.</p>
+  <table>
+    <tr><th style="width:32%">Действие</th><th>Что должно произойти</th></tr>
+    <tr><td class="k">Клиент: фото + «42»</td><td>В группе тишина, заказ появился в CRM с моделью и размером. Номера: <b>N1</b>, N2, …</td></tr>
+    <tr><td class="k">Клиент: фото без подписи</td><td>Заказ создан; вам в личку фото и вопрос «размер не указан».</td></tr>
+    <tr><td class="k">Помощник (третий аккаунт): фото</td><td>Заказ создан. Если помощник нажмёт у бота «CRM» или напишет <code>/balance</code> — доступа нет.</td></tr>
+    <tr><td class="k">Клиент: фото чека или коробки</td><td>Заказа нет, вам в личку: «не похоже на заказ». Ответ <code>/add</code> на это фото в группе — заказ создаётся.</td></tr>
+    <tr><td class="k">Вы: кнопка «CRM»</td><td>Заказ с квадратным фото; в блоке «Для администратора» — «Распознано Gemini · уверенность …%».</td></tr>
+    <tr><td class="k">Вы в личке: <code>/deposit 1000000 тест</code></td><td>Баланс клиента ₩1,000,000 (у клиента в CRM тоже).</td></tr>
+    <tr><td class="k"><code>/buy 1 100000 120000</code></td><td>Заказ N1 «Выкуплен», баланс −120 000. Повтор той же команды не списывает второй раз.</td></tr>
+    <tr><td class="k"><code>/notify me all</code></td><td>Дальше каждое событие приходит вам в личку с кнопкой «Открыть в CRM».</td></tr>
+    <tr><td class="k"><code>/status warehouse 1</code>, <code>/cargo TRACK1 1</code></td><td>Статусы меняются, клиент видит их в CRM и в колокольчике.</td></tr>
+    <tr><td class="k">Клиент: кнопка «CRM»</td><td>Только его режим: заказы, фото, статусы, баланс. Нет закупок, прибыли, ссылок, внутренних комментариев.</td></tr>
+    <tr><td class="k"><code>/notify client</code></td><td>Уведомления уходят клиенту. Он должен один раз открыть бота в личке и нажать <b>Start</b>.</td></tr>
+  </table>
+  <div class="note bad"><b>Перед работой с настоящим клиентом уберите тестовые данные.</b>
+    Остановите сервер (Ctrl+C) и переименуйте папку <code>data</code>, например в <code>data-test</code>. При следующем
+    запуске CRM начнёт с чистой базы: номера снова с N1, баланс ₩0. Затем заново <code>/setclient</code> на сообщение
+    настоящего клиента.</div>
+</div>
+
+<!-- ============================ 10 ============================ -->
+<div class="section">
+  <h2>10. Как выглядит CRM</h2>
+  <p class="small muted">Экраны из демо-режима (<code>python -m crm.server --demo</code>) — у вас будет то же самое с вашими данными.</p>
+  <h3>Ваш режим (администратор)</h3>
+  <div class="figs">
+    <figure class="phone-sm"><img src="img/admin-home.jpg" alt=""><figcaption>Сводка: баланс клиента в ₩ и $, прибыль, заказы по статусам</figcaption></figure>
+    <figure class="phone-sm"><img src="img/admin-orders.jpg" alt=""><figcaption>Заказы: поиск, фильтры, выбор нескольких для массовых действий</figcaption></figure>
+    <figure class="phone-sm"><img src="img/admin-n10-top.jpg" alt=""><figcaption>Заказ из фото: квадратное фото, модель от Gemini, размер из подписи</figcaption></figure>
+  </div>
+  <div class="figs" style="margin-top:10px; align-items:flex-start">
+    <figure><div class="crop"><img src="img/admin-n10-panel.jpg" alt="" style="width:82mm"></div>
+      <figcaption style="max-width:82mm">Блок «Для администратора»: закупка, прибыль, ссылка на магазин, что распознал Gemini, кнопки «Выкупить» и «Отменить»</figcaption></figure>
+    <figure class="phone-sm"><img src="img/admin-settings.jpg" alt=""><figcaption>Настройки: курс и уведомления в Telegram (кому / что)</figcaption></figure>
+  </div>
+</div>
+
+<div class="section">
+  <h3 style="margin-top:0">Режим клиента</h3>
+  <div class="figs">
+    <figure class="phone-sm"><img src="img/client-home.jpg" alt=""><figcaption>Главная клиента: баланс, заказы, отправки</figcaption></figure>
+    <figure class="phone-sm"><img src="img/client-n10.jpg" alt=""><figcaption>Тот же заказ глазами клиента — без ссылки и служебных данных</figcaption></figure>
+    <figure class="phone-sm"><img src="img/client-notifications.jpg" alt=""><figcaption>Колокольчик: «Важные» и «Все»</figcaption></figure>
+  </div>
+  <h3>На компьютере</h3>
+  <figure class="wide"><img src="img/desktop-orders.jpg" alt="">
+    <figcaption>Telegram Desktop, широкое окно: боковое меню и таблица заказов с поиском, фильтрами и массовыми действиями</figcaption></figure>
+</div>
+
+<!-- ============================ 11 ============================ -->
+<div class="section">
+  <h2>11. Постоянная работа на сервере</h2>
+  <p>Когда всё проверено, CRM переносится на сервер, чтобы работать круглосуточно без вашего компьютера.
+    Подробно — в <code>docs/deploy.md</code> в проекте; коротко:</p>
+  <div class="step"><div class="num">1</div><div>
+    <p><b>VPS</b> (1 vCPU, 1–2 ГБ RAM, Ubuntu, ваши 30 ГБ диска) и домен или поддомен, например <code>crm.вашдомен.com</code>.
+      В DNS домена — A-запись на IP сервера.</p>
+  </div></div>
+  <div class="step"><div class="num">2</div><div>
+    <p>На сервере установите Docker: <code>curl -fsSL https://get.docker.com | sh</code>, скачайте проект (как в шаге 5).</p>
+  </div></div>
+  <div class="step"><div class="num">3</div><div>
+    <p>Скопируйте свой <code>.env</code> и поправьте две строки: <code>DOMAIN=crm.вашдомен.com</code>,
+      <code>MINI_APP_URL=https://crm.вашдомен.com/</code>.</p>
+<pre>chmod 600 .env
+docker compose up -d --build
+docker compose logs -f crm
+docker compose exec crm python -m crm.tools.doctor</pre>
+    <p>HTTPS-сертификат для домена получится автоматически (Caddy). База, фото и копии хранятся в томе Docker
+      <code>crm_data</code> и не пропадают при обновлениях. Скачать копии с сервера:
+      <code>docker compose cp crm:/data/backups ./backups</code>. Тестовую базу с компьютера переносить не нужно —
+      на сервере начните с чистой.</p>
+  </div></div>
+  <div class="note warn"><b>Один токен — один запущенный бот.</b> Перед запуском на сервере остановите бота на компьютере
+    (Ctrl+C), иначе Telegram выдаст ошибку «Conflict». Для экспериментов потом заведите отдельного тестового бота.</div>
+  <p>Обновление после изменений в проекте: <code>git pull && docker compose up -d --build</code>.</p>
+</div>
+
+<!-- ============================ 12 ============================ -->
+<div class="section">
+  <h2>12. Команды бота</h2>
+  <table>
+    <tr><th style="width:36%">Команда</th><th>Что делает</th></tr>
+    <tr><td class="k">фото + подпись</td><td>Новый заказ: от клиента или помощников в группе — молча; от вас в личке с ботом (можно пересылать) — с ответом.</td></tr>
+    <tr><td class="k">/add (ответом на фото)</td><td>Принять фото как заказ, если бот решил, что это не заказ.</td></tr>
+    <tr><td class="k">/setclient (ответом)</td><td>Указать, кто клиент (сам клиент, не помощник). Или <code>/setclient 123456789 Имя</code>. Ответ — в личку.</td></tr>
+    <tr><td class="k">/buy 5 140000 170000</td><td>Выкуп: закупка, цена клиенту; списывает цену <b>один раз</b>.</td></tr>
+    <tr><td class="k">/rebuy 5 150000 185000 [ссылка] [причина]</td><td>Перезаказ: с баланса только разница; причину увидит клиент, ссылку — только вы.</td></tr>
+    <tr><td class="k">/cancel 5</td><td>Отмена с возвратом (до отправки).</td></tr>
+    <tr><td class="k">/status warehouse 5 7</td><td>Статус нескольких заказов (warehouse, cargo, delivered).</td></tr>
+    <tr><td class="k">/cargo TRACK123 5 7</td><td>Отправка с трек-номером; <code>/shipcost 1 95000</code> — стоимость доставки (списывается).</td></tr>
+    <tr><td class="k">python -m crm.tools.backup</td><td>Копия базы сейчас; <code>--list</code> — список; <code>--restore ФАЙЛ</code> — восстановление.</td></tr>
+    <tr><td class="k">/deposit, /adjust, /rate</td><td>Пополнение, корректировка с причиной, курс KRW за 1 USD.</td></tr>
+    <tr><td class="k">/notify me all · /notify client</td><td>Уведомления в личку: вам для проверки или клиенту; важные или все.</td></tr>
+    <tr><td class="k">/order 5, /balance, /history</td><td>Карточка заказа, баланс, история.</td></tr>
+    <tr><td class="k">/whoami, /help</td><td>Ваш ID и список команд.</td></tr>
+  </table>
+
+</div>
+
+<!-- ============================ 13 ============================ -->
+<div class="section">
+  <h2>13. Если что-то не так</h2>
+  <table>
+    <tr><th style="width:36%">Признак</th><th>Что сделать</th></tr>
+    <tr><td class="k">Фото из группы не стало заказом</td><td>В группу бот не пишет — смотрите заказ в CRM. Если его нет: Privacy Mode
+      (<code>/setprivacy</code> → Disable, затем удалить и снова добавить бота); ваши собственные фото в группе заказами не считаются;
+      фото, отправленное ответом на другое сообщение, — тоже. Ошибки и «не похоже на заказ» приходят вам в личку.</td></tr>
+    <tr><td class="k">Модель не распознаётся</td><td><code>python -m crm.tools.doctor</code> — строка «Gemini». В заказе в CRM написана причина («ключ не подходит», «лимит»).</td></tr>
+    <tr><td class="k">Нет кнопки «CRM»</td><td><code>MINI_APP_URL</code> должен начинаться с https://; после изменения — перезапуск. Обновите чат с ботом.</td></tr>
+    <tr><td class="k">«Откройте CRM из Telegram»</td><td>Адрес открыт в браузере — CRM входит только через кнопку в Telegram (или демо-режим).</td></tr>
+    <tr><td class="k">«Нет доступа»</td><td>Ваш ID не в <code>ADMIN_TELEGRAM_IDS</code> или клиент не указан — <code>/setclient</code>.</td></tr>
+    <tr><td class="k">Уведомления не приходят</td><td>Получатель должен нажать Start в личке с ботом. Причина ошибки видна в CRM → Настройки.</td></tr>
+    <tr><td class="k">«База уже открыта другим процессом»</td><td>CRM уже запущена в другом окне или на сервере — остановите лишнюю.</td></tr>
+    <tr><td class="k">Не пришла ночная копия</td><td>Бот должен работать в 4:00 (Сеул), а вы — один раз нажать Start в личке с ботом. Копии также лежат в <code>data/backups</code>.</td></tr>
+    <tr><td class="k">No module named …</td><td>Не активирован <code>.venv</code> или команда запущена не из папки <code>backend</code>.</td></tr>
+    <tr><td class="k">Conflict: terminated by other getUpdates</td><td>Бот запущен в двух местах одновременно — остановите лишний.</td></tr>
+  </table>
+
+  <h3>Безопасность</h3>
+  <ul class="small">
+    <li>Ключи — только в <code>.env</code>; в Git он не попадает, как и папка <code>data/</code>. Никому не отправляйте.</li>
+    <li>Файлы копий базы содержат все заказы и деньги — храните их у себя и не пересылайте.</li>
+    <li>Перевыпуск: токен бота — @BotFather → Revoke; ключ Gemini — AI Studio. После замены — перезапуск.</li>
+    <li>Gemini только читает фото и подпись. К базе, деньгам и настройкам доступа у него нет.</li>
+  </ul>
+</div>
+
+</body>
+</html>
