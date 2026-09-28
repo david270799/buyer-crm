@@ -58,8 +58,7 @@ python -m crm.server --demo
 
 Коротко (подробно — [docs/deploy.md](docs/deploy.md)):
 
-Пошаговая инструкция со скриншотами — [docs/guide.pdf](docs/guide.pdf) (описывает вариант с Firebase;
-обновится под SQLite).
+Пошаговая инструкция со скриншотами — [docs/guide.pdf](docs/guide.pdf).
 
 1. Сервер с доменом и HTTPS (VPS + `docker compose`).
 2. `.env` из `.env.example`: `BOT_TOKEN`, `ADMIN_TELEGRAM_IDS`, `MINI_APP_URL`, `DOMAIN`, `GEMINI_API_KEY`.
