@@ -223,5 +223,25 @@ def test_gemini_3_runs_on_its_defaults_without_temperature():
     new = GeminiRecognizer("key", "gemini-3.5-flash-lite").request_body(b"x", None)
     old = GeminiRecognizer("key", "gemini-2.5-flash").request_body(b"x", None)
     assert "temperature" not in new["generationConfig"]
+    assert new["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "MINIMAL"}
+    assert "thinkingConfig" not in old["generationConfig"]
     assert new["generationConfig"]["responseMimeType"] == "application/json"
     assert old["generationConfig"]["temperature"] == 0.1
+
+
+def test_thinking_level_is_dropped_if_the_model_refuses_it():
+    sent: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        sent.append(body["generationConfig"])
+        if "thinkingConfig" in body["generationConfig"]:
+            return httpx.Response(400, json={"error": {"message": "thinking level not supported"}})
+        return httpx.Response(200, json=gemini_reply(answer()))
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    g = GeminiRecognizer("k", "gemini-3.5-flash-lite", client=client, backoff_seconds=0)
+    assert g.recognize(b"img", CAPTION).brand == "Nike"
+    assert g.recognize(b"img", CAPTION).brand == "Nike"
+    # One refused request, then never sent again.
+    assert ["thinkingConfig" in c for c in sent] == [True, False, False]
