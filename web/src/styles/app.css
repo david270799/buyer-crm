@@ -1071,6 +1071,22 @@ table.orders .r {
   font-weight: 500;
 }
 
+.field > .field-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Negative margins: the button must not make this label taller than its neighbours. */
+.btn.ai-fill {
+  width: 28px;
+  min-height: 24px;
+  height: 24px;
+  margin: -5px 0;
+  padding: 0;
+  border-radius: 8px;
+}
+
 .field .hint {
   color: var(--text-3);
   font-size: 12px;

@@ -38,7 +38,7 @@ B2B-клиента**. Участников только два:
 | HTTP API | `backend/crm/api/app.py` (FastAPI) | для Mini App: проверка Telegram `initData`, роли, JSON только через `domain/views.py` |
 | Mini App клиента | `web/` (React + TS + Vite), `ClientApp.tsx` | только чтение: главная, заказы, отправки, баланс и история, уведомления |
 | Mini App админа + веб-панель | `web/`, `AdminApp.tsx` | та же сборка; на широком экране — боковое меню и таблица заказов |
-| Распознавание фото | `backend/crm/services/recognition.py`, `photo_recognition.py` | Gemini (REST `generateContent`) читает фото и подпись → бренд, модель, размер, ссылка; кнопка «Распознать (Gemini)» в форме заказа Mini App (`POST /api/recognize`, только заполняет форму) |
+| Распознавание фото | `backend/crm/services/recognition.py`, `photo_recognition.py` | Gemini (REST `generateContent`) читает фото и подпись → бренд, модель, размер, ссылка; значок ✨ у поля «Бренд» в форме заказа Mini App (`POST /api/recognize`, только заполняет форму) |
 | AI-ассистент админа | — | **ещё не сделан** (фаза 9 ТЗ: intent → validator → whitelist → service) |
 
 Всё работает **одним процессом** `python -m crm.server`: API + статика Mini App (`web/dist`) + бот.

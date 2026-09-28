@@ -80,27 +80,27 @@ function recognitionToast(r: PhotoRecognition): string {
   return `Gemini: ${name}${r.size ? ` · размер ${r.size}` : ""}`;
 }
 
-export function PhotoInput({
-  value,
-  onChange,
+/** Small AI button next to the order name: Gemini reads the uploaded photo and
+ * fills brand, model and size in the form (nothing is saved by itself). */
+export function AiFillButton({
+  photoUrl,
   onRecognized,
 }: {
-  value: PhotoValue;
-  onChange: (v: PhotoValue) => void;
-  /** Shows the "Распознать" button: Gemini reads the photo and fills the form. */
-  onRecognized?: (r: PhotoRecognition) => void;
+  photoUrl: string | null;
+  onRecognized: (r: PhotoRecognition) => void;
 }) {
   const settings = useSettings();
   const toast = useToast();
-  const [busy, setBusy] = useState(false);
   const [reading, setReading] = useState(false);
-  const enabled = settings.data?.uploads_enabled ?? true;
-  const canRecognize = Boolean(onRecognized && settings.data?.recognition_enabled && value.photo_url);
-  const recognize = async () => {
-    if (!value.photo_url || !onRecognized) return;
+  if (!settings.data?.recognition_enabled) return null;
+  const run = async () => {
+    if (!photoUrl) {
+      toast("Сначала добавьте фото", "error");
+      return;
+    }
     setReading(true);
     try {
-      const result = await recognizePhoto(value.photo_url);
+      const result = await recognizePhoto(photoUrl);
       onRecognized(result);
       toast(recognitionToast(result), result.recognized ? undefined : "error");
     } catch (error) {
@@ -109,6 +109,25 @@ export function PhotoInput({
       setReading(false);
     }
   };
+  return (
+    <button
+      type="button"
+      className="btn ai-fill"
+      onClick={run}
+      disabled={reading}
+      title="Заполнить по фото (Gemini)"
+      aria-label="Заполнить по фото (Gemini)"
+    >
+      {reading ? <Loader2 className="spin" size={14} /> : <Sparkles size={14} />}
+    </button>
+  );
+}
+
+export function PhotoInput({ value, onChange }: { value: PhotoValue; onChange: (v: PhotoValue) => void }) {
+  const settings = useSettings();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const enabled = settings.data?.uploads_enabled ?? true;
   return (
     <div className="upload">
       <div className="preview">
@@ -143,18 +162,8 @@ export function PhotoInput({
             }}
           />
         </label>
-        {canRecognize && (
-          <button type="button" className="btn small" onClick={recognize} disabled={reading || busy}>
-            {reading ? <Loader2 className="spin" size={14} /> : <Sparkles size={14} />}
-            {reading ? "Распознаём…" : "Распознать (Gemini)"}
-          </button>
-        )}
         <div className="tiny faint">
-          {!enabled
-            ? "Хранилище фото не настроено"
-            : canRecognize
-              ? "Gemini впишет бренд, модель и размер — проверьте перед сохранением"
-              : "Сожмём до WebP, пропорции сохранятся"}
+          {enabled ? "Сожмём до WebP, пропорции сохранятся" : "Хранилище фото не настроено"}
         </div>
       </div>
     </div>
@@ -813,15 +822,18 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
       <div className="form-grid two">
         <div className="full field">
           <span>Фото</span>
-          <PhotoInput
-            value={form.photo}
-            onChange={(photo) => set("photo", photo)}
-            onRecognized={(r) => setForm((f) => ({ ...f, ...recognizedFields(r) }))}
-          />
+          <PhotoInput value={form.photo} onChange={(photo) => set("photo", photo)} />
         </div>
-        <Field label="Бренд">
-          <input className="input" value={form.brand} onChange={(e) => set("brand", e.target.value)} />
-        </Field>
+        <div className="field">
+          <span className="field-head">
+            Бренд
+            <AiFillButton
+              photoUrl={form.photo.photo_url}
+              onRecognized={(r) => setForm((f) => ({ ...f, ...recognizedFields(r) }))}
+            />
+          </span>
+          <input className="input" aria-label="Бренд" value={form.brand} onChange={(e) => set("brand", e.target.value)} />
+        </div>
         <Field label="Модель">
           <input className="input" value={form.model} onChange={(e) => set("model", e.target.value)} />
         </Field>

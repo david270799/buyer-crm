@@ -16,7 +16,7 @@ import { OrderDetailsPage } from "../shared/OrderDetailsPage";
 import { EditButton, ShipmentDetailsPage, ShipmentsPage } from "../shared/ShipmentsPages";
 import { OrderAdminPanel } from "./OrderAdminPanel";
 import { AdminOrdersPage } from "./OrdersPage";
-import { MoneySheet, PhotoInput, type PhotoValue, recognizedFields, ShipmentEditSheet, useBalance } from "./sheets";
+import { AiFillButton, MoneySheet, PhotoInput, type PhotoValue, recognizedFields, ShipmentEditSheet, useBalance } from "./sheets";
 
 const NAV: NavItem[] = [
   { to: "/", label: "Сводка", icon: LayoutGrid },
@@ -132,15 +132,24 @@ function NewOrderPage() {
         <div className="form-grid two">
           <div className="full field">
             <span>Фото</span>
-            <PhotoInput
-              value={photo}
-              onChange={setPhoto}
-              onRecognized={(r) => setForm((f) => ({ ...f, ...recognizedFields(r) }))}
+            <PhotoInput value={photo} onChange={setPhoto} />
+          </div>
+          <div className="field">
+            <span className="field-head">
+              Бренд
+              <AiFillButton
+                photoUrl={photo.photo_url}
+                onRecognized={(r) => setForm((f) => ({ ...f, ...recognizedFields(r) }))}
+              />
+            </span>
+            <input
+              className="input"
+              aria-label="Бренд"
+              value={form.brand}
+              onChange={(e) => set("brand", e.target.value)}
+              placeholder="Nike"
             />
           </div>
-          <Field label="Бренд">
-            <input className="input" value={form.brand} onChange={(e) => set("brand", e.target.value)} placeholder="Nike" />
-          </Field>
           <Field label="Модель">
             <input className="input" value={form.model} onChange={(e) => set("model", e.target.value)} placeholder="Air Max 95" />
           </Field>
