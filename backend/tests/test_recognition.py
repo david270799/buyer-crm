@@ -215,3 +215,13 @@ def test_key_check_uses_the_model_endpoint():
     )
     with pytest.raises(RecognitionError):
         bad.check()
+
+
+def test_gemini_3_runs_on_its_defaults_without_temperature():
+    from crm.services.recognition import GeminiRecognizer
+
+    new = GeminiRecognizer("key", "gemini-3.5-flash-lite").request_body(b"x", None)
+    old = GeminiRecognizer("key", "gemini-2.5-flash").request_body(b"x", None)
+    assert "temperature" not in new["generationConfig"]
+    assert new["generationConfig"]["responseMimeType"] == "application/json"
+    assert old["generationConfig"]["temperature"] == 0.1

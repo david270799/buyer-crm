@@ -258,12 +258,20 @@ class GeminiRecognizer:
                     ],
                 }
             ],
-            "generationConfig": {
-                "temperature": 0.1,
-                "responseMimeType": "application/json",
-                "responseSchema": RESPONSE_SCHEMA,
-            },
+            "generationConfig": self._generation_config(),
         }
+
+    def _generation_config(self) -> dict[str, Any]:
+        config: dict[str, Any] = {
+            "responseMimeType": "application/json",
+            "responseSchema": RESPONSE_SCHEMA,
+        }
+        # Gemini 3.x runs on its own defaults (3.5 Flash-Lite: minimal thinking,
+        # the fastest mode); a custom temperature is not supported there and
+        # makes answers slow or broken. Older models keep a low temperature.
+        if not _is_gemini_3(self._model):
+            config["temperature"] = 0.1
+        return config
 
     def _call(self, body: dict[str, Any]) -> dict[str, Any]:
         url = API_URL.format(model=self._model)
@@ -299,6 +307,11 @@ class GeminiRecognizer:
             time.monotonic() - started,
         )
         return result
+
+
+def _is_gemini_3(model: str) -> bool:
+    match = re.match(r"(?:models/)?gemini-(\d+)", model)
+    return bool(match) and int(match.group(1)) >= 3
 
 
 def _http_error(response: httpx.Response) -> str:

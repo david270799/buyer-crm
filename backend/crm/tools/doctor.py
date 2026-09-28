@@ -8,10 +8,13 @@ Gemini key, and documents the CRM cannot interpret (unknown status, charges
 that were never recorded).
 """
 
+import io
 import sys
+import time
 from collections import Counter
 
 from dotenv import find_dotenv, load_dotenv
+from PIL import Image, ImageDraw
 
 from crm.config import Settings, load_settings
 from crm.domain.enums import CHARGED_STATUSES
@@ -206,8 +209,32 @@ def check_gemini(settings: Settings, report: Report) -> None:
         recognizer.check()
     except RecognitionError as exc:
         report.fail(f"{recognizer.engine}: {exc}")
+        return
+    report.ok(f"ключ подходит, модель {recognizer.engine} доступна")
+    # A real (tiny, nearly free) request: shows that answers parse and how fast they come.
+    started = time.monotonic()
+    try:
+        recognizer.recognize(_sample_photo(), "Nike Air Max 95, размер 270")
+    except RecognitionError as exc:
+        report.fail(f"пробное распознавание не удалось: {exc}")
+        return
+    seconds = time.monotonic() - started
+    line = f"пробное распознавание: ответ за {seconds:.1f} с"
+    if seconds > 15:
+        report.warn(line + " — медленно")
     else:
-        report.ok(f"ключ подходит, модель {recognizer.engine} доступна")
+        report.ok(line)
+
+
+def _sample_photo() -> bytes:
+    from crm.services.image_service import process_image
+
+    image = Image.new("RGB", (320, 320), "white")
+    ImageDraw.Draw(image).rectangle((60, 140, 260, 200), fill=(30, 30, 30))
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    main, _, _ = process_image(buffer.getvalue())
+    return main
 
 
 def run(db: Database | None, settings: Settings, *, live: bool = False) -> Report:
