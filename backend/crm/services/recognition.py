@@ -28,7 +28,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.5-flash-lite"
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 MIN_CONFIDENCE = 0.6
 # A photo is treated as "not an order" only when Gemini is this sure.

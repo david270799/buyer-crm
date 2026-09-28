@@ -215,7 +215,7 @@ def create_demo_database(
                 size="270",
                 link="https://store.example.kr/nb-2002r-rain-cloud",
                 confidence=0.91,
-                engine="gemini-2.5-flash (демо)",
+                engine="gemini-3.5-flash-lite (демо)",
             ),
         ),
     )

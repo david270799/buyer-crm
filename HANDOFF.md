@@ -139,7 +139,7 @@
 | `BOT_TOKEN` | **да** | токен Telegram-бота | @BotFather → `/mybots` → бот → API Token (перевыпуск: `/revoke`) |
 | `ADMIN_TELEGRAM_IDS` | **да** (можно пусто при первом запуске) | числовые Telegram ID админов через запятую | написать боту `/start` или `/whoami` — он покажет ID |
 | `GEMINI_API_KEY` | желательно | ключ распознавания фото (начинается с `AQ.` или `AIza`) | https://aistudio.google.com/apikey → Create API key |
-| `GEMINI_MODEL` | нет | модель Gemini (по умолчанию `gemini-2.5-flash`) | — |
+| `GEMINI_MODEL` | нет | модель Gemini (по умолчанию `gemini-3.5-flash-lite`) | — |
 | `DOMAIN` | для Mini App (compose/Caddy) | домен или поддомен с A-записью на IP сервера | регистратор домена |
 | `MINI_APP_URL` | для Mini App | `https://<домен>/`; бот ставит кнопку «CRM» | setup.sh выводит из `DOMAIN` |
 | `ALLOWED_CHAT_IDS` | нет | ID групп (−100…), где бот работает | бот присылает ID группы админу при добавлении |
