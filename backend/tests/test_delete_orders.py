@@ -170,3 +170,17 @@ def test_several_charged_orders_are_refunded_in_one_go(db, services, admin):
     assert result.change.balance_after == START_BALANCE
     assert balance(db) == START_BALANCE
     assert result.next_order_id == "N3"
+
+
+def test_client_history_hides_a_deleted_orders_charge_and_refund(db, services, admin, client_actor):
+    services.finance.deposit(admin, 500_000, "перевод", "dep1")
+    [order_id] = _create(services, admin, 1)
+    services.orders.buy(admin, order_id, 100_000, 167_640)
+    services.orders.delete_orders(admin, [order_id])
+
+    client_view = services.finance.history(client_actor)
+    admin_view = services.finance.history(admin)
+
+    assert [e.type.value for e in client_view] == ["deposit"]
+    assert {e.type.value for e in admin_view} == {"deposit", "order_charge", "order_refund"}
+    assert client_view[0].balance_after == balance(db)  # the line still adds up
