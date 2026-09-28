@@ -568,6 +568,18 @@ h3 {
   }
 }
 
+/* Press-and-hold selects: no text selection or image menu under the finger. */
+.no-callout {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.no-callout img {
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
 .order-card {
   position: relative;
   display: flex;

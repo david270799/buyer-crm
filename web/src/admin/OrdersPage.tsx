@@ -7,7 +7,7 @@ import type { Order, OrderFilters } from "../api/types";
 import { PageHead } from "../components/Layout";
 import { OrderCard, Thumb } from "../components/orders";
 import { StatusBadge } from "../components/status";
-import { Checkbox, Empty, ErrorState, Loading, useDebounced, useSelection } from "../components/ui";
+import { Checkbox, Empty, ErrorState, Loading, useDebounced, useLongPress, useSelection } from "../components/ui";
 import { krw, plural, shortDate } from "../lib/format";
 import { StatusChips, useOrderFilters } from "../shared/filters";
 import { AttentionSheet, BulkStatusSheet, CommentSheet, DeleteConfirm, ShipmentSheet } from "./sheets";
@@ -15,8 +15,45 @@ import { AttentionSheet, BulkStatusSheet, CommentSheet, DeleteConfirm, ShipmentS
 type Bulk = "status" | "ship" | "comment" | "attention" | "delete" | null;
 const PAGE = 50;
 
-function OrdersTable({ orders, selection }: { orders: Order[]; selection: ReturnType<typeof useSelection> }) {
+function OrderRow({ order, selection }: { order: Order; selection: ReturnType<typeof useSelection> }) {
   const navigate = useNavigate();
+  const selected = selection.has(order.id);
+  const press = useLongPress(
+    () => {
+      if (!selected) selection.toggle(order.id);
+    },
+    () => (selection.selected.length ? selection.toggle(order.id) : navigate(`/orders/${order.id}`)),
+  );
+  return (
+    <tr className={`${selected ? "selected" : ""} no-callout`} {...press}>
+      <td onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+        <Checkbox checked={selected} label={`Выбрать ${order.id}`} onChange={() => selection.toggle(order.id)} />
+      </td>
+      <td>
+        <Thumb src={order.thumbnail_url ?? order.photo_url} alt={order.id} />
+      </td>
+      <td className="num" style={{ fontWeight: 600 }}>
+        {order.id}
+        {order.attention_required && <AlertTriangle size={13} style={{ marginLeft: 6, verticalAlign: -1, color: "var(--warning)" }} />}
+      </td>
+      <td>
+        <div style={{ fontWeight: 500 }}>{order.brand ?? "—"}</div>
+        <div className="small muted">{order.model ?? ""}</div>
+      </td>
+      <td>{order.size ?? "—"}</td>
+      <td>
+        <StatusBadge status={order.status} />
+      </td>
+      <td className="r">{krw(order.purchase_price)}</td>
+      <td className="r">{krw(order.client_price)}</td>
+      <td className={`r ${order.profit != null && order.profit < 0 ? "negative" : ""}`}>{krw(order.profit)}</td>
+      <td className="small">{order.shipment_id ?? <span className="faint">—</span>}</td>
+      <td className="small muted">{shortDate(order.timestamps.created_at ?? order.timestamps.bought_at)}</td>
+    </tr>
+  );
+}
+
+function OrdersTable({ orders, selection }: { orders: Order[]; selection: ReturnType<typeof useSelection> }) {
   const allSelected = orders.length > 0 && orders.every((o) => selection.has(o.id));
   return (
     <div className="card table-wrap">
@@ -44,35 +81,7 @@ function OrdersTable({ orders, selection }: { orders: Order[]; selection: Return
         </thead>
         <tbody>
           {orders.map((order) => (
-            <tr
-              key={order.id}
-              className={selection.has(order.id) ? "selected" : ""}
-              onClick={() => navigate(`/orders/${order.id}`)}
-            >
-              <td onClick={(e) => e.stopPropagation()}>
-                <Checkbox checked={selection.has(order.id)} label={`Выбрать ${order.id}`} onChange={() => selection.toggle(order.id)} />
-              </td>
-              <td>
-                <Thumb src={order.thumbnail_url ?? order.photo_url} alt={order.id} />
-              </td>
-              <td className="num" style={{ fontWeight: 600 }}>
-                {order.id}
-                {order.attention_required && <AlertTriangle size={13} style={{ marginLeft: 6, verticalAlign: -1, color: "var(--warning)" }} />}
-              </td>
-              <td>
-                <div style={{ fontWeight: 500 }}>{order.brand ?? "—"}</div>
-                <div className="small muted">{order.model ?? ""}</div>
-              </td>
-              <td>{order.size ?? "—"}</td>
-              <td>
-                <StatusBadge status={order.status} />
-              </td>
-              <td className="r">{krw(order.purchase_price)}</td>
-              <td className="r">{krw(order.client_price)}</td>
-              <td className={`r ${order.profit != null && order.profit < 0 ? "negative" : ""}`}>{krw(order.profit)}</td>
-              <td className="small">{order.shipment_id ?? <span className="faint">—</span>}</td>
-              <td className="small muted">{shortDate(order.timestamps.created_at ?? order.timestamps.bought_at)}</td>
-            </tr>
+            <OrderRow key={order.id} order={order} selection={selection} />
           ))}
         </tbody>
       </table>
@@ -163,6 +172,7 @@ export function AdminOrdersPage() {
                   selectable
                   showCost
                   selected={selection.has(order.id)}
+                  selecting={ids.length > 0}
                   onToggle={() => selection.toggle(order.id)}
                 />
               ))}
