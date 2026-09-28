@@ -9,6 +9,7 @@ from crm.repositories import (
     IntakeRepository,
     LedgerRepository,
     OrderRepository,
+    ProfitRepository,
     SettingsRepository,
     ShipmentRepository,
 )
@@ -23,6 +24,7 @@ from crm.services.ledger import BalanceLedger
 from crm.services.notifications import NotificationService
 from crm.services.order_service import OrderService
 from crm.services.photo_recognition import PhotoRecognitionService
+from crm.services.profit_service import ProfitService
 from crm.services.reactions import ReactionService
 from crm.services.recognition import Recognizer
 from crm.services.sequences import SequenceAllocator
@@ -47,6 +49,7 @@ class Services:
     recognizer: Recognizer | None = None
     photo_recognition: PhotoRecognitionService | None = None
     reactions: ReactionService | None = None
+    profit: ProfitService | None = None
 
 
 def build_services(
@@ -62,6 +65,7 @@ def build_services(
     ledger_repo = LedgerRepository()
     shipments_repo = ShipmentRepository()
     settings_repo = SettingsRepository()
+    profit_repo = ProfitRepository()
 
     auditor = Auditor(db, AuditRepository())
     ledger = BalanceLedger(clients_repo, ledger_repo)
@@ -82,6 +86,7 @@ def build_services(
             event_repo=events_repo,
             intake=IntakeRepository(),
             blobs=blob_storage,
+            profit=profit_repo,
         ),
         shipments=ShipmentService(
             db, clock, orders_repo, shipments_repo, sequences, ledger, auditor, recorder
@@ -102,4 +107,5 @@ def build_services(
         recognizer=recognizer,
         photo_recognition=PhotoRecognitionService(blob_storage, recognizer),
         reactions=ReactionService(db, clock, orders_repo, recorder),
+        profit=ProfitService(db, clock, profit_repo, auditor),
     )

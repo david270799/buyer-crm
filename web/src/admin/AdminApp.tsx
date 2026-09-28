@@ -16,6 +16,7 @@ import { OrderDetailsPage } from "../shared/OrderDetailsPage";
 import { EditButton, ShipmentDetailsPage, ShipmentsPage } from "../shared/ShipmentsPages";
 import { OrderAdminPanel } from "./OrderAdminPanel";
 import { AdminOrdersPage } from "./OrdersPage";
+import { ProfitSection } from "./profit";
 import { AiFillButton, MoneySheet, PhotoInput, type PhotoValue, recognizedFields, ShipmentEditSheet, useBalance } from "./sheets";
 
 const NAV: NavItem[] = [
@@ -203,6 +204,7 @@ function FinancePage() {
     <>
       <BalancePage
         title="Финансы"
+        extra={<ProfitSection />}
         actions={
           <div className="row" style={{ gap: 6 }}>
             <button className="btn primary small" onClick={() => setSheet("deposit")}>

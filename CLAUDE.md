@@ -174,6 +174,7 @@ web/
 | `orders/N{n}` | заказ: статус, бренд/модель/размер, цены (`purchase_price`, `client_price`, `profit`), `charged_amount_krw`, `refunded_amount_krw`, `shipment_id`, фото, `source_url` (только админ), `client_comment` / `internal_comment`, `attention_required`, `purchases[]` (история закупок, только админ), `recognition` (что прочитал Gemini, только админ), временные метки и `created_by`/`updated_by` |
 | `shipments/SHP-YYYY-NNN` | физическая отправка: `shipment_number` («Отправка #18»), трек, коробка, вес, `shipping_cost_krw`, `shipping_charged_krw`, фото, `order_ids[]` |
 | `transactions/{id}` | ledger баланса, только добавление: `type` (`order_charge`, `order_refund`, `order_rebuy`, `deposit`, `adjustment`, `shipping_charge`), `amount_krw` со знаком, `balance_before/after`, связи. ID детерминированные → идемпотентность |
+| `profit_entries/{id}` | доп. прибыль админа (`/profit`, «Моя прибыль» в «Финансах»): `amount_krw`, `comment`; только админ, баланс клиента не меняет, входит в прибыль сводки |
 | `settings/general` | `krw_per_usd` |
 | `settings/notifications` | уведомления в личку: `recipient` (`off`/`admins`/`client`), `level` (`important`/`all`) |
 | `counters/orders`, `counters/shipments` | `next_id`; увеличиваются только в транзакции; после удаления заказов номера возвращаются только с конца, не ниже `floor` (номера с историей денег) |
@@ -209,7 +210,7 @@ web/
   * бот принимает заказы только после добавления в группу, истории не импортирует;
   * добавил бота не админ → бот выходит и сообщает админам; для группы нужен выключенный Privacy Mode.
 * **Команды админа:** `/buy`, `/cancel`, `/rebuy`, `/status`, `/delete`, `/cargo`, `/shipcost`, `/deposit`,
-  `/adjust`, `/rate`, `/notify`, `/add`, `/setclient`; общие: `/order`, `/balance`, `/history`,
+  `/adjust`, `/profit`, `/rate`, `/notify`, `/add`, `/setclient`; общие: `/order`, `/balance`, `/history`,
   `/shipments`, `/shipment`, `/whoami`, `/help` (таблица — в README). Ответы на `/add`, `/setclient`
   в группе уходят админу в личку, команда удаляется из группы.
 * **Уведомления в личку** (`bot/notifier.py`): outbox — события пишутся с `delivery: pending` в той же

@@ -32,7 +32,12 @@ from crm.domain.ids import make_order_id, normalize_order_id, order_number
 from crm.domain.models import Order, status_timestamp_field
 from crm.domain.money import MAX_AMOUNT_KRW, format_krw
 from crm.domain.timeutil import to_local
-from crm.repositories import EventRepository, IntakeRepository, OrderRepository
+from crm.repositories import (
+    EventRepository,
+    IntakeRepository,
+    OrderRepository,
+    ProfitRepository,
+)
 from crm.services.common import (
     UNSET,
     Actor,
@@ -312,6 +317,7 @@ class OrderService:
         event_repo: EventRepository | None = None,
         intake: IntakeRepository | None = None,
         blobs: BlobStorage | None = None,
+        profit: ProfitRepository | None = None,
     ):
         self._db = db
         self._clock = clock
@@ -323,6 +329,7 @@ class OrderService:
         self._event_repo = event_repo or EventRepository()
         self._intake = intake or IntakeRepository()
         self._blobs = blobs
+        self._profit = profit
 
     # --- reads -------------------------------------------------------------
 
@@ -390,6 +397,11 @@ class OrderService:
                 if isinstance(o.timestamp("bought_at"), datetime)
                 and to_local(o.timestamp("bought_at")).strftime("%Y-%m") == month
             )
+            # The admin's extra profit entries (never shown to the client).
+            for entry in self._profit.list_all(self._db) if self._profit else []:
+                result.profit_total_krw += entry.amount_krw
+                if entry.created_at and to_local(entry.created_at).strftime("%Y-%m") == month:
+                    result.profit_month_krw += entry.amount_krw
         return result
 
     # --- edit (no money) ---------------------------------------------------

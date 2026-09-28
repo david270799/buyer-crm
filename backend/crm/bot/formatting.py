@@ -34,6 +34,7 @@ from crm.services.order_service import (
     DeleteResult,
     RebuyResult,
 )
+from crm.services.profit_service import ProfitResult
 from crm.services.shipment_service import ShipmentUpdateResult, ShipResult
 
 
@@ -336,6 +337,17 @@ def rate_current(rate: Decimal | None) -> str:
     return f"Текущий курс: 1 $ = {_rate(rate)} ₩\nИзменить: /rate 1350"
 
 
+def profit_result(result: ProfitResult) -> str:
+    entry = result.entry
+    if result.already_done:
+        return "ℹ️ Эта запись прибыли уже сделана."
+    lines = [f"💰 Прибыль: {format_krw(entry.amount_krw, signed=True)}"]
+    if entry.comment:
+        lines.append(f"💬 {e(entry.comment)}")
+    lines.append("Видите только вы; баланс клиента не изменился.")
+    return "\n".join(lines)
+
+
 def ledger_result(result: LedgerResult) -> str:
     entry = result.entry
     label = LEDGER_LABELS_RU.get(entry.type, "Операция") if entry.type else "Операция"
@@ -544,6 +556,7 @@ ADMIN_HELP = """<b>Команды администратора</b>
 /balance, /history — баланс и история
 /deposit 5000000 [комментарий] — пополнение
 /adjust -15000 причина — корректировка (комментарий увидит клиент)
+/profit 50000 [комментарий] — ваша доп. прибыль (клиент не видит, баланс не меняется)
 /rate 1350 — курс KRW за 1 USD
 /notify — уведомления в личку (выкл / мне / клиенту; важные / все)
 /add — ответом на фото: принять его как заказ

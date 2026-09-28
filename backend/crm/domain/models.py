@@ -212,6 +212,28 @@ class Shipment:
 
 
 @dataclass
+class ProfitEntry:
+    """Admin-only extra profit (cashback, rate gains...). Never touches the
+    client's balance and is never shown to the client."""
+
+    id: str
+    amount_krw: int
+    comment: str | None
+    created_at: datetime | None
+    created_by: str | None
+
+    @classmethod
+    def from_doc(cls, doc_id: str, data: Doc) -> "ProfitEntry":
+        return cls(
+            id=doc_id,
+            amount_krw=to_int_amount(data.get("amount_krw")) or 0,
+            comment=_str_or_none(data.get("comment")),
+            created_at=_dt(data.get("created_at")),
+            created_by=_str_or_none(data.get("created_by")),
+        )
+
+
+@dataclass
 class LedgerEntry:
     id: str
     type: LedgerType | None

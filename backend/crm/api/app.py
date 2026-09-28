@@ -41,7 +41,7 @@ from crm.domain.errors import (
     ValidationError,
 )
 from crm.domain.events import Event
-from crm.domain.models import LedgerEntry, Order
+from crm.domain.models import LedgerEntry, Order, ProfitEntry
 from crm.domain.notifications import NotificationSettings
 from crm.domain.timeutil import BUSINESS_TZ
 from crm.domain.views import ledger_view, order_view, shipment_view
@@ -603,6 +603,20 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         )
         return {"entry": ledger_view(result.entry, p.role), "already_done": result.already_done}
 
+    @app.get("/api/finance/profit")
+    def profit_history(p: Admin) -> dict[str, Any]:
+        entries = services.profit.history(p.actor) if services.profit else []
+        return {"items": [_profit_json(e) for e in entries]}
+
+    @app.post("/api/finance/profit")
+    def add_profit(body: MoneyIn, p: Admin) -> dict[str, Any]:
+        if services.profit is None:
+            raise ConfigurationError("Учёт прибыли не подключён.")
+        result = services.profit.add(
+            p.actor, body.amount_krw, body.comment, f"ma-{body.idempotency_key}"
+        )
+        return {"entry": _profit_json(result.entry), "already_done": result.already_done}
+
     def notifications_json(actor: Actor, current: NotificationSettings) -> dict[str, Any]:
         return {
             "recipient": current.recipient.value,
@@ -684,6 +698,15 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         app.mount("/", StaticFiles(directory=config.static_dir, html=True), name="web")
 
     return app
+
+
+def _profit_json(entry: ProfitEntry) -> dict[str, Any]:
+    return {
+        "id": entry.id,
+        "amount_krw": entry.amount_krw,
+        "comment": entry.comment,
+        "created_at": entry.created_at,
+    }
 
 
 def _bulk_json(result) -> dict[str, Any]:

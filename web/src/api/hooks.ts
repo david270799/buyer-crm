@@ -89,6 +89,29 @@ export const useTransactions = () =>
     queryFn: () => get<{ items: LedgerItem[] }>("/api/transactions?limit=100"),
   });
 
+export interface ProfitItem {
+  id: string;
+  amount_krw: number;
+  comment: string | null;
+  created_at: string | null;
+}
+
+/** The admin's extra profit: never shown to the client, never touches the balance. */
+export const useProfit = () =>
+  useQuery({
+    queryKey: ["profit"] as const,
+    queryFn: () => get<{ items: ProfitItem[] }>("/api/finance/profit"),
+  });
+
+export const useAddProfit = () => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (body: { amount_krw: number; comment: string | null; idempotency_key: string }) =>
+      post<{ entry: ProfitItem; already_done: boolean }>("/api/finance/profit", body),
+    onSuccess: refresh,
+  });
+};
+
 export const useSettings = () =>
   useQuery({
     queryKey: keys.settings,

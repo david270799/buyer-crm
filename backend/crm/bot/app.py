@@ -41,6 +41,7 @@ ADMIN_COMMANDS = [
     BotCommand(command="history", description="История баланса"),
     BotCommand(command="deposit", description="Пополнение баланса"),
     BotCommand(command="adjust", description="Корректировка баланса"),
+    BotCommand(command="profit", description="Моя прибыль (клиент не видит)"),
     BotCommand(command="rate", description="Курс KRW/USD"),
     BotCommand(command="add", description="Принять фото как заказ (ответом на фото)"),
     BotCommand(command="setclient", description="Указать клиента (ответом на его сообщение)"),
