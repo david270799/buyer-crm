@@ -18,6 +18,7 @@ from crm.bot.access import AccessMiddleware
 from crm.bot.backups import NightlyBackup
 from crm.bot.handlers import build_router
 from crm.bot.notifier import TelegramNotifier
+from crm.bot.reactions import ReactionSyncer
 from crm.config import Settings
 from crm.domain.errors import ConfigurationError
 from crm.services.container import Services
@@ -113,6 +114,11 @@ async def run_bot(
         notifier_task = asyncio.create_task(notifier.run(), name="telegram-notifier")
         notifier_task.add_done_callback(_report_notifier_exit)
         background = [notifier_task]
+        if services.reactions is not None:
+            reactions = ReactionSyncer(bot, services.reactions)
+            reactions_task = asyncio.create_task(reactions.run(), name="order-reactions")
+            reactions_task.add_done_callback(_report_notifier_exit)
+            background.append(reactions_task)
         if isinstance(database, SqliteDatabase) and not database.read_only:
             nightly = NightlyBackup(
                 bot,

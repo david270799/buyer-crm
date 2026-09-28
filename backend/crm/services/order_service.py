@@ -1154,6 +1154,7 @@ class OrderService:
                     self._event_repo.delete(tx, event.id)
             for key in intake_keys:
                 self._intake.delete(tx, key)
+            self._events.touched(tx)  # e.g. the photo's reaction in the group goes
             new_next = self._sequences.release(
                 tx,
                 ORDER_COUNTER,

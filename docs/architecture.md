@@ -108,6 +108,9 @@ ID детерминированные там, где это даёт идемп�
 * `events/{id}`: лента для клиента (история заказа и колокольчик): `type`, `important`, `title`, `body`,
   `order_ids[]`, `shipment_id`, `amount_krw`, `created_at`, `actor`. Пишется в той же транзакции, что и изменение.
 * `event_reads/{tg:<id>}`: `seen_at` — когда пользователь последний раз открывал уведомления.
+* `reactions/tg<chat>_<message>`: реакция бота на фото заказа — `order_id`, `status`, `emoji`, `error`,
+  `updated_at`. Желаемая реакция считается из статуса заказа (`STATUS_REACTIONS` в
+  `services/reactions.py`); нет заказа или статус без реакции — документ удаляется вместе с реакцией.
 * `intake/tg<chat>_<message>`: какое сообщение Telegram стало каким заказом (`order_id`);
   создаётся в той же транзакции, что и заказ, поэтому одно сообщение — максимум один заказ.
 * `orders.recognition` (только админ): что прочитал Gemini — `engine`, `brand`, `model`,
