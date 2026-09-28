@@ -12,6 +12,7 @@ Money rules (see docs/architecture.md, "Финансовые инвариант�
   entry, so a crash or a retry can never leave money half-moved.
 """
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -26,12 +27,12 @@ from crm.domain.enums import (
     Role,
 )
 from crm.domain.errors import ConflictError, NotFoundError, ValidationError
-from crm.domain.events import EventType
+from crm.domain.events import Event, EventType
 from crm.domain.ids import make_order_id, normalize_order_id, order_number
 from crm.domain.models import Order, status_timestamp_field
 from crm.domain.money import MAX_AMOUNT_KRW, format_krw
 from crm.domain.timeutil import to_local
-from crm.repositories import OrderRepository
+from crm.repositories import EventRepository, IntakeRepository, OrderRepository
 from crm.services.common import (
     UNSET,
     Actor,
@@ -50,6 +51,9 @@ from crm.services.ledger import (
 )
 from crm.services.sequences import SequenceAllocator
 from crm.storage import Database, DocumentExistsError, Transaction
+from crm.storage.blobs import BlobStorage
+
+logger = logging.getLogger(__name__)
 
 ORDER_COUNTER = "orders"
 
@@ -108,6 +112,35 @@ class RebuyResult:
     order: Order
     already_done: bool
     change: BalanceChange | None = None
+
+
+@dataclass
+class DeleteResult:
+    deleted: list[str] = field(default_factory=list)
+    not_found: list[str] = field(default_factory=list)
+    skipped: list[tuple[str, str]] = field(default_factory=list)
+    # Refunds of what was still charged for the deleted orders.
+    refunds: list[tuple[str, int]] = field(default_factory=list)
+    change: BalanceChange | None = None
+    # Number the next new order gets (None if no order was ever numbered).
+    next_order_id: str | None = None
+
+    @property
+    def refunded_krw(self) -> int:
+        return sum(amount for _, amount in self.refunds)
+
+
+@dataclass
+class DeletePreview:
+    """What `delete_orders` would do, for the confirmation question."""
+
+    orders: list[Order] = field(default_factory=list)
+    not_found: list[str] = field(default_factory=list)
+    skipped: list[tuple[str, str]] = field(default_factory=list)
+
+    @property
+    def refund_krw(self) -> int:
+        return sum(o.charged_amount_krw for o in self.orders)
 
 
 @dataclass
@@ -259,6 +292,10 @@ class OrderService:
         sequences: SequenceAllocator,
         auditor: Auditor,
         events: EventRecorder,
+        *,
+        event_repo: EventRepository | None = None,
+        intake: IntakeRepository | None = None,
+        blobs: BlobStorage | None = None,
     ):
         self._db = db
         self._clock = clock
@@ -267,6 +304,9 @@ class OrderService:
         self._sequences = sequences
         self._auditor = auditor
         self._events = events
+        self._event_repo = event_repo or EventRepository()
+        self._intake = intake or IntakeRepository()
+        self._blobs = blobs
 
     # --- reads -------------------------------------------------------------
 
@@ -965,6 +1005,165 @@ class OrderService:
                 f"Перезаказ по заказу {order_id} уже проведён. Обновите данные и повторите."
             ) from None
 
+    # --- delete ------------------------------------------------------------
+
+    def preview_delete(self, actor: Actor, order_ids: Sequence[str]) -> DeletePreview:
+        require_admin(actor)
+        ids = list(dict.fromkeys(normalize_order_id(i) for i in order_ids))
+        require_bulk_size(ids)
+        found = self._orders.get_many(self._db, ids)
+        preview = DeletePreview()
+        for order_id in ids:
+            order = found.get(order_id)
+            if order is None:
+                preview.not_found.append(order_id)
+            elif reason := _delete_blocker(order):
+                preview.skipped.append((order_id, reason))
+            else:
+                preview.orders.append(order)
+        return preview
+
+    def delete_orders(self, actor: Actor, order_ids: Sequence[str]) -> DeleteResult:
+        """Remove orders everywhere: the order, its photos, its history events and
+        the link to the Telegram message. What was still charged is refunded to
+        the balance; ledger entries and audit logs stay (they are never deleted).
+
+        Orders in a shipment (sent) are refused: after shipping there are no
+        refunds. A deleted number is handed out again only from the end and only
+        if the order never had money history (see CounterRepository.get_floor).
+        """
+        require_admin(actor)
+        ids = list(dict.fromkeys(normalize_order_id(i) for i in order_ids))
+        require_bulk_size(ids)
+        photos: list[str] = []
+
+        def fn(tx: Transaction) -> DeleteResult:
+            photos.clear()
+            result = DeleteResult()
+            raw = tx.get_many(self._orders.collection, ids)
+            targets: list[tuple[Order, dict[str, Any]]] = []
+            for order_id in ids:
+                data = raw.get(order_id)
+                if data is None:
+                    result.not_found.append(order_id)
+                    continue
+                order = Order.from_doc(order_id, data)
+                if reason := _delete_blocker(order):
+                    result.skipped.append((order_id, reason))
+                    continue
+                targets.append((order, data))
+            if not targets:
+                return result
+
+            deleted_ids = {order.id for order, _ in targets}
+            # Read phase: everything below is read before the first write.
+            had_money = {
+                order.id: self._ledger.has_entry(tx, order_charge_entry_id(order.id))
+                for order, _ in targets
+            }
+            client = (
+                self._ledger.load_client(tx)
+                if any(order.charged_amount_krw > 0 for order, _ in targets)
+                else None
+            )
+            events: dict[str, Event] = {}
+            intake_keys: list[str] = []
+            for order, _ in targets:
+                for event in self._event_repo.for_order(tx, order.id):
+                    events[event.id] = event
+                if order.source_chat_id is None or order.source_message_id is None:
+                    continue
+                key = self._intake.key(order.source_chat_id, order.source_message_id)
+                if self._intake.order_id(tx, key) == order.id:
+                    intake_keys.append(key)
+            all_orders = tx.query(self._orders.collection)
+            current_next, floor = self._sequences.read_for_release(tx, ORDER_COUNTER)
+
+            remaining = [(doc_id, d) for doc_id, d in all_orders if doc_id not in deleted_ids]
+            used_photos = {
+                d.get(name) for _, d in remaining for name in ("photo_url", "thumbnail_url")
+            }
+            for order, _ in targets:
+                photos.extend(
+                    url
+                    for url in (order.photo_url, order.thumbnail_url)
+                    if url and url not in used_photos
+                )
+            highest_remaining = max(
+                (n for n in (order_number(doc_id) for doc_id, _ in remaining) if n is not None),
+                default=0,
+            )
+            burned = [order_number(order_id) or 0 for order_id, spent in had_money.items() if spent]
+            new_floor = max([floor, *burned])
+
+            # Write phase.
+            now = self._clock.now()
+            for order, data in targets:
+                self._orders.delete(tx, order.id)
+                refund = order.charged_amount_krw
+                if refund > 0 and client is not None:
+                    result.change = self._ledger.apply(
+                        tx,
+                        client,
+                        entry_id=order_refund_entry_id(order.id),
+                        type=LedgerType.ORDER_REFUND,
+                        amount_krw=refund,
+                        actor=actor,
+                        now=now,
+                        order_id=order.id,
+                        comment=f"Заказ удалён: {order.title}" if order.title else "Заказ удалён",
+                    )
+                    result.refunds.append((order.id, refund))
+                self._auditor.record(
+                    tx,
+                    actor,
+                    now,
+                    action="order.delete",
+                    entity_type="order",
+                    entity_id=order.id,
+                    before=data,
+                    after={
+                        "refunded_krw": refund,
+                        "balance_after": result.change.balance_after
+                        if refund > 0 and result.change
+                        else None,
+                    },
+                )
+                result.deleted.append(order.id)
+            for event in events.values():
+                left = [i for i in event.order_ids if i not in deleted_ids]
+                if left:
+                    self._event_repo.set_order_ids(tx, event.id, left)
+                else:
+                    self._event_repo.delete(tx, event.id)
+            for key in intake_keys:
+                self._intake.delete(tx, key)
+            new_next = self._sequences.release(
+                tx,
+                ORDER_COUNTER,
+                current_next=current_next,
+                floor=new_floor,
+                highest_remaining=highest_remaining,
+                now=now,
+            )
+            result.next_order_id = make_order_id(new_next) if new_next is not None else None
+            return result
+
+        try:
+            result = self._db.run_transaction(fn)
+        except DocumentExistsError:
+            raise ConflictError(
+                "Возврат по одному из заказов уже есть в истории транзакций. Удаление "
+                "остановлено, ничего не изменено — проверьте заказы вручную."
+            ) from None
+        if self._blobs is not None:
+            for url in photos:
+                try:
+                    self._blobs.delete_url(url)
+                except Exception:  # noqa: BLE001 - the order is gone; a stray file is harmless
+                    logger.warning("Could not delete photo %s", url, exc_info=True)
+        return result
+
     # --- helpers -----------------------------------------------------------
 
     def _require_order(self, tx: Transaction, order_id: str) -> Order:
@@ -977,6 +1176,13 @@ class OrderService:
                 "Операция остановлена, чтобы не испортить данные."
             )
         return order
+
+
+def _delete_blocker(order: Order) -> str | None:
+    if order.status in (OrderStatus.CARGO, OrderStatus.DELIVERED) or order.shipment_id:
+        where = f" (отправка {order.shipment_id})" if order.shipment_id else ""
+        return f"уже отправлен{where} — после отправки заказ не удаляется"
+    return None
 
 
 def _fmt(amount: int | None) -> str:

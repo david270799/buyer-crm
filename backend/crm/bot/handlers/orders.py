@@ -1,14 +1,18 @@
 import asyncio
+import contextlib
 
-from aiogram import Router
+from aiogram import F, Router
+from aiogram.enums import ChatType
 from aiogram.filters import Command, CommandObject
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from crm.bot import formatting as fmt
 from crm.bot import parsing
 from crm.bot.access import HasRole
-from crm.bot.handlers.reply import answer
+from crm.bot.handlers.errors import user_text
+from crm.bot.handlers.reply import answer, answer_privately
 from crm.domain.enums import Role
+from crm.domain.errors import CRMError, ValidationError
 from crm.services.common import Actor
 from crm.services.container import Services
 
@@ -58,6 +62,68 @@ async def status(
     await answer(message, fmt.status_result(new_status, result))
 
 
+DELETE_PREFIX = "del:"
+DELETE_CANCEL = "del-cancel"
+_CALLBACK_LIMIT = 64  # bytes, Telegram's limit for callback data
+
+
+def delete_keyboard(order_ids: list[str]) -> InlineKeyboardMarkup:
+    data = DELETE_PREFIX + parsing.compact_order_ids(order_ids)
+    if len(data.encode()) > _CALLBACK_LIMIT:
+        raise ValidationError(
+            "Слишком много разрозненных номеров для одной команды. Удалите их в несколько "
+            "приёмов или диапазонами, например /delete 1-20."
+        )
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=f"🗑 Удалить ({len(order_ids)})", callback_data=data),
+                InlineKeyboardButton(text="Отмена", callback_data=DELETE_CANCEL),
+            ]
+        ]
+    )
+
+
+async def delete(
+    message: Message, command: CommandObject, services: Services, actor: Actor
+) -> None:
+    """Asks first: deletion cannot be undone. The answer goes to the admin's
+    private chat, so nothing is written in the client's group."""
+    order_ids = parsing.parse_order_list(command.args, parsing.DELETE_USAGE)
+    preview = await asyncio.to_thread(services.orders.preview_delete, actor, order_ids)
+    text = fmt.delete_preview(preview)
+    if not preview.orders:
+        await answer_privately(message, text)
+        return
+    markup = delete_keyboard([o.id for o in preview.orders])
+    if message.chat.type == ChatType.PRIVATE or message.bot is None or message.from_user is None:
+        await message.answer(text, reply_markup=markup)
+        return
+    await message.bot.send_message(message.from_user.id, text, reply_markup=markup)
+    with contextlib.suppress(Exception):  # no right to delete in the group: fine
+        await message.delete()
+
+
+async def delete_confirmed(query: CallbackQuery, services: Services, actor: Actor) -> None:
+    order_ids = parsing.expand_order_ids((query.data or "")[len(DELETE_PREFIX) :])
+    try:
+        result = await asyncio.to_thread(services.orders.delete_orders, actor, order_ids)
+        text = fmt.delete_result(result)
+    except CRMError as exc:
+        text = user_text(exc)
+    await query.answer()
+    if isinstance(query.message, Message):
+        await query.message.edit_text(text, reply_markup=None)
+
+
+async def delete_cancelled(query: CallbackQuery) -> None:
+    await query.answer("Удаление отменено")
+    if isinstance(query.message, Message):
+        await query.message.edit_text(
+            "Удаление отменено — ничего не изменилось.", reply_markup=None
+        )
+
+
 def build() -> Router:
     router = Router(name="orders")
     router.message.register(order, Command("order"), HasRole(Role.ADMIN, Role.CLIENT))
@@ -65,4 +131,9 @@ def build() -> Router:
     router.message.register(cancel, Command("cancel"), HasRole(Role.ADMIN))
     router.message.register(rebuy, Command("rebuy"), HasRole(Role.ADMIN))
     router.message.register(status, Command("status"), HasRole(Role.ADMIN))
+    router.message.register(delete, Command("delete"), HasRole(Role.ADMIN))
+    router.callback_query.register(
+        delete_confirmed, F.data.startswith(DELETE_PREFIX), HasRole(Role.ADMIN)
+    )
+    router.callback_query.register(delete_cancelled, F.data == DELETE_CANCEL, HasRole(Role.ADMIN))
     return router

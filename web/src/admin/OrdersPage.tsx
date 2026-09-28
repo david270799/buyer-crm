@@ -1,4 +1,4 @@
-import { AlertTriangle, MessageSquare, Plus, Search, Tag, Truck, X } from "lucide-react";
+import { AlertTriangle, MessageSquare, Plus, Search, Tag, Trash2, Truck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -10,9 +10,9 @@ import { StatusBadge } from "../components/status";
 import { Checkbox, Empty, ErrorState, Loading, useDebounced, useSelection } from "../components/ui";
 import { krw, plural, shortDate } from "../lib/format";
 import { StatusChips, useOrderFilters } from "../shared/filters";
-import { AttentionSheet, BulkStatusSheet, CommentSheet, ShipmentSheet } from "./sheets";
+import { AttentionSheet, BulkStatusSheet, CommentSheet, DeleteConfirm, ShipmentSheet } from "./sheets";
 
-type Bulk = "status" | "ship" | "comment" | "attention" | null;
+type Bulk = "status" | "ship" | "comment" | "attention" | "delete" | null;
 const PAGE = 50;
 
 function OrdersTable({ orders, selection }: { orders: Order[]; selection: ReturnType<typeof useSelection> }) {
@@ -196,6 +196,9 @@ export function AdminOrdersPage() {
           <button className="btn" onClick={() => setBulk("attention")}>
             <AlertTriangle size={16} /> Внимание
           </button>
+          <button className="btn icon-only" onClick={() => setBulk("delete")} aria-label="Удалить" title="Удалить">
+            <Trash2 size={16} />
+          </button>
           <button className="btn icon-only" onClick={selection.clear} aria-label="Снять выбор">
             <X size={16} />
           </button>
@@ -205,6 +208,7 @@ export function AdminOrdersPage() {
       {bulk === "ship" && <ShipmentSheet ids={ids} onClose={() => setBulk(null)} onDone={done} />}
       {bulk === "comment" && <CommentSheet ids={ids} onClose={() => setBulk(null)} onDone={done} />}
       {bulk === "attention" && <AttentionSheet ids={ids} onClose={() => setBulk(null)} onDone={done} />}
+      {bulk === "delete" && <DeleteConfirm ids={ids} onClose={() => setBulk(null)} onDone={done} />}
     </>
   );
 }

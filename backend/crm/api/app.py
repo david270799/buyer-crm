@@ -154,6 +154,10 @@ class BulkStatusIn(BaseModel):
     status: str
 
 
+class BulkDeleteIn(BaseModel):
+    order_ids: OrderIds
+
+
 class BulkUpdateIn(BaseModel):
     order_ids: OrderIds
     client_comment: str | None = None
@@ -518,6 +522,28 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         return _bulk_json(
             services.orders.bulk_update(p.actor, body.order_ids, BulkUpdate(**fields))
         )
+
+    @app.post("/api/orders/bulk/delete/preview")
+    def bulk_delete_preview(body: BulkDeleteIn, p: Admin) -> dict[str, Any]:
+        preview = services.orders.preview_delete(p.actor, body.order_ids)
+        return {
+            "orders": [order_json(o, p.role) for o in preview.orders],
+            "refund_krw": preview.refund_krw,
+            "not_found": preview.not_found,
+            "skipped": [{"order_id": i, "reason": r} for i, r in preview.skipped],
+        }
+
+    @app.post("/api/orders/bulk/delete")
+    def bulk_delete(body: BulkDeleteIn, p: Admin) -> dict[str, Any]:
+        result = services.orders.delete_orders(p.actor, body.order_ids)
+        return {
+            "deleted": result.deleted,
+            "not_found": result.not_found,
+            "skipped": [{"order_id": i, "reason": r} for i, r in result.skipped],
+            "refunded_krw": result.refunded_krw,
+            "change": change_json(result.change),
+            "next_order_id": result.next_order_id,
+        }
 
     # --- admin: shipments -------------------------------------------------
 

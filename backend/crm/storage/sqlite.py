@@ -173,13 +173,14 @@ class SqliteDatabase(InMemoryDatabase):
                 self._collection_versions[collection] += 1
                 self._next_version += 1
 
-    def _persist(self, staged: dict[tuple[str, str], Doc]) -> None:
+    def _persist(self, staged: dict[tuple[str, str], Doc | None]) -> None:
         if self.read_only:
             raise StorageError("База открыта только для чтения.")
         if not staged:
             return
         now = datetime.now(timezone.utc).isoformat()
-        rows = [(c, i, dumps(data), now) for (c, i), data in staged.items()]
+        rows = [(c, i, dumps(data), now) for (c, i), data in staged.items() if data is not None]
+        deleted = [(c, i) for (c, i), data in staged.items() if data is None]
         with self._sql_lock:
             try:
                 self._conn.execute("BEGIN IMMEDIATE")
@@ -188,6 +189,9 @@ class SqliteDatabase(InMemoryDatabase):
                     "ON CONFLICT(collection, id) DO UPDATE SET "
                     "data = excluded.data, updated_at = excluded.updated_at",
                     rows,
+                )
+                self._conn.executemany(
+                    "DELETE FROM documents WHERE collection = ? AND id = ?", deleted
                 )
                 self._conn.execute("COMMIT")
             except sqlite3.Error as exc:

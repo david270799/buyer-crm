@@ -1,11 +1,13 @@
 """Command argument parsing. Pure functions; every error is a ValidationError."""
 
+import re
 from decimal import Decimal
 
 from crm.domain.enums import OrderStatus, parse_status
 from crm.domain.errors import ValidationError
-from crm.domain.ids import normalize_order_id, parse_order_ids, split_tokens
+from crm.domain.ids import normalize_order_id, order_number, parse_order_ids, split_tokens
 from crm.domain.money import parse_krw, parse_rate
+from crm.services.common import MAX_BULK_ORDERS
 
 BUY_USAGE = "Формат: /buy <номер> <закупка> <цена клиенту>\nПример: /buy 5 140000 170000"
 CANCEL_USAGE = "Формат: /cancel <номер>\nПример: /cancel 125"
@@ -24,6 +26,10 @@ SHIPCOST_USAGE = (
 REBUY_USAGE = (
     "Формат: /rebuy <номер> <закупка> <цена клиенту> [ссылка] [причина для клиента]\n"
     "Пример: /rebuy 5 150000 185000 https://shop.kr/item Магазин отменил заказ"
+)
+DELETE_USAGE = (
+    "Формат: /delete <номера…>\nПример: /delete 7 или /delete 1-5 8\n"
+    "Заказ удаляется отовсюду; списанное по нему возвращается на баланс."
 )
 RATE_USAGE = "Формат: /rate <KRW за 1 USD>\nПример: /rate 1350"
 NOTIFY_USAGE = (
@@ -57,6 +63,49 @@ def _order_ids(tokens: list[str], usage: str) -> list[str]:
     if not ids:
         raise ValidationError(f"Не указаны номера заказов.\n{usage}")
     return ids
+
+
+_RANGE_RE = re.compile(r"^([nN#№]?\d+)\s*[-–—]\s*([nN#№]?\d+)$")
+
+
+def parse_order_list(args: str | None, usage: str) -> list[str]:
+    """Order numbers with ranges: `1-5 8` → N1…N5, N8."""
+    tokens: list[str] = []
+    # "1 - 5" → "1-5"
+    for token in _tokens(re.sub(r"\s*[-–—]\s*", "-", args or "")):
+        match = _RANGE_RE.match(token)
+        if not match:
+            tokens.append(token)
+            continue
+        first, last = (order_number(normalize_order_id(t)) or 0 for t in match.groups())
+        if first > last:
+            first, last = last, first
+        if last - first >= MAX_BULK_ORDERS:
+            raise ValidationError(
+                f"Слишком большой диапазон {token}: не больше {MAX_BULK_ORDERS} заказов за раз."
+            )
+        tokens += [str(n) for n in range(first, last + 1)]
+    return _order_ids(tokens, usage)
+
+
+def compact_order_ids(order_ids: list[str]) -> str:
+    """`N1 N2 N3 N5` → `1-3.5` (for 64-byte Telegram callback data)."""
+    numbers = sorted({order_number(i) or 0 for i in order_ids})
+    parts: list[str] = []
+    start = prev = None
+    for n in [*numbers, None]:
+        if n is not None and prev is not None and n == prev + 1:
+            prev = n
+            continue
+        if start is not None:
+            parts.append(str(start) if start == prev else f"{start}-{prev}")
+        start = prev = n
+    return ".".join(parts)
+
+
+def expand_order_ids(compact: str) -> list[str]:
+    """Inverse of `compact_order_ids`."""
+    return parse_order_list(compact.replace(".", " "), DELETE_USAGE)
 
 
 def parse_buy(args: str | None) -> tuple[str, int, int]:

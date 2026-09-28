@@ -6,7 +6,7 @@ from crm.domain.errors import ConfigurationError
 from crm.domain.models import ClientInfo
 from crm.repositories import ClientRepository, LedgerRepository
 from crm.services.common import Actor
-from crm.storage import Transaction
+from crm.storage import Reader, Transaction
 
 
 @dataclass(frozen=True)
@@ -51,6 +51,9 @@ class BalanceLedger:
                 "Финансовая операция остановлена."
             )
         return client
+
+    def has_entry(self, reader: Reader, entry_id: str) -> bool:
+        return self._ledger.get(reader, entry_id) is not None
 
     def apply(
         self,

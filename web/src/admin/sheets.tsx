@@ -9,6 +9,8 @@ import {
   useBuy,
   useCancel,
   useCreateShipment,
+  useDeleteOrders,
+  useDeletePreview,
   useMoney,
   useOverview,
   useRebuy,
@@ -289,6 +291,71 @@ export function CancelConfirm({ order, onClose }: { order: Order; onClose: () =>
       ) : (
         <div className="small" style={{ marginTop: 10 }}>
           Списаний по заказу не было — баланс не изменится.
+        </div>
+      )}
+    </Confirm>
+  );
+}
+
+/** Delete orders everywhere, after showing exactly what will happen (from the server). */
+export function DeleteConfirm({ ids, onClose, onDone }: { ids: string[]; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const preview = useDeletePreview(ids);
+  const remove = useDeleteOrders();
+  const orders = preview.data?.orders ?? [];
+  const refund = preview.data?.refund_krw ?? 0;
+  const single = ids.length === 1;
+  return (
+    <Confirm
+      title={single ? `Удалить ${ids[0]}?` : `Удалить заказы: ${ids.length} шт.?`}
+      confirmLabel={orders.length ? `Удалить${single ? "" : ` (${orders.length})`}` : "Удалить"}
+      danger
+      busy={remove.isPending || preview.isLoading || !orders.length}
+      onClose={onClose}
+      onConfirm={() =>
+        // mutateAsync, not mutate(..., callbacks): the refreshed order page
+        // unmounts this dialog on 404, and per-call callbacks would then be lost.
+        remove.mutateAsync(orders.map((o) => o.id)).then(
+          (r) => {
+            const lines = [`Удалено: ${r.deleted.join(", ")}`];
+            if (r.refunded_krw) lines.push(`Возврат ${krw(r.refunded_krw)}`);
+            for (const s of r.skipped) lines.push(`${s.order_id}: ${s.reason}`);
+            if (r.next_order_id) lines.push(`Следующий заказ: ${r.next_order_id}`);
+            toast(lines.join("\n"));
+            onDone();
+          },
+          (e) => toast(errorText(e), "error"),
+        )
+      }
+    >
+      {preview.isLoading ? (
+        <div className="muted small">Проверяю заказы…</div>
+      ) : preview.error ? (
+        <div className="banner negative small">{errorText(preview.error)}</div>
+      ) : (
+        <div className="stack" style={{ gap: 8 }}>
+          <div className="muted small">
+            Заказ исчезнет у клиента, из списков и истории, фото удалятся. Вернуть нельзя. В журнале действий
+            запись останется.
+          </div>
+          {!single && orders.length > 0 && (
+            <div className="small">{orders.map((o) => o.id).join(", ")}</div>
+          )}
+          {preview.data?.skipped.map((s) => (
+            <div key={s.order_id} className="small">
+              ⏭ {s.order_id}: {s.reason}
+            </div>
+          ))}
+          {preview.data?.not_found.length ? (
+            <div className="small">Не найдено: {preview.data.not_found.join(", ")}</div>
+          ) : null}
+          {refund > 0 ? (
+            <BalancePreview delta={refund} label="Вернётся на баланс" />
+          ) : orders.length ? (
+            <div className="small">Списаний нет — баланс не изменится.</div>
+          ) : (
+            <div className="small">Удалять нечего.</div>
+          )}
         </div>
       )}
     </Confirm>

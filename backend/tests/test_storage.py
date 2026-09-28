@@ -54,6 +54,23 @@ def test_update_keeps_other_fields_and_merge_set(db):
     assert db.get("c", "a") == {"keep": 1, "v": 2, "extra": True}
 
 
+def test_delete_removes_document_and_missing_is_a_no_op(db):
+    seed(db, "c", "a", {"v": 1})
+    seed(db, "c", "b", {"v": 2})
+
+    def fn(tx):
+        tx.delete("c", "a")
+        tx.delete("c", "never-existed")
+
+    db.run_transaction(fn)
+    assert db.get("c", "a") is None
+    assert db.get("c", "b") == {"v": 2}
+    assert [doc_id for doc_id, _ in db.query("c")] == ["b"]
+    # The ID can be used again.
+    db.run_transaction(lambda tx: tx.create("c", "a", {"v": 3}))
+    assert db.get("c", "a") == {"v": 3}
+
+
 def test_get_many_reports_missing_documents(db):
     seed(db, "c", "a", {"v": 1})
     assert db.get_many("c", ["a", "b"]) == {"a": {"v": 1}, "b": None}

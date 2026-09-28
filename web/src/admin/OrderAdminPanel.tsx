@@ -1,13 +1,14 @@
-import { Ban, ExternalLink, Pencil, Repeat, ShoppingBag, Sparkles, Truck, Warehouse } from "lucide-react";
+import { Ban, ExternalLink, Pencil, Repeat, ShoppingBag, Sparkles, Trash2, Truck, Warehouse } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { useBulkStatus } from "../api/hooks";
 import type { Order, OrderStatus, Recognition } from "../api/types";
 import { errorText, useToast } from "../components/ui";
 import { date, krw } from "../lib/format";
-import { bulkSummary, BuySheet, CancelConfirm, EditOrderSheet, RebuySheet, ShipmentSheet } from "./sheets";
+import { bulkSummary, BuySheet, CancelConfirm, DeleteConfirm, EditOrderSheet, RebuySheet, ShipmentSheet } from "./sheets";
 
-type Dialog = "buy" | "cancel" | "edit" | "ship" | "rebuy" | null;
+type Dialog = "buy" | "cancel" | "edit" | "ship" | "rebuy" | "delete" | null;
 
 function shopName(url: string | null | undefined): string {
   if (!url) return "без ссылки";
@@ -52,6 +53,7 @@ function RecognitionInfo({ recognition, link }: { recognition: Recognition; link
 
 export function OrderAdminPanel({ order }: { order: Order }) {
   const toast = useToast();
+  const navigate = useNavigate();
   const [dialog, setDialog] = useState<Dialog>(null);
   const setStatus = useBulkStatus();
   const move = (status: OrderStatus) =>
@@ -64,6 +66,8 @@ export function OrderAdminPanel({ order }: { order: Order }) {
   const beforeShipping = (status === "bought" || status === "warehouse") && !order.shipment_id;
   const canCancel = status === "new" || beforeShipping;
   const canRebuy = beforeShipping && (order.charged_amount_krw ?? 0) > 0;
+  // Same rule as the server: a sent order is never deleted.
+  const canDelete = status !== "cargo" && status !== "delivered" && !order.shipment_id;
   const purchases = order.purchases ?? [];
   const profit = order.profit ?? null;
   return (
@@ -153,12 +157,20 @@ export function OrderAdminPanel({ order }: { order: Order }) {
               <Ban size={16} /> Отменить
             </button>
           )}
+          {canDelete && (
+            <button className="btn ghost" onClick={() => setDialog("delete")}>
+              <Trash2 size={16} /> Удалить
+            </button>
+          )}
         </div>
       </div>
       {dialog === "buy" && <BuySheet order={order} onClose={() => setDialog(null)} />}
       {dialog === "cancel" && <CancelConfirm order={order} onClose={() => setDialog(null)} />}
       {dialog === "rebuy" && <RebuySheet order={order} onClose={() => setDialog(null)} />}
       {dialog === "edit" && <EditOrderSheet order={order} onClose={() => setDialog(null)} />}
+      {dialog === "delete" && (
+        <DeleteConfirm ids={[order.id]} onClose={() => setDialog(null)} onDone={() => navigate("/orders", { replace: true })} />
+      )}
       {dialog === "ship" && (
         <ShipmentSheet ids={[order.id]} onClose={() => setDialog(null)} onDone={() => setDialog(null)} />
       )}

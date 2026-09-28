@@ -67,7 +67,18 @@ def build_services(
     roles = RoleResolver(db, clients_repo, admin_ids)
 
     return Services(
-        orders=OrderService(db, clock, orders_repo, ledger, sequences, auditor, recorder),
+        orders=OrderService(
+            db,
+            clock,
+            orders_repo,
+            ledger,
+            sequences,
+            auditor,
+            recorder,
+            event_repo=events_repo,
+            intake=IntakeRepository(),
+            blobs=blob_storage,
+        ),
         shipments=ShipmentService(
             db, clock, orders_repo, shipments_repo, sequences, ledger, auditor, recorder
         ),

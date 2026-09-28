@@ -28,6 +28,13 @@ class OrderRepository:
         """Partial update: fields written by other code are left untouched."""
         tx.update(self.collection, order_id, fields)
 
+    def delete(self, tx: Transaction, order_id: str) -> None:
+        tx.delete(self.collection, order_id)
+
+    def list_ids(self, reader: Reader) -> list[str]:
+        """All order IDs, inside a transaction (the whole collection is read)."""
+        return [doc_id for doc_id, _ in reader.query(self.collection)]
+
     def list_all(self, db: Database) -> list[Order]:
         return [Order.from_doc(doc_id, data) for doc_id, data in db.scan(self.collection)]
 

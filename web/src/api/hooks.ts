@@ -5,6 +5,8 @@ import type {
   BalanceChange,
   CrmEvent,
   BulkResult,
+  DeletePreview,
+  DeleteResult,
   LedgerItem,
   Me,
   NotificationSettings,
@@ -220,6 +222,21 @@ export const useBulkUpdate = () => {
       internal_comment?: string | null;
       attention_required?: boolean;
     }) => post<BulkResult>("/api/orders/bulk/update", body),
+    onSuccess: refresh,
+  });
+};
+
+export const useDeletePreview = (ids: string[]) =>
+  useQuery({
+    queryKey: ["delete-preview", ids] as const,
+    queryFn: () => post<DeletePreview>("/api/orders/bulk/delete/preview", { order_ids: ids }),
+    gcTime: 0,
+  });
+
+export const useDeleteOrders = () => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (ids: string[]) => post<DeleteResult>("/api/orders/bulk/delete", { order_ids: ids }),
     onSuccess: refresh,
   });
 };

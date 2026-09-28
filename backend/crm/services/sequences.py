@@ -51,6 +51,30 @@ class SequenceAllocator:
     def commit(self, tx: Transaction, name: str, used_number: int, now: datetime) -> None:
         self._counters.set_next(tx, name, used_number + 1, now)
 
+    def read_for_release(self, tx: Transaction, name: str) -> tuple[int | None, int]:
+        """Read phase of `release`: (next number or None if never used, floor)."""
+        return self._counters.get_next(tx, name), self._counters.get_floor(tx, name)
+
+    def release(
+        self,
+        tx: Transaction,
+        name: str,
+        *,
+        current_next: int | None,
+        floor: int,
+        highest_remaining: int,
+        now: datetime,
+    ) -> int | None:
+        """Write phase after deleting documents: hand numbers out again only from
+        the end — the next number follows the highest remaining document and
+        never goes below `floor + 1`. Returns the new next number (None if the
+        counter was never used)."""
+        if current_next is None:
+            return None
+        new_next = min(current_next, max(highest_remaining, floor) + 1)
+        self._counters.set_after_delete(tx, name, new_next, floor, now)
+        return new_next
+
     def run(
         self,
         name: str,

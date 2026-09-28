@@ -151,6 +151,22 @@ export interface BulkResult {
   skipped: { order_id: string; reason: string }[];
 }
 
+export interface DeletePreview {
+  orders: Order[];
+  refund_krw: number;
+  not_found: string[];
+  skipped: { order_id: string; reason: string }[];
+}
+
+export interface DeleteResult {
+  deleted: string[];
+  not_found: string[];
+  skipped: { order_id: string; reason: string }[];
+  refunded_krw: number;
+  change: BalanceChange | null;
+  next_order_id: string | null;
+}
+
 export interface ShipResult {
   shipment: Shipment | null;
   created: boolean;

@@ -4,12 +4,17 @@ import threading
 import uuid
 from pathlib import Path
 from typing import Protocol
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlparse
 
 
 class BlobStorage(Protocol):
     def put(self, path: str, data: bytes, content_type: str) -> str:
         """Store `data` at `path` and return a URL the Mini App can load."""
+        ...
+
+    def delete_url(self, url: str) -> bool:
+        """Remove the file behind a URL returned by `put`. False if the URL is not ours
+        or the file is already gone; never raises for a missing file."""
         ...
 
 
@@ -34,6 +39,18 @@ class FirebaseBlobStorage:
             f"{quote(path, safe='')}?alt=media&token={token}"
         )
 
+    def delete_url(self, url: str) -> bool:
+        parsed = urlparse(url)
+        prefix = f"/v0/b/{self._bucket.name}/o/"
+        if parsed.netloc != "firebasestorage.googleapis.com" or not parsed.path.startswith(prefix):
+            return False
+        blob = self._bucket.blob(unquote(parsed.path[len(prefix) :]))
+        try:
+            blob.delete()
+        except Exception:  # noqa: BLE001 - already gone or no access: nothing to undo
+            return False
+        return True
+
 
 class LocalBlobStorage:
     """Files in a local directory (the server's disk), served by the API under `base_url`."""
@@ -57,6 +74,16 @@ class LocalBlobStorage:
         partial.replace(target)  # never a half-written photo
         return f"{self._base_url}/{path}"
 
+    def delete_url(self, url: str) -> bool:
+        prefix = f"{self._base_url}/"
+        if not url.startswith(prefix):
+            return False
+        target = (self._root / url[len(prefix) :]).resolve()
+        if self._root.resolve() not in target.parents or not target.is_file():
+            return False
+        target.unlink(missing_ok=True)
+        return True
+
 
 class MemoryBlobStorage:
     """For tests."""
@@ -69,3 +96,9 @@ class MemoryBlobStorage:
         with self._lock:
             self.files[path] = (data, content_type)
         return f"memory://{path}"
+
+    def delete_url(self, url: str) -> bool:
+        if not url.startswith("memory://"):
+            return False
+        with self._lock:
+            return self.files.pop(url[len("memory://") :], None) is not None

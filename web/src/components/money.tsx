@@ -59,7 +59,11 @@ function entryTitle(item: LedgerItem): string {
   return item.type ? LEDGER_LABEL[item.type] : "Операция";
 }
 
+/** The order of this entry was deleted: the money history stays, the link goes. */
+const orderDeleted = (item: LedgerItem) => Boolean(item.order_id) && !item.order;
+
 function entrySubtitle(item: LedgerItem): string | null {
+  if (orderDeleted(item)) return item.comment || "Заказ удалён";
   if (item.order_id || item.type === "shipping_charge") return null;
   return item.comment;
 }
@@ -93,11 +97,9 @@ export function History({ items }: { items: LedgerItem[] }) {
                   </div>
                 </>
               );
-              const target = item.order_id
-                ? `/orders/${item.order_id}`
-                : item.shipment_id
-                  ? `/shipments/${item.shipment_id}`
-                  : null;
+              let target: string | null = null;
+              if (item.order_id) target = orderDeleted(item) ? null : `/orders/${item.order_id}`;
+              else if (item.shipment_id) target = `/shipments/${item.shipment_id}`;
               return target ? (
                 <Link key={item.id} to={target} className="list-item">
                   {content}

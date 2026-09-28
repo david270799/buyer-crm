@@ -31,6 +31,7 @@ ADMIN_COMMANDS = [
     BotCommand(command="cancel", description="Отмена с возвратом: /cancel 5"),
     BotCommand(command="rebuy", description="Перезаказ: /rebuy 5 150000 185000"),
     BotCommand(command="status", description="Статус: /status warehouse 5 7"),
+    BotCommand(command="delete", description="Удалить заказы: /delete 1-5"),
     BotCommand(command="cargo", description="Отправка: /cargo TRACK 5 10"),
     BotCommand(command="shipcost", description="Стоимость доставки: /shipcost 1 95000"),
     BotCommand(command="order", description="Карточка заказа"),

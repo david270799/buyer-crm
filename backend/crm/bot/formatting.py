@@ -26,7 +26,14 @@ from crm.domain.views import order_view
 from crm.services.client_service import ClientChange
 from crm.services.finance_service import BalanceView, LedgerResult
 from crm.services.ledger import BalanceChange
-from crm.services.order_service import BulkResult, BuyResult, CancelResult, RebuyResult
+from crm.services.order_service import (
+    BulkResult,
+    BuyResult,
+    CancelResult,
+    DeletePreview,
+    DeleteResult,
+    RebuyResult,
+)
 from crm.services.shipment_service import ShipmentUpdateResult, ShipResult
 
 
@@ -180,6 +187,39 @@ def _bulk_tail(
         lines.append("⏭ Пропущено:")
         lines += [f" • {e(order_id)} — {e(reason)}" for order_id, reason in skipped]
     return lines
+
+
+def delete_preview(preview: DeletePreview) -> str:
+    if not preview.orders:
+        lines = ["Удалять нечего."]
+        lines += _bulk_tail(preview.not_found, preview.skipped, "", [])
+        return "\n".join(lines)
+    lines = [f"🗑 <b>Удалить {len(preview.orders)} заказ(ов)?</b> Это нельзя отменить."]
+    for order in preview.orders:
+        charged = (
+            f" · вернётся {format_krw(order.charged_amount_krw)}"
+            if order.charged_amount_krw
+            else ""
+        )
+        lines.append(f" • <b>{e(order.id)}</b> {e(order.title or '')}{charged}")
+    if preview.refund_krw:
+        lines.append(f"Возврат на баланс: {format_krw(preview.refund_krw, signed=True)}")
+    lines.append("Заказ пропадёт у клиента и из истории; в журнале действий запись останется.")
+    lines += _bulk_tail(preview.not_found, preview.skipped, "", [])
+    return "\n".join(lines)
+
+
+def delete_result(result: DeleteResult) -> str:
+    lines = []
+    if result.deleted:
+        lines.append(f"🗑 Удалено: {_ids(result.deleted)}")
+    if result.change:
+        lines.append(f"Возврат на баланс: {format_krw(result.refunded_krw, signed=True)}")
+        lines.append(_balance_line(result.change.balance_before, result.change.balance_after))
+    lines += _bulk_tail(result.not_found, result.skipped, "", [])
+    if result.deleted and result.next_order_id:
+        lines.append(f"Следующий новый заказ получит номер <b>{e(result.next_order_id)}</b>.")
+    return "\n".join(lines) or "Удалять нечего."
 
 
 def status_result(status: OrderStatus, result: BulkResult) -> str:
@@ -496,6 +536,7 @@ ADMIN_HELP = """<b>Команды администратора</b>
 /cancel 5 — отмена (возвращает списанное один раз; после отправки отмены нет)
 /rebuy 5 150000 185000 [ссылка] [причина] — перезаказ в другом магазине (разница по цене)
 /status warehouse 5 7 12 — статус нескольких заказов (warehouse, cargo, delivered)
+/delete 7 или /delete 1-5 — удалить ошибочные заказы отовсюду (с подтверждением; списанное вернётся)
 /cargo TRACK123 5 10 18 — отправка: создаёт shipment, ставит статус «Отправлен»
 /shipcost 1 95000 — стоимость доставки отправки #1 (списывается с баланса)
 /order 5 — карточка заказа

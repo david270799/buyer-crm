@@ -36,3 +36,6 @@ class IntakeRepository:
             key,
             {"order_id": order_id, "chat_id": chat_id, "message_id": message_id, "created_at": now},
         )
+
+    def delete(self, tx: Transaction, key: str) -> None:
+        tx.delete(self.collection, key)

@@ -148,7 +148,8 @@ class InMemoryDatabase:
         return entry[0] if entry else 0
 
     def _commit(self, writes: list[tuple[str, str, str, Doc]]) -> None:
-        staged: dict[tuple[str, str], Doc] = {}
+        # None marks a deleted document.
+        staged: dict[tuple[str, str], Doc | None] = {}
 
         def current(key: tuple[str, str]) -> Doc | None:
             if key in staged:
@@ -172,16 +173,22 @@ class InMemoryDatabase:
                 if existing is None:
                     raise DocumentMissingError(f"{collection}/{doc_id} does not exist")
                 staged[key] = {**existing, **copy.deepcopy(data)}
+            elif op == "delete":
+                staged[key] = None
 
         self._persist(staged)
         for (collection, doc_id), data in staged.items():
-            self._docs[collection][doc_id] = (self._next_version, data)
+            if data is None:
+                self._docs[collection].pop(doc_id, None)
+            else:
+                self._docs[collection][doc_id] = (self._next_version, data)
             self._collection_versions[collection] += 1
             self._next_version += 1
         self.commit_count += 1
 
-    def _persist(self, staged: dict[tuple[str, str], Doc]) -> None:
-        """Hook for durable subclasses: write `staged` or raise; nothing is applied then."""
+    def _persist(self, staged: dict[tuple[str, str], Doc | None]) -> None:
+        """Hook for durable subclasses: write `staged` (None = delete) or raise;
+        nothing is applied then."""
 
     # Test helper: write documents directly, bypassing transactions.
     def seed(self, collection: str, doc_id: str, data: Doc) -> None:
@@ -249,3 +256,6 @@ class _MemoryTransaction:
 
     def update(self, collection: str, doc_id: str, data: Doc) -> None:
         self._write("update", collection, doc_id, data)
+
+    def delete(self, collection: str, doc_id: str) -> None:
+        self.writes.append(("delete", collection, doc_id, {}))

@@ -261,3 +261,7 @@ class _FirestoreTransaction:
     def update(self, collection: str, doc_id: str, data: Doc) -> None:
         self._touched.add(collection)
         self._txn.update(self._db._ref(collection, doc_id), data)
+
+    def delete(self, collection: str, doc_id: str) -> None:
+        self._touched.add(collection)
+        self._txn.delete(self._db._ref(collection, doc_id))

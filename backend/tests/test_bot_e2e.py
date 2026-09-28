@@ -12,8 +12,8 @@ from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.base import BaseSession
 from aiogram.enums import ParseMode
-from aiogram.methods import GetMe, SendMessage, TelegramMethod
-from aiogram.types import Chat, Message, Update, User
+from aiogram.methods import EditMessageText, GetMe, SendMessage, TelegramMethod
+from aiogram.types import CallbackQuery, Chat, Message, Update, User
 from conftest import ADMIN_TG, CLIENT_TG, START_BALANCE, balance, seed_order
 
 from crm.bot.app import create_dispatcher
@@ -91,6 +91,7 @@ def bot_env(db, services, client_doc):
         await dp.feed_update(bot, update)
         return session.texts()[before:]
 
+    send.dp, send.bot, send.session = dp, bot, session
     return send
 
 
@@ -196,6 +197,59 @@ async def test_status_command(db, bot_env):
     seed_order(db, "N1", status="bought", client_price=1)
     (reply,) = await bot_env("/status склад 1, 2")
     assert "✅ Обновлено: N1" in reply and "Не найдено: N2" in reply
+
+
+async def _press(bot_env, data: str, user_id: int = ADMIN_TG) -> list[TelegramMethod]:
+    update = Update(
+        update_id=next(_ids),
+        callback_query=CallbackQuery(
+            id=str(next(_ids)),
+            from_user=User(id=user_id, is_bot=False, first_name="U"),
+            chat_instance="1",
+            data=data,
+            message=Message(
+                message_id=next(_ids),
+                date=datetime.now(timezone.utc),
+                chat=Chat(id=user_id, type="private"),
+                text="?",
+            ),
+        ),
+    )
+    before = len(bot_env.session.sent)
+    await bot_env.dp.feed_update(bot_env.bot, update)
+    return bot_env.session.sent[before:]
+
+
+async def test_delete_command_asks_then_deletes_and_refunds(db, bot_env):
+    for order_id in ("N1", "N2", "N3"):
+        seed_order(db, order_id, brand="Nike")
+    seed_order(db, "N4", status="bought", client_price=50_000, charged_amount_krw=50_000)
+
+    (question,) = await bot_env("/delete 2 - 4")
+    assert "Удалить 3 заказ" in question and "вернётся" in question
+    markup = bot_env.session.sent[-1].reply_markup
+    confirm = markup.inline_keyboard[0][0].callback_data
+    assert confirm == "del:2-4"
+    assert db.get("orders", "N2") is not None  # nothing happens before the button
+
+    # The client cannot press the admin's button.
+    await _press(bot_env, confirm, user_id=CLIENT_TG)
+    assert db.get("orders", "N2") is not None
+
+    sent = await _press(bot_env, confirm)
+    (edit,) = [m for m in sent if isinstance(m, EditMessageText)]
+    assert "Удалено: N2, N3, N4" in edit.text and "N2" in edit.text
+    assert db.get("orders", "N2") is None and db.get("orders", "N1") is not None
+    assert balance(db) == START_BALANCE + 50_000
+
+
+async def test_delete_can_be_cancelled(db, bot_env):
+    seed_order(db, "N1")
+    await bot_env("/delete 1")
+    sent = await _press(bot_env, "del-cancel")
+    (edit,) = [m for m in sent if isinstance(m, EditMessageText)]
+    assert "отменено" in edit.text
+    assert db.get("orders", "N1") is not None
 
 
 async def test_invalid_token_gives_clear_error_and_closes_session(services):
