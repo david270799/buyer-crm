@@ -61,9 +61,10 @@ python -m crm.server --demo
 Пошаговая инструкция со скриншотами — [docs/guide.pdf](docs/guide.pdf).
 
 1. Сервер с доменом и HTTPS (VPS + `docker compose`).
-2. `.env` из `.env.example`: `BOT_TOKEN`, `ADMIN_TELEGRAM_IDS`, `MINI_APP_URL`, `DOMAIN`, `GEMINI_API_KEY`.
+2. На сервере `bash deploy/setup.sh` — ставит Docker, спрашивает ключи в `.env` и запускает всё
+   (вручную: `.env` из `.env.example` — `BOT_TOKEN`, `ADMIN_TELEGRAM_IDS`, `DOMAIN`, `MINI_APP_URL`, `GEMINI_API_KEY`).
    База, фото и копии хранятся на сервере (SQLite, папка `data/`), Firebase не нужен.
-3. `docker compose up -d --build` — бот сам добавит кнопку **«CRM»**, которая открывает Mini App.
+3. Бот сам добавит кнопку **«CRM»**, которая открывает Mini App (когда задан домен).
 4. `docker compose exec crm python -m crm.tools.doctor` — проверка настроек, базы и копий.
 5. Добавьте бота в группу с клиентом и ответьте `/setclient` на любое сообщение клиента.
 

@@ -23,31 +23,46 @@ Telegram открывает Mini App только по **HTTPS**, поэтому
 
 ## Свой сервер (VPS) с Docker
 
-Подойдёт любой VPS (1 vCPU, 1–2 ГБ RAM, Ubuntu) и домен или поддомен, например `crm.example.com`.
+Подойдёт любой VPS с Ubuntu 24.04 (1 vCPU, 2 ГБ RAM; на 1 ГБ скрипт сам добавит swap) и открытыми
+портами 22, 80, 443. Для Mini App нужен ещё домен или поддомен (`crm.example.com`) с A-записью
+на IP сервера; бот работает и без него, домен можно добавить позже.
 
-1. В DNS направьте `crm.example.com` на IP сервера (A-запись).
-2. Установите Docker: `curl -fsSL https://get.docker.com | sh`.
-3. Скопируйте проект и настройки:
+1. Зайдите на сервер: `ssh root@IP_СЕРВЕРА` (macOS — «Терминал», Windows — PowerShell).
+2. Дайте серверу доступ к репозиторию (он приватный) — ключом только для чтения:
    ```bash
-   git clone <адрес репозитория> buyer-crm && cd buyer-crm
-   cp .env.example .env     # заполните BOT_TOKEN, ADMIN_TELEGRAM_IDS, DOMAIN, MINI_APP_URL,
-                            # GEMINI_API_KEY; STORAGE=sqlite уже стоит по умолчанию
-   chmod 600 .env
+   apt-get update && apt-get install -y git
+   ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519 -C crm-server
+   cat ~/.ssh/id_ed25519.pub
    ```
-4. Запуск:
+   Строку `ssh-ed25519 …` добавьте на GitHub: репозиторий → **Settings → Deploy keys → Add deploy key**
+   (галочку «Allow write access» не ставьте). Это открытая часть ключа, её можно показывать;
+   файл `id_ed25519` без `.pub` никуда не копируйте.
+3. Скачайте проект и запустите установку:
    ```bash
-   docker compose up -d --build
+   ssh-keyscan github.com >> ~/.ssh/known_hosts
+   git clone git@github.com:<владелец>/buyer-crm.git /opt/buyer-crm
+   cd /opt/buyer-crm && bash deploy/setup.sh
+   ```
+   Скрипт ставит Docker, спрашивает токен бота, ваш Telegram ID, ключ Gemini и домен (токен и ключ
+   при вводе не видны), записывает их в `.env` и запускает CRM. Запускать его повторно безопасно —
+   так же добавляются домен или ID позже; уже заполненное не спрашивается (исправить: `nano .env`).
+   Вручную то же самое: Docker (`curl -fsSL https://get.docker.com | sh`), `cp .env.example .env`,
+   заполнить, `chmod 600 .env`, `docker compose up -d --build`.
+4. Проверка:
+   ```bash
    docker compose logs -f crm      # «Bot @... started», «SQLite database: /data/crm.sqlite3»
    docker compose exec crm python -m crm.tools.doctor    # проверка, ничего не меняет
    ```
-5. Откройте бота в Telegram → `/start` → кнопка **«CRM»** (бот ставит её сам, если задан `MINI_APP_URL`).
+5. Откройте бота в Telegram → `/start` → кнопка **«CRM»** (бот ставит её сам, если задан домен).
 6. В @BotFather выключите Privacy Mode (`/setprivacy` → Disable), добавьте бота в группу с клиентом
    (сами, с выключенной «анонимностью») и ответьте `/setclient` на любое сообщение клиента.
    С этого момента каждое фото с подписью от клиента или его помощников молча становится заказом;
    вопросы бот присылает вам в личку.
 
-Обновление после изменений в коде: `git pull && docker compose up -d --build` — данные в томе
-`crm_data` сохраняются.
+Один токен — один работающий бот: если CRM запущена у вас на компьютере, остановите её там.
+
+Обновление после изменений в коде: `cd /opt/buyer-crm && git pull && docker compose up -d --build` —
+данные в томе `crm_data` сохраняются.
 
 ## Копии и восстановление
 

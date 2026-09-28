@@ -92,3 +92,13 @@ jobs:
           docker exec crm python -m crm.tools.backup --list | grep -q "crm-"
           docker exec crm python -m crm.tools.doctor || true
           docker rm -f crm
+      - name: Smoke test (docker compose, .env from .env.example, no domain yet)
+        run: |
+          cp .env.example .env
+          sed -i 's/^BOT_TOKEN=.*/BOT_TOKEN=123456:ci-token/; s/^RUN_BOT=.*/RUN_BOT=0/' .env
+          echo 'DATA_DIR=' >> .env  # an empty value in .env must not move the database
+          docker compose up -d --build
+          curl -fsS --retry 30 --retry-all-errors --retry-delay 2 http://localhost/api/config
+          curl -fsS http://localhost/ | grep -q "<title>Buyer CRM</title>"
+          docker compose exec -T crm test -f /data/crm.sqlite3
+          docker compose down -v

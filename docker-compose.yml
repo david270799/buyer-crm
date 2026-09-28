@@ -1,5 +1,9 @@
 # VPS deployment: the CRM behind Caddy, which obtains an HTTPS certificate
-# automatically (Telegram Mini Apps require HTTPS). See docs/deploy.md.
+# for DOMAIN automatically (Telegram Mini Apps require HTTPS). See docs/deploy.md;
+# deploy/setup.sh installs Docker, fills in .env and starts everything.
+#
+# Without DOMAIN the bot works as usual and Caddy serves plain HTTP on port 80
+# (the Mini App cannot be opened from Telegram until a domain is set).
 #
 # Everything the CRM stores — the SQLite database, order photos and nightly
 # backups — lives in the `crm_data` volume (/data in the container), so it
@@ -8,6 +12,8 @@ services:
   crm:
     build: .
     env_file: .env
+    environment:
+      DATA_DIR: /data  # the volume below, whatever .env says
     volumes:
       - crm_data:/data
       # Only with STORAGE=firestore: the Firebase service account key.
@@ -16,7 +22,7 @@ services:
 
   caddy:
     image: caddy:2
-    command: caddy reverse-proxy --from ${DOMAIN:?set DOMAIN in .env} --to crm:8080
+    command: caddy reverse-proxy --from ${DOMAIN:-:80} --to crm:8080
     ports:
       - "80:80"
       - "443:443"
