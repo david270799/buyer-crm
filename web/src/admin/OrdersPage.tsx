@@ -87,7 +87,9 @@ export function AdminOrdersPage() {
   const [limit, setLimit] = useState(PAGE);
   const selection = useSelection();
   const [bulk, setBulk] = useState<Bulk>(null);
-  useEffect(() => setLimit(PAGE), [filters.status, q, sort, filters.attention]);
+  useEffect(() => {
+    setLimit(PAGE);
+  }, [filters.status, q, sort, filters.attention]);
 
   const { data, error, isLoading, isFetching, refetch } = useOrders({
     status: filters.status,
