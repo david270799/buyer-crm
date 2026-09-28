@@ -2,9 +2,10 @@
 
     python -m crm.tools.doctor
 
-It never writes. Run it before the first start against the real project and
-after adding documents by hand in the Firebase console: it shows documents
-the CRM cannot interpret (unknown status, charges that were never recorded).
+It never writes (the SQLite database is opened read-only, so it can run next
+to the server). It shows the configuration, the data folder, backups, the
+Gemini key, and documents the CRM cannot interpret (unknown status, charges
+that were never recorded).
 """
 
 import sys
@@ -17,7 +18,7 @@ from crm.domain.enums import CHARGED_STATUSES
 from crm.domain.errors import ConfigurationError
 from crm.domain.ids import order_number
 from crm.domain.models import ClientInfo, GeneralSettings, Order
-from crm.storage import Database
+from crm.storage import Database, StorageError
 
 
 class Report:
@@ -50,7 +51,9 @@ def check_config(settings: Settings, report: Report) -> None:
         report.ok(f"ADMIN_TELEGRAM_IDS: {sorted(settings.admin_ids)}")
     else:
         report.fail("ADMIN_TELEGRAM_IDS не задан")
-    if settings.firebase_storage_bucket:
+    if settings.storage == "sqlite":
+        check_sqlite_files(settings, report)
+    elif settings.firebase_storage_bucket:
         report.ok(f"FIREBASE_STORAGE_BUCKET: {settings.firebase_storage_bucket}")
     else:
         report.warn("FIREBASE_STORAGE_BUCKET не задан — фото заказов не сохраняются")
@@ -62,6 +65,32 @@ def check_config(settings: Settings, report: Report) -> None:
         report.info(
             "ALLOWED_CHAT_IDS не задан — бот отвечает в любом чате (админ-команды всё "
             "равно только от админа)"
+        )
+
+
+def check_sqlite_files(settings: Settings, report: Report) -> None:
+    import shutil
+
+    from crm.backup import list_backups
+
+    report.ok(f"Хранилище: SQLite, папка данных {settings.data_dir}")
+    if settings.database_path.is_file():
+        size = settings.database_path.stat().st_size // 1024
+        report.ok(f"база {settings.database_path.name}: {size} КБ")
+    else:
+        report.info("базы ещё нет — она создастся при первом запуске сервера")
+    probe = settings.data_dir if settings.data_dir.exists() else settings.data_dir.parent
+    if probe.exists():
+        free_gb = shutil.disk_usage(probe).free / 1024**3
+        (report.ok if free_gb >= 2 else report.warn)(f"свободно на диске: {free_gb:.1f} ГБ")
+    backups = list_backups(settings.backup_dir)
+    if backups:
+        report.ok(f"копий базы: {len(backups)}, последняя {backups[-1].name}")
+    else:
+        report.info("копий базы пока нет — бот делает их каждую ночь в 4:00 (Сеул)")
+    if not settings.backup_to_telegram:
+        report.warn(
+            "BACKUP_TO_TELEGRAM=0 — копии не уходят в Telegram, храните их вне сервера сами"
         )
 
 
@@ -181,12 +210,16 @@ def check_gemini(settings: Settings, report: Report) -> None:
         report.ok(f"ключ подходит, модель {recognizer.engine} доступна")
 
 
-def run(db: Database, settings: Settings, *, live: bool = False) -> Report:
-    """`live` also calls external services (Gemini) to check the keys."""
+def run(db: Database | None, settings: Settings, *, live: bool = False) -> Report:
+    """`live` also calls external services (Gemini) to check the keys.
+    `db` is None when the SQLite database does not exist yet."""
     report = Report()
     check_config(settings, report)
     if live:
         check_gemini(settings, report)
+    if db is None:
+        print(f"\nИтого: ошибок {report.problems}, предупреждений {report.warnings}")
+        return report
     check_client(db, settings, report)
     max_order = check_orders(db, report)
     check_counters(db, max_order, report)
@@ -199,12 +232,16 @@ def main() -> None:
     load_dotenv(find_dotenv(usecwd=True))
     try:
         settings = load_settings(require_bot=False)
-        from crm.firebase import create_database
+        from crm.runtime import open_read_only
 
-        db = create_database(settings)
+        missing = settings.storage == "sqlite" and not settings.database_path.is_file()
+        db = None if missing else open_read_only(settings)
         report = run(db, settings, live=True)
     except ConfigurationError as exc:
         print(f"❌ {exc.user_message}", file=sys.stderr)
+        sys.exit(2)
+    except StorageError as exc:
+        print(f"❌ {exc}", file=sys.stderr)
         sys.exit(2)
     sys.exit(1 if report.problems else 0)
 

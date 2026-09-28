@@ -44,7 +44,7 @@ async def _main(demo: bool) -> None:
         )
         blobs = None
     else:
-        from crm.firebase import create_blob_storage, create_database
+        from crm.runtime import create_blob_storage, create_database
 
         db = create_database(settings)
         blobs = create_blob_storage(settings)
@@ -52,7 +52,7 @@ async def _main(demo: bool) -> None:
 
     recognizer = create_recognizer(settings.gemini_api_key, settings.gemini_model)
     services = build_services(db, settings.admin_ids, blob_storage=blobs, recognizer=recognizer)
-    await run_bot(create_bot(settings.bot_token), services, settings)
+    await run_bot(create_bot(settings.bot_token), services, settings, database=db)
 
 
 def main() -> None:

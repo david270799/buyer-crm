@@ -8,6 +8,9 @@
 credentials/
 secrets/
 
+# CRM data: database, photos, backups (see DATA_DIR)
+data/
+
 # Python
 __pycache__/
 *.py[cod]

@@ -55,12 +55,14 @@ def build_app(settings: Settings, demo: bool):
         db = create_demo_database(client_id, blob_storage=blobs)
         logger.warning("ДЕМО-РЕЖИМ: данные в памяти, Firebase не используется.")
     else:
-        from crm.firebase import create_blob_storage, create_database
+        from crm.runtime import create_blob_storage, create_database
+        from crm.runtime import media_dir as served_media
 
         admin_ids = settings.admin_ids
         client_id = None
         db = create_database(settings)
         blobs = create_blob_storage(settings)
+        media_dir = served_media(settings)
         if blobs is None:
             logger.warning("FIREBASE_STORAGE_BUCKET не задан — загрузка фото отключена.")
 
@@ -73,7 +75,7 @@ def build_app(settings: Settings, demo: bool):
         logger.warning("Mini App не собран (%s) — работает только API. См. web/README.", web_dist)
 
     run_bot = bool(settings.bot_token) and os.environ.get("RUN_BOT", "1") != "0"
-    lifespan = _bot_lifespan(services, settings) if run_bot else None
+    lifespan = _bot_lifespan(services, settings, db) if run_bot else None
     config = ApiConfig(
         bot_token=settings.bot_token,
         init_data_max_age_seconds=settings.init_data_max_age_hours * 3600,
@@ -88,13 +90,19 @@ def build_app(settings: Settings, demo: bool):
     return create_app(services, config, lifespan=lifespan)
 
 
-def _bot_lifespan(services, settings: Settings):
+def _bot_lifespan(services, settings: Settings, db):
     @contextlib.asynccontextmanager
     async def lifespan(_app):
         from crm.bot.app import create_bot, run_bot
 
         task = asyncio.create_task(
-            run_bot(create_bot(settings.bot_token), services, settings, handle_signals=False)
+            run_bot(
+                create_bot(settings.bot_token),
+                services,
+                settings,
+                handle_signals=False,
+                database=db,
+            )
         )
         task.add_done_callback(_report_bot_exit)
         try:

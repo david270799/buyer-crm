@@ -1,13 +1,17 @@
 # VPS deployment: the CRM behind Caddy, which obtains an HTTPS certificate
 # automatically (Telegram Mini Apps require HTTPS). See docs/deploy.md.
+#
+# Everything the CRM stores — the SQLite database, order photos and nightly
+# backups — lives in the `crm_data` volume (/data in the container), so it
+# survives rebuilds and updates.
 services:
   crm:
     build: .
     env_file: .env
-    environment:
-      FIREBASE_CREDENTIALS: /secrets/service-account.json
     volumes:
-      - ./secrets/service-account.json:/secrets/service-account.json:ro
+      - crm_data:/data
+      # Only with STORAGE=firestore: the Firebase service account key.
+      # - ./secrets/service-account.json:/secrets/service-account.json:ro
     restart: unless-stopped
 
   caddy:
@@ -23,4 +27,5 @@ services:
     restart: unless-stopped
 
 volumes:
+  crm_data:
   caddy_data:

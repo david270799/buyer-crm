@@ -13,7 +13,8 @@ CRM байера, который выкупает товары в Южной К�
 | HTTP API с проверкой Telegram-подписи | ✅ |
 | Перезаказ, история заказа, колокольчик уведомлений (важные / все) | ✅ |
 | Уведомления в личку Telegram (выкл / только мне / клиенту; важные / все) | ✅ |
-| Фото: квадрат 1:1 на белом фоне, WebP до ~500 КБ + миниатюра, Firebase Storage | ✅ |
+| Фото: квадрат 1:1 на белом фоне, WebP до ~500 КБ + миниатюра, на диске сервера | ✅ |
+| База SQLite на сервере, ночные копии в Telegram (Firebase — по желанию) | ✅ |
 | Заказы по фото: сообщение с фото → Gemini (бренд, модель, размер, ссылка) → новый заказ | ✅ |
 | AI-ассистент | позже |
 
@@ -22,21 +23,22 @@ CRM байера, который выкупает товары в Южной К�
 Подробности — [docs/architecture.md](docs/architecture.md), запуск в работу — [docs/deploy.md](docs/deploy.md).
 
 ```
-backend/          Python 3.11+: aiogram 3, FastAPI, firebase-admin
+backend/          Python 3.11+: aiogram 3, FastAPI, SQLite (Firebase — по желанию)
   crm/domain/       статусы, ID, деньги, модели, правила видимости полей для клиента
-  crm/storage/      порт Database (Firestore и in-memory), хранилище файлов
+  crm/storage/      порт Database (SQLite, in-memory, Firestore), хранилище файлов
   crm/services/     вся бизнес-логика — общая для бота, Mini App и будущего AI
   crm/api/          HTTP API для Mini App (проверка Telegram initData)
   crm/bot/          Telegram-бот (тонкие хендлеры)
   crm/server.py     один процесс: API + Mini App + бот
-  crm/tools/doctor  read-only проверка конфигурации и данных Firebase
+  crm/tools/doctor  read-only проверка конфигурации и данных
+  crm/tools/backup  копия базы / восстановление
 web/              Mini App: React + TypeScript + Vite
 Dockerfile, docker-compose.yml   сервер с HTTPS (Caddy)
 ```
 
 ## Посмотреть прямо сейчас: демо в браузере
 
-Нужны Python 3.11+ и Node.js 20+. Firebase и ключи **не нужны** — данные в памяти.
+Нужны Python 3.11+ и Node.js 20+. Ключи **не нужны** — демо-данные в памяти.
 
 ```bash
 cd web && npm install && npm run build && cd ..
@@ -56,12 +58,14 @@ python -m crm.server --demo
 
 Коротко (подробно — [docs/deploy.md](docs/deploy.md)):
 
-Пошаговая инструкция со скриншотами — [docs/guide.pdf](docs/guide.pdf).
+Пошаговая инструкция со скриншотами — [docs/guide.pdf](docs/guide.pdf) (описывает вариант с Firebase;
+обновится под SQLite).
 
-1. Сервер с доменом и HTTPS (VPS + `docker compose`, или Google Cloud Run).
-2. `.env` из `.env.example`: `BOT_TOKEN`, `ADMIN_TELEGRAM_IDS`, `MINI_APP_URL`, `FIREBASE_*`, `GEMINI_API_KEY`.
-3. `docker compose run --rm crm python -m crm.tools.doctor` — проверка существующих данных.
-4. `docker compose up -d --build` — бот сам добавит кнопку **«CRM»**, которая открывает Mini App.
+1. Сервер с доменом и HTTPS (VPS + `docker compose`).
+2. `.env` из `.env.example`: `BOT_TOKEN`, `ADMIN_TELEGRAM_IDS`, `MINI_APP_URL`, `DOMAIN`, `GEMINI_API_KEY`.
+   База, фото и копии хранятся на сервере (SQLite, папка `data/`), Firebase не нужен.
+3. `docker compose up -d --build` — бот сам добавит кнопку **«CRM»**, которая открывает Mini App.
+4. `docker compose exec crm python -m crm.tools.doctor` — проверка настроек, базы и копий.
 5. Добавьте бота в группу с клиентом и ответьте `/setclient` на любое сообщение клиента.
 
 Админу в группе с клиентом нужно выключить «Анонимность» (Remain anonymous) — иначе Telegram
@@ -77,7 +81,7 @@ python -m crm.server --demo
 в подписи — размер и, если есть, ссылка. Бот:
 
 1. скачивает фото и приводит его к квадрату 1:1 (весь товар целиком, белые поля, без обрезки),
-   сжимает в WebP до ~500 КБ, делает миниатюру и сохраняет в Firebase Storage;
+   сжимает в WebP до ~500 КБ, делает миниатюру и сохраняет на диск сервера;
 2. отправляет фото и подпись в Gemini — тот определяет бренд, модель, категорию, размер и ссылку.
    Если Gemini не уверен, поля остаются пустыми (он не выдумывает); ссылка и размер берутся
    только из того, что клиент написал или что видно на фото;
@@ -132,7 +136,7 @@ cd web && npm run typecheck && npm test       # фронтенд
 firebase emulators:exec --only firestore --project demo-buyer-crm "cd backend && python -m pytest -q"
 ```
 
-Каждый тест с хранилищем выполняется дважды — на in-memory фейке и на эмуляторе Firestore,
+Каждый тест с хранилищем выполняется на in-memory фейке, на SQLite-файле и на эмуляторе Firestore,
 включая параллельные `/buy`, `/cancel` и создание заказов. CI на каждый push: lint, тесты,
 сборка Mini App, сборка Docker-образа и smoke-тест.
 
@@ -143,5 +147,6 @@ firebase emulators:exec --only firestore --project demo-buyer-crm "cd backend &&
   `initDataUnsafe` для авторизации не используется. Админ — из `ADMIN_TELEGRAM_IDS`,
   клиент — `client_info/main_client.telegram_id`. Клиентские эндпоинты только читают.
 * Роль проверяется дважды: на входе (бот / API) и внутри сервиса.
-* `firestore.rules` и `storage.rules` запрещают прямой доступ из браузера; применяются вручную
+* База и фото — на сервере; копия базы каждую ночь приходит админам в личку (только им).
+* При `STORAGE=firestore`: `firestore.rules` и `storage.rules` запрещают прямой доступ из браузера
   (`firebase deploy --only firestore:rules,storage`).

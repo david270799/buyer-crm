@@ -13,13 +13,16 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     WEB_DIST=/app/web/dist \
+    DATA_DIR=/data \
     PORT=8080
 WORKDIR /app/backend
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/crm ./crm
 COPY --from=web /web/dist /app/web/dist
-RUN useradd --create-home --uid 10001 crm
+RUN useradd --create-home --uid 10001 crm && mkdir -p /data && chown crm:crm /data
 USER crm
+# Database, order photos and backups. Keep it on a volume (see docker-compose.yml).
+VOLUME ["/data"]
 EXPOSE 8080
 CMD ["python", "-m", "crm.server"]

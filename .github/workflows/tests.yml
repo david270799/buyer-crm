@@ -76,3 +76,19 @@ jobs:
           curl -fsS http://localhost:8080/ | grep -q "<title>Buyer CRM</title>"
           curl -fsS -H "Authorization: demo client" http://localhost:8080/api/overview | grep -q '"balance"'
           docker rm -f crm
+      - name: Smoke test (SQLite on a volume, data survives a restart)
+        run: |
+          docker volume create crm_data
+          run() {
+            docker run -d --name crm -p 8080:8080 -v crm_data:/data \
+              -e RUN_BOT=0 -e BOT_TOKEN=123456:ci-token -e ADMIN_TELEGRAM_IDS=1001 buyer-crm
+            curl -fsS --retry 30 --retry-all-errors --retry-delay 2 http://localhost:8080/api/config
+          }
+          run
+          docker exec crm python -c "import sqlite3; c = sqlite3.connect('/data/crm.sqlite3'); print(c.execute('select count(*) from documents').fetchone())"
+          docker exec crm python -m crm.tools.backup
+          docker rm -f crm
+          run
+          docker exec crm python -m crm.tools.backup --list | grep -q "crm-"
+          docker exec crm python -m crm.tools.doctor || true
+          docker rm -f crm

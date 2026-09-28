@@ -15,11 +15,14 @@ from aiogram.types import (
 )
 
 from crm.bot.access import AccessMiddleware
+from crm.bot.backups import NightlyBackup
 from crm.bot.handlers import build_router
 from crm.bot.notifier import TelegramNotifier
 from crm.config import Settings
 from crm.domain.errors import ConfigurationError
 from crm.services.container import Services
+from crm.storage import Database
+from crm.storage.sqlite import SqliteDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -68,11 +71,17 @@ def create_dispatcher(services: Services, settings: Settings) -> Dispatcher:
 
 
 async def run_bot(
-    bot: Bot, services: Services, settings: Settings, *, handle_signals: bool = True
+    bot: Bot,
+    services: Services,
+    settings: Settings,
+    *,
+    handle_signals: bool = True,
+    database: Database | None = None,
 ) -> None:
     """Long polling until cancelled. Always closes the HTTP session.
 
     `handle_signals=False` when embedded in the web server, which owns signals.
+    With a SQLite `database` the bot also makes the nightly backup.
     """
     try:
         try:
@@ -102,21 +111,36 @@ async def run_bot(
         notifier = TelegramNotifier(bot, services.notifications, settings.mini_app_url)
         notifier_task = asyncio.create_task(notifier.run(), name="telegram-notifier")
         notifier_task.add_done_callback(_report_notifier_exit)
+        background = [notifier_task]
+        if isinstance(database, SqliteDatabase) and not database.read_only:
+            nightly = NightlyBackup(
+                bot,
+                database.path,
+                settings.backup_dir,
+                settings.admin_ids,
+                keep=settings.backup_keep,
+                send=settings.backup_to_telegram,
+            )
+            backup_task = asyncio.create_task(nightly.run(), name="nightly-backup")
+            backup_task.add_done_callback(_report_notifier_exit)
+            background.append(backup_task)
         try:
             await dp.start_polling(
                 bot, allowed_updates=dp.resolve_used_update_types(), handle_signals=handle_signals
             )
         finally:
-            notifier_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await notifier_task
+            for task in background:
+                task.cancel()
+            for task in background:
+                with contextlib.suppress(asyncio.CancelledError):
+                    await task
     finally:
         await bot.session.close()
 
 
 def _report_notifier_exit(task: asyncio.Task) -> None:
     if not task.cancelled() and task.exception() is not None:
-        logger.error("Telegram notifications stopped", exc_info=task.exception())
+        logger.error("Background task %s stopped", task.get_name(), exc_info=task.exception())
 
 
 async def set_commands(bot: Bot, admin_ids: frozenset[int]) -> None:

@@ -1,8 +1,9 @@
 """Shared fixtures.
 
-Every test that takes `db` runs twice: against the in-memory database and,
-when FIRESTORE_EMULATOR_HOST is set, against the real Firestore emulator
-(each test in its own throw-away project, so tests never share data).
+Every test that takes `db` runs against the in-memory database, the SQLite
+file database (the production default, in a temporary file) and, when
+FIRESTORE_EMULATOR_HOST is set, the real Firestore emulator (each test in its
+own throw-away project, so tests never share data).
 """
 
 import os
@@ -43,11 +44,18 @@ def _emulator_database() -> Database:
     return FirestoreDatabase(Client(project=f"demo-crm-{uuid.uuid4().hex[:12]}"))
 
 
-@pytest.fixture(params=["memory", pytest.param("emulator", marks=pytest.mark.emulator)])
-def db(request) -> Database:
+@pytest.fixture(params=["memory", "sqlite", pytest.param("emulator", marks=pytest.mark.emulator)])
+def db(request, tmp_path):
     if request.param == "memory":
-        return InMemoryDatabase()
-    return _emulator_database()
+        yield InMemoryDatabase()
+    elif request.param == "sqlite":
+        from crm.storage.sqlite import SqliteDatabase
+
+        database = SqliteDatabase(tmp_path / "crm.sqlite3")
+        yield database
+        database.close()
+    else:
+        yield _emulator_database()
 
 
 def seed(db: Database, collection: str, doc_id: str, data: dict) -> None:

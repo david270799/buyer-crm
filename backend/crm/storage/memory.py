@@ -106,15 +106,18 @@ class InMemoryDatabase:
     ) -> list[tuple[str, Doc]]:
         with self._lock:
             rows = [
-                (doc_id, copy.deepcopy(data))
+                (doc_id, data)
                 for doc_id, (_, data) in sorted(self._docs[collection].items())
                 if all(_matches(data, flt) for flt in filters)
             ]
-        if order_by is not None:
-            # Like Firestore: documents without the ordered field are excluded.
-            rows = [row for row in rows if order_by.field in row[1]]
-            rows.sort(key=lambda row: row[1][order_by.field], reverse=order_by.descending)
-        return rows[:limit] if limit is not None else rows
+            if order_by is not None:
+                # Like Firestore: documents without the ordered field are excluded.
+                rows = [row for row in rows if order_by.field in row[1]]
+                rows.sort(key=lambda row: row[1][order_by.field], reverse=order_by.descending)
+            if limit is not None:
+                rows = rows[:limit]
+            # Copy only what is returned: callers may modify their copies.
+            return [(doc_id, copy.deepcopy(data)) for doc_id, data in rows]
 
     def scan(self, collection: str) -> list[tuple[str, Doc]]:
         return self.query(collection)
@@ -145,7 +148,7 @@ class InMemoryDatabase:
         return entry[0] if entry else 0
 
     def _commit(self, writes: list[tuple[str, str, str, Doc]]) -> None:
-        staged: dict[tuple[str, str], Doc | None] = {}
+        staged: dict[tuple[str, str], Doc] = {}
 
         def current(key: tuple[str, str]) -> Doc | None:
             if key in staged:
@@ -170,11 +173,15 @@ class InMemoryDatabase:
                     raise DocumentMissingError(f"{collection}/{doc_id} does not exist")
                 staged[key] = {**existing, **copy.deepcopy(data)}
 
+        self._persist(staged)
         for (collection, doc_id), data in staged.items():
             self._docs[collection][doc_id] = (self._next_version, data)
             self._collection_versions[collection] += 1
             self._next_version += 1
         self.commit_count += 1
+
+    def _persist(self, staged: dict[tuple[str, str], Doc]) -> None:
+        """Hook for durable subclasses: write `staged` or raise; nothing is applied then."""
 
     # Test helper: write documents directly, bypassing transactions.
     def seed(self, collection: str, doc_id: str, data: Doc) -> None:

@@ -1,70 +1,99 @@
 # Запуск в работу
 
-Всё работает одним сервисом: API, Mini App (клиент и админ) и Telegram-бот.
+Всё работает одним сервисом на вашем сервере: API, Mini App (клиент и админ), Telegram-бот и база.
 Telegram открывает Mini App только по **HTTPS**, поэтому нужен сервер с доменом.
 
-## Вариант 1 — свой сервер (VPS) с Docker — рекомендуется
+## Где хранятся данные
 
-Подойдёт любой VPS за ~$5/мес (1 vCPU, 1 ГБ RAM) и домен или поддомен, например `crm.example.com`.
+По умолчанию (`STORAGE=sqlite`) всё лежит на сервере, в одной папке данных (`DATA_DIR`,
+в Docker — том `crm_data`, внутри контейнера `/data`):
+
+| Что | Где |
+|---|---|
+| База (заказы, деньги, история, настройки) | `crm.sqlite3` — один файл SQLite |
+| Фото заказов и отправок | `media/` (WebP, до ~0,5 МБ на фото) |
+| Резервные копии базы | `backups/crm-ДАТА-ВРЕМЯ.sqlite3.gz`, хранятся последние 14 |
+
+Каждую ночь в 4:00 (Сеул) бот делает копию базы и **присылает её администраторам в Telegram** —
+так копия всегда есть не только на сервере. Фото в копию не входят (их много, и их можно
+прислать заново); всё о заказах и деньгах — входит. Отключить отправку: `BACKUP_TO_TELEGRAM=0`.
+
+30 ГБ диска хватает надолго: база даже для тысяч заказов — десятки мегабайт, фото — около
+0,5 МБ, то есть это десятки тысяч фото.
+
+## Свой сервер (VPS) с Docker
+
+Подойдёт любой VPS (1 vCPU, 1–2 ГБ RAM, Ubuntu) и домен или поддомен, например `crm.example.com`.
 
 1. В DNS направьте `crm.example.com` на IP сервера (A-запись).
 2. Установите Docker: `curl -fsSL https://get.docker.com | sh`.
 3. Скопируйте проект и настройки:
    ```bash
    git clone <адрес репозитория> buyer-crm && cd buyer-crm
-   cp .env.example .env            # заполните BOT_TOKEN, ADMIN_TELEGRAM_IDS, DOMAIN, MINI_APP_URL,
-                                   # FIREBASE_PROJECT_ID, FIREBASE_STORAGE_BUCKET, GEMINI_API_KEY
-   mkdir -p secrets && nano secrets/service-account.json   # JSON сервисного аккаунта Firebase
-   chmod 600 .env secrets/service-account.json
+   cp .env.example .env     # заполните BOT_TOKEN, ADMIN_TELEGRAM_IDS, DOMAIN, MINI_APP_URL,
+                            # GEMINI_API_KEY; STORAGE=sqlite уже стоит по умолчанию
+   chmod 600 .env
    ```
-4. Проверка данных Firebase (ничего не пишет):
-   ```bash
-   docker compose run --rm crm python -m crm.tools.doctor
-   ```
-5. Запуск:
+4. Запуск:
    ```bash
    docker compose up -d --build
-   docker compose logs -f crm      # «Bot @... started», «Uvicorn running»
+   docker compose logs -f crm      # «Bot @... started», «SQLite database: /data/crm.sqlite3»
+   docker compose exec crm python -m crm.tools.doctor    # проверка, ничего не меняет
    ```
-6. Откройте бота в Telegram → `/start` → кнопка **«CRM»** (бот ставит её сам, если задан `MINI_APP_URL`).
-   Клиент открывает ту же кнопку из лички с ботом и видит только свой режим.
-
-7. В @BotFather выключите Privacy Mode (`/setprivacy` → Disable), добавьте бота в группу с клиентом
+5. Откройте бота в Telegram → `/start` → кнопка **«CRM»** (бот ставит её сам, если задан `MINI_APP_URL`).
+6. В @BotFather выключите Privacy Mode (`/setprivacy` → Disable), добавьте бота в группу с клиентом
    (сами, с выключенной «анонимностью») и ответьте `/setclient` на любое сообщение клиента.
    С этого момента каждое фото с подписью от клиента или его помощников молча становится заказом;
    вопросы бот присылает вам в личку.
 
-Обновление после изменений в коде: `git pull && docker compose up -d --build`.
+Обновление после изменений в коде: `git pull && docker compose up -d --build` — данные в томе
+`crm_data` сохраняются.
 
-Пошаговая инструкция со скриншотами, включая проверку на своём компьютере через временный
-HTTPS-туннель, — [guide.pdf](guide.pdf).
-
-## Вариант 2 — Google Cloud Run (тот же Google-аккаунт, что и Firebase)
-
-Требуется тариф Blaze. Бот работает через long polling, поэтому нужен ровно **один постоянно работающий** экземпляр:
+## Копии и восстановление
 
 ```bash
-gcloud run deploy buyer-crm --source . --region asia-northeast3 \
-  --min-instances 1 --max-instances 1 --no-cpu-throttling \
-  --set-env-vars ADMIN_TELEGRAM_IDS=...,FIREBASE_PROJECT_ID=...,FIREBASE_STORAGE_BUCKET=... \
-  --set-secrets BOT_TOKEN=bot-token:latest
+docker compose exec crm python -m crm.tools.backup           # сделать копию сейчас
+docker compose exec crm python -m crm.tools.backup --list    # список копий
+docker compose cp crm:/data/backups ./backups                # скачать копии с сервера
 ```
 
-На Cloud Run сервисный аккаунт подключается автоматически (Application Default Credentials),
-JSON-ключ не нужен. `MINI_APP_URL` — адрес сервиса, который выдаст `gcloud`.
+Восстановление (например, из файла, который бот прислал в Telegram):
 
-## Firebase
+```bash
+docker compose cp crm-20261001-040000.sqlite3.gz crm:/data/restore.sqlite3.gz
+docker compose stop crm
+docker compose run --rm crm python -m crm.tools.backup --restore /data/restore.sqlite3.gz
+docker compose start crm
+```
 
-* **Правила доступа** (`firestore.rules`, `storage.rules`) запрещают всё для браузеров — backend
-  работает через Admin SDK и их не использует. Применить: `firebase deploy --only firestore:rules,storage`.
-  Перед этим убедитесь, что к Firestore не обращается напрямую никакое другое приложение.
-* **Storage**: включите Firebase Storage в консоли и укажите бакет в `FIREBASE_STORAGE_BUCKET` —
-  иначе загрузка фото в Mini App будет отключена (остальное работает).
+Перед заменой копия проверяется; прежняя база остаётся рядом как `crm.sqlite3.before-restore-…`.
+Пока сервер работает, восстановление отказывается запускаться — база открыта.
+
+Свои отчёты можно строить обычным SQL: в базе есть представления `orders_v` и `transactions_v`,
+например `sqlite3 crm.sqlite3 "select status, count(*), sum(profit) from orders_v group by status"`
+(на копии или при остановленном сервере).
+
+## Без Docker
+
+То же самое работает напрямую: `cd backend && python -m crm.server` — база и фото появятся в папке
+`data/` в корне проекта (или в `DATA_DIR`). Нужен только один запущенный процесс CRM на одну базу:
+второй откажется стартовать, пока первый работает.
+
+## Firebase вместо SQLite (необязательно)
+
+`STORAGE=firestore` хранит данные в Firestore, а фото в Firebase Storage — тогда нужны
+`FIREBASE_PROJECT_ID`, `FIREBASE_STORAGE_BUCKET` и ключ сервисного аккаунта (`FIREBASE_CREDENTIALS`,
+в docker-compose раскомментируйте строку с `secrets/service-account.json`). Резервные копии
+тогда делает Google. Этот вариант также позволяет запуск в Google Cloud Run
+(`--min-instances 1 --max-instances 1 --no-cpu-throttling`), где нет постоянного диска.
+Правила `firestore.rules` и `storage.rules` запрещают прямой доступ из браузера:
+`firebase deploy --only firestore:rules,storage`.
 
 ## Ключи и безопасность
 
-* Ключи хранятся только в `.env` / `secrets/` на сервере (или в Secret Manager). В git и в чаты их не отправляйте.
-* Перевыпуск: токен бота — @BotFather → `/revoke`; ключ Firebase — Google Cloud Console →
-  IAM → Service accounts → Keys → удалить старый, создать новый. После замены — `docker compose up -d`.
+* Ключи хранятся только в `.env` на сервере. В git и в чаты их не отправляйте.
+* Перевыпуск: токен бота — @BotFather → `/revoke`; ключ Gemini — AI Studio. После замены — `docker compose up -d`.
+* Копия базы содержит все заказы и деньги — присылается только администраторам в личку.
+  Не пересылайте её никому.
 * Один бот-токен — один работающий экземпляр. Для экспериментов заведите отдельного тестового бота
-  и запускайте `python -m crm.server --demo` — демо-данные в памяти, Firebase не затрагивается.
+  и запускайте `python -m crm.server --demo` — демо-данные в памяти, настоящая база не затрагивается.

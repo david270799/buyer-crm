@@ -36,7 +36,7 @@ class FirebaseBlobStorage:
 
 
 class LocalBlobStorage:
-    """Files in a local directory, served by the API under `base_url` (demo mode)."""
+    """Files in a local directory (the server's disk), served by the API under `base_url`."""
 
     def __init__(self, root: Path, base_url: str = "/media"):
         self._root = root
@@ -52,7 +52,9 @@ class LocalBlobStorage:
         if self._root.resolve() not in target.parents:
             raise ValueError("Path escapes storage root")
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(data)
+        partial = target.with_name(f".{target.name}.part")
+        partial.write_bytes(data)
+        partial.replace(target)  # never a half-written photo
         return f"{self._base_url}/{path}"
 
 

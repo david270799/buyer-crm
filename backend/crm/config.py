@@ -7,8 +7,13 @@ environment or in files outside git. See `.env.example`.
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 
 from crm.domain.errors import ConfigurationError
+
+# The repository's data/ folder when run from source; /data in the Docker image.
+DEFAULT_DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+STORAGES = ("sqlite", "firestore")
 
 
 @dataclass(frozen=True)
@@ -28,6 +33,23 @@ class Settings:
     web_origins: tuple[str, ...] = ()
     init_data_max_age_hours: int = 24
     port: int = 8080
+    # Storage: "sqlite" (one file on this server, the default) or "firestore".
+    storage: str = "sqlite"
+    data_dir: Path = DEFAULT_DATA_DIR
+    backup_to_telegram: bool = True
+    backup_keep: int = 14
+
+    @property
+    def database_path(self) -> Path:
+        return self.data_dir / "crm.sqlite3"
+
+    @property
+    def media_dir(self) -> Path:
+        return self.data_dir / "media"
+
+    @property
+    def backup_dir(self) -> Path:
+        return self.data_dir / "backups"
 
 
 def _optional(env: Mapping[str, str], name: str) -> str | None:
@@ -81,7 +103,14 @@ def load_settings(env: Mapping[str, str] | None = None, *, require_bot: bool = T
         ),
         init_data_max_age_hours=_positive_int(env, "INIT_DATA_MAX_AGE_HOURS", 24),
         port=_positive_int(env, "PORT", 8080),
+        storage=(_optional(env, "STORAGE") or "sqlite").lower(),
+        data_dir=Path(_optional(env, "DATA_DIR") or DEFAULT_DATA_DIR).expanduser(),
+        backup_to_telegram=(_optional(env, "BACKUP_TO_TELEGRAM") or "1")
+        not in ("0", "no", "false"),
+        backup_keep=_positive_int(env, "BACKUP_KEEP", 14),
     )
+    if settings.storage not in STORAGES:
+        raise ConfigurationError("STORAGE: sqlite (по умолчанию) или firestore.")
     if settings.mini_app_url and not settings.mini_app_url.startswith("https://"):
         raise ConfigurationError("MINI_APP_URL должен начинаться с https:// (требование Telegram).")
     # ADMIN_TELEGRAM_IDS may be empty on the very first start: the bot then gives
