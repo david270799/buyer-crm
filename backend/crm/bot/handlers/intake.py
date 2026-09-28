@@ -154,14 +154,16 @@ class PhotoIntake:
         order (then `confirm_to`, the admin who asked, gets the result privately)."""
         chat_id = message.chat.id
         private = message.chat.type == ChatType.PRIVATE
-        if await asyncio.to_thread(self._services.intake.existing, chat_id, message.message_id):
-            return  # a redelivered update
+        # Take the place in the queue before the first await: photos are
+        # numbered in the order Telegram delivered them.
         loop = asyncio.get_running_loop()
         previous, mine = self._last.get(chat_id), loop.create_future()
         self._last[chat_id] = mine
         link = message_link(chat_id, message.message_id)
         file_id = _file_id(message)
         try:
+            if await asyncio.to_thread(self._services.intake.existing, chat_id, message.message_id):
+                return  # a redelivered update
             async with self._slots:
                 if private:
                     with contextlib.suppress(Exception):

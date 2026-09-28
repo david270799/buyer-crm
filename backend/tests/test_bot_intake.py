@@ -304,9 +304,19 @@ async def test_not_an_order_goes_to_the_admin_and_add_forces_it(db, env):
     assert len(e["session"].deleted()) == 2  # the /add commands are removed from the group
 
 
-async def test_photos_sent_together_keep_their_order(db, env):
+async def test_photos_sent_together_keep_their_order(db, env, monkeypatch):
     seed_order(db, "N125")
     e = env(FakeGemini(slow_first=0.3))  # the first photo is recognised last
+    # And the duplicate check of earlier photos is slower too (e.g. network latency).
+    intake = e["services"].intake
+    real_existing = intake.existing
+    delays = iter([0.2, 0.1, 0.0])
+
+    def slow_existing(chat_id, message_id):
+        time.sleep(next(delays, 0.0))
+        return real_existing(chat_id, message_id)
+
+    monkeypatch.setattr(intake, "existing", slow_existing)
 
     first, second, third = (next(_ids) for _ in range(3))
     await asyncio.gather(
