@@ -181,6 +181,20 @@ def _clean_url(value: str | None, name: str) -> str | None:
     return text
 
 
+# Photos on the server's own disk are served from here (LocalBlobStorage).
+_MEDIA_PREFIX = "/media/"
+
+
+def _clean_photo_url(value: str | None, name: str) -> str | None:
+    """A photo is an http(s) URL or a file of our own media storage (`/media/...`)."""
+    text = _clean_text(value, name, _MAX_LONG_TEXT)
+    if text is None:
+        return None
+    if text.startswith(_MEDIA_PREFIX) and ".." not in text and "//" not in text:
+        return text
+    return _clean_url(text, name)
+
+
 @dataclass
 class OrderUpdate:
     """Partial update of non-financial order fields (UNSET = keep, None = clear).
@@ -247,8 +261,10 @@ def _clean_update_fields(values: dict[str, Any]) -> dict[str, Any]:
             cleaned[name] = _clean_text(value, name, _MAX_SHORT_TEXT)
         elif name in ("client_comment", "internal_comment"):
             cleaned[name] = _clean_text(value, "Комментарий", _MAX_LONG_TEXT)
-        elif name in ("source_url", "photo_url", "thumbnail_url"):
-            cleaned[name] = _clean_url(value, "Ссылка" if name == "source_url" else "Фото")
+        elif name == "source_url":
+            cleaned[name] = _clean_url(value, "Ссылка")
+        elif name in ("photo_url", "thumbnail_url"):
+            cleaned[name] = _clean_photo_url(value, "Фото")
         elif name == "attention_required":
             if not isinstance(value, bool):
                 raise ValidationError("attention_required должен быть true или false.")
@@ -504,8 +520,8 @@ class OrderService:
             "model": _clean_text(new.model, "Модель", _MAX_SHORT_TEXT),
             "size": _clean_text(new.size, "Размер", _MAX_SHORT_TEXT),
             "source_url": _clean_url(new.source_url, "Ссылка"),
-            "photo_url": _clean_url(new.photo_url, "Фото"),
-            "thumbnail_url": _clean_url(new.thumbnail_url, "Миниатюра"),
+            "photo_url": _clean_photo_url(new.photo_url, "Фото"),
+            "thumbnail_url": _clean_photo_url(new.thumbnail_url, "Миниатюра"),
             "client_comment": _clean_text(new.client_comment, "Комментарий", _MAX_LONG_TEXT),
             "internal_comment": _clean_text(
                 new.internal_comment, "Внутренний комментарий", _MAX_LONG_TEXT

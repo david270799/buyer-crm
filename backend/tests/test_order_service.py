@@ -310,6 +310,18 @@ def test_create_order_skips_ids_taken_while_counter_was_behind(db, services, adm
     assert db.get("counters", "orders")["next_id"] == 8
 
 
+def test_create_order_accepts_photos_from_own_media_storage(db, services, admin):
+    # LocalBlobStorage (SQLite mode) returns same-origin paths, not https URLs.
+    order = services.orders.create_order(
+        admin,
+        NewOrder(photo_url="/media/orders/2026/a.webp", thumbnail_url="/media/orders/a_t.webp"),
+    )
+    assert db.get("orders", order.id)["photo_url"] == "/media/orders/2026/a.webp"
+    for bad in ("/media/../crm.sqlite3", "javascript:alert(1)", "/other/a.webp"):
+        with pytest.raises(ValidationError):
+            services.orders.create_order(admin, NewOrder(photo_url=bad))
+
+
 def test_create_order_in_empty_collection_starts_at_one(db, services, admin):
     assert services.orders.create_order(admin, NewOrder()).id == "N1"
 
