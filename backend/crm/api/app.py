@@ -264,8 +264,16 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
-        if request.url.path.startswith("/api/"):
+        path = request.url.path
+        if path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
+        elif path == "/" or path.endswith(".html"):
+            # Always revalidate the page: a cached copy would point at the scripts
+            # of an older build, which no longer exist after an update (blank app).
+            response.headers["Cache-Control"] = "no-cache"
+        elif path.startswith("/assets/") and response.status_code == 200:
+            # Build files carry a content hash in their names: safe to keep.
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         return response
 
     # --- errors -----------------------------------------------------------

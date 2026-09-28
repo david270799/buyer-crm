@@ -402,6 +402,8 @@ def test_demo_login_only_in_demo_mode(db, clock, client_doc):
 
 def test_static_frontend_is_served(db, clock, client_doc, tmp_path):
     (tmp_path / "index.html").write_text("<html>CRM</html>")
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "assets" / "index-abc123.js").write_text("console.log(1)")
     media = tmp_path / "media"
     media.mkdir()
     (media / "p.webp").write_bytes(b"RIFF")
@@ -412,6 +414,13 @@ def test_static_frontend_is_served(db, clock, client_doc, tmp_path):
     assert client.get("/media/p.webp").headers["content-type"] == "image/webp"
     page = client.get("/")
     assert page.status_code == 200 and "CRM" in page.text
+    # The page is always revalidated (an old copy would load scripts of an old
+    # build); hashed build files are cached for good.
+    assert page.headers["cache-control"] == "no-cache"
+    assert client.get("/?open=order:N5").headers["cache-control"] == "no-cache"
+    script = client.get("/assets/index-abc123.js")
+    assert script.headers["cache-control"] == "public, max-age=31536000, immutable"
+    assert "immutable" not in client.get("/assets/missing.js").headers.get("cache-control", "")
     assert client.get("/api/me").status_code == 401
     assert client.get("/api/me").headers["cache-control"] == "no-store"
 

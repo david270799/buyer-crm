@@ -99,11 +99,41 @@ if [ -z "$(get_env ADMIN_TELEGRAM_IDS)" ]; then
   if [ -n "$ids" ]; then set_env ADMIN_TELEGRAM_IDS "$ids"; fi
 fi
 
+# ok | bad | unknown: asks Google whether the key works (the key goes via stdin,
+# not the command line).
+gemini_check() {
+  local code
+  code=$(printf 'x-goog-api-key: %s\n' "$1" | curl -sS -o /dev/null -w '%{http_code}' -m 15 -H @- \
+    https://generativelanguage.googleapis.com/v1beta/models 2>/dev/null) || code=000
+  case $code in
+    200) echo ok ;;
+    400 | 401 | 403) echo bad ;;
+    *) echo unknown ;;
+  esac
+}
+
 if [ -z "$(get_env GEMINI_API_KEY)" ]; then
   title "Ключ Gemini (распознавание товара на фото)"
-  echo "Ключ из https://aistudio.google.com/apikey. Символы не видны. Нет ключа — Enter:"
-  echo "заказы всё равно принимаются, бренд и модель тогда впишете сами."
-  key=$(ask GEMINI_API_KEY '^[A-Za-z0-9_-]{20,}$' hidden optional)
+  echo "Ключ из https://aistudio.google.com/apikey — начинается с AQ. или AIza. Символы не видны."
+  echo "Нет ключа — Enter: заказы всё равно принимаются, бренд и модель тогда впишете сами."
+  while true; do
+    key=$(ask GEMINI_API_KEY '^[A-Za-z0-9._~+/=-]{20,}$' hidden optional)
+    [ -n "$key" ] || break
+    case $(gemini_check "$key") in
+      ok)
+        echo "✅ Google принял ключ"
+        break
+        ;;
+      bad)
+        echo "Google не принял этот ключ. Скопируйте его ещё раз кнопкой копирования в AI Studio"
+        echo "и вставьте снова (или Enter — пропустить)."
+        ;;
+      *)
+        warn "Не удалось связаться с Google для проверки — сохраняю ключ как есть."
+        break
+        ;;
+    esac
+  done
   if [ -n "$key" ]; then
     set_env GEMINI_API_KEY "$key"
     echo "✅ Ключ сохранён (…${key: -4})"

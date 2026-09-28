@@ -3,6 +3,7 @@ import { type ReactNode, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { backButton } from "../telegram";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { BellButton } from "./events";
 
 export interface NavItem {
@@ -54,7 +55,7 @@ export function Shell({ nav, title, children }: { nav: NavItem[]; title: string;
           <span className="topbar-title">{title}</span>
           <BellButton />
         </header>
-        {children}
+        <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>
       </main>
       <nav className="tabbar" aria-label="Навигация">
         {nav.map((item) => (

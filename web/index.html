@@ -8,14 +8,43 @@
     <title>Buyer CRM</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Nothing here may hold up the first paint: a slow font or script server
+         must not leave Telegram showing an empty page. -->
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media = 'all'"
     />
-    <script src="https://telegram.org/js/telegram-web-app.js?56"></script>
+    <!-- defer: still runs before the app (scripts run in document order). -->
+    <script src="https://telegram.org/js/telegram-web-app.js?56" defer></script>
+    <style>
+      .boot { min-height: 100vh; display: flex; flex-direction: column; gap: 14px; align-items: center;
+        justify-content: center; font: 15px/1.4 system-ui, sans-serif; color: #8a8a8e; text-align: center; }
+      .boot-spinner { width: 28px; height: 28px; border-radius: 50%; border: 3px solid #8a8a8e44;
+        border-top-color: #8a8a8e; animation: boot-spin 0.9s linear infinite; }
+      .boot button { font: inherit; padding: 8px 18px; border-radius: 10px; border: 1px solid #8a8a8e66;
+        background: transparent; color: inherit; }
+      @keyframes boot-spin { to { transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Replaced by the app as soon as it starts. -->
+    <div id="root">
+      <div class="boot">
+        <div class="boot-spinner"></div>
+        <div id="boot-slow" hidden>
+          CRM загружается дольше обычного.<br />Проверьте интернет и нажмите «Обновить».
+          <div style="margin-top: 12px"><button type="button" onclick="location.reload()">Обновить</button></div>
+        </div>
+      </div>
+    </div>
+    <script>
+      setTimeout(function () {
+        var slow = document.getElementById("boot-slow");
+        if (slow) slow.hidden = false;
+      }, 8000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

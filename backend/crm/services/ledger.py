@@ -42,7 +42,9 @@ class BalanceLedger:
     def load_client(self, tx: Transaction) -> ClientInfo:
         client = self._clients.get_main(tx)
         if client is None:
-            raise ConfigurationError("В Firestore не найден документ client_info/main_client.")
+            raise ConfigurationError(
+                "Клиент ещё не назначен: в группе ответьте /setclient на любое сообщение клиента."
+            )
         if client.balance is None:
             raise ConfigurationError(
                 "Поле balance в client_info/main_client отсутствует или не является числом. "
