@@ -11,11 +11,11 @@ import { Empty, ErrorState, Loading } from "../components/ui";
 import { date, items, krw, orderTitle } from "../lib/format";
 import { CopyText } from "./OrderDetailsPage";
 
-export function ShipmentsPage() {
+export function ShipmentsPage({ action }: { action?: ReactNode }) {
   const { data, error, isLoading, refetch } = useShipments();
   return (
     <>
-      <PageHead title="Отправки" sub={data ? `${data.items.length} всего` : undefined} />
+      <PageHead title="Отправки" sub={data ? `${data.items.length} всего` : undefined} action={action} />
       {isLoading ? (
         <Loading rows={4} />
       ) : error || !data ? (

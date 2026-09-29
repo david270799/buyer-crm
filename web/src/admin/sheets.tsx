@@ -13,6 +13,7 @@ import {
   useDeleteOrders,
   useDeletePreview,
   useMoney,
+  useOrders,
   useOverview,
   useRebuy,
   useSettings,
@@ -20,7 +21,8 @@ import {
   useUpdateShipment,
 } from "../api/hooks";
 import type { BulkResult, Order, OrderStatus, PhotoRecognition, Shipment } from "../api/types";
-import { Confirm, errorText, Field, MoneyInput, Sheet, Switch, useToast } from "../components/ui";
+import { Thumb } from "../components/orders";
+import { Checkbox, Confirm, errorText, Field, MoneyInput, Sheet, Switch, useToast } from "../components/ui";
 import { krw, STATUS_LABEL, todayKey } from "../lib/format";
 
 // --- helpers ------------------------------------------------------------------
@@ -622,6 +624,69 @@ function parseWeight(text: string): number | null | "invalid" {
   if (!text.trim()) return null;
   const value = Number(text);
   return Number.isFinite(value) && value > 0 ? value : "invalid";
+}
+
+/** "+" on the shipments page: pick orders that can be sent, then the usual form. */
+export function NewShipmentFlow({ onClose }: { onClose: () => void }) {
+  const orders = useOrders({ sort: "newest", limit: 200 });
+  const [picked, setPicked] = useState<string[]>([]);
+  const [ready, setReady] = useState(false);
+  const candidates = (orders.data?.items ?? []).filter(
+    (o) => (o.status === "bought" || o.status === "warehouse") && !o.shipment_id,
+  );
+  const toggle = (id: string) => setPicked((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
+  if (ready) return <ShipmentSheet ids={picked} onClose={() => setReady(false)} onDone={onClose} />;
+  return (
+    <Sheet
+      title="Новая отправка: заказы"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" onClick={onClose}>
+            Отмена
+          </button>
+          <button className="btn primary" disabled={!picked.length} onClick={() => setReady(true)}>
+            Далее{picked.length ? ` (${picked.length})` : ""}
+          </button>
+        </>
+      }
+    >
+      {orders.isLoading ? (
+        <div className="muted small">Загрузка…</div>
+      ) : !candidates.length ? (
+        <div className="muted small">Нет заказов для отправки: нужны выкупленные или на складе, ещё не отправленные.</div>
+      ) : (
+        <div className="stack" style={{ gap: 8 }}>
+          <div className="row between small">
+            <span className="muted">Выкуплены или на складе</span>
+            <button
+              className="btn small ghost"
+              onClick={() => setPicked(picked.length === candidates.length ? [] : candidates.map((o) => o.id))}
+            >
+              {picked.length === candidates.length ? "Снять все" : "Выбрать все"}
+            </button>
+          </div>
+          <div className="list">
+            {candidates.map((o) => (
+              <div key={o.id} className="list-item" onClick={() => toggle(o.id)}>
+                <Checkbox checked={picked.includes(o.id)} onChange={() => toggle(o.id)} label={`Выбрать ${o.id}`} />
+                <Thumb src={o.thumbnail_url ?? o.photo_url} alt={o.id} />
+                <div className="grow">
+                  <div className="title">
+                    {o.id} · {[o.brand, o.model].filter(Boolean).join(" ") || "Без названия"}
+                  </div>
+                  <div className="small muted">
+                    {o.status_label ?? ""}
+                    {o.size ? ` · размер ${o.size}` : ""}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Sheet>
+  );
 }
 
 export function ShipmentSheet({ ids, onClose, onDone }: { ids: string[]; onClose: () => void; onDone: () => void }) {

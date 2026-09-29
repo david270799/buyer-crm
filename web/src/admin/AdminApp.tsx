@@ -17,7 +17,7 @@ import { EditButton, ShipmentDetailsPage, ShipmentsPage } from "../shared/Shipme
 import { OrderAdminPanel } from "./OrderAdminPanel";
 import { AdminOrdersPage } from "./OrdersPage";
 import { ProfitSection } from "./profit";
-import { AiFillButton, MoneySheet, PhotoInput, type PhotoValue, recognizedFields, ShipmentEditSheet, useBalance } from "./sheets";
+import { AiFillButton, MoneySheet, NewShipmentFlow, PhotoInput, type PhotoValue, recognizedFields, ShipmentEditSheet, useBalance } from "./sheets";
 
 const NAV: NavItem[] = [
   { to: "/", label: "Сводка", icon: LayoutGrid },
@@ -194,6 +194,22 @@ function NewOrderPage() {
           </button>
         </div>
       </div>
+    </>
+  );
+}
+
+function AdminShipmentsPage() {
+  const [creating, setCreating] = useState(false);
+  return (
+    <>
+      <ShipmentsPage
+        action={
+          <button className="btn primary small" onClick={() => setCreating(true)} aria-label="Новая отправка">
+            <Plus size={16} /> Новая
+          </button>
+        }
+      />
+      {creating && <NewShipmentFlow onClose={() => setCreating(false)} />}
     </>
   );
 }
@@ -385,7 +401,7 @@ export function AdminApp({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
         <Route path="/orders" element={<AdminOrdersPage />} />
         <Route path="/orders/new" element={<NewOrderPage />} />
         <Route path="/orders/:id" element={<OrderDetailsPage adminPanel={(order) => <OrderAdminPanel order={order} />} />} />
-        <Route path="/shipments" element={<ShipmentsPage />} />
+        <Route path="/shipments" element={<AdminShipmentsPage />} />
         <Route path="/shipments/:id" element={<AdminShipmentDetails />} />
         <Route path="/finance" element={<FinancePage />} />
         <Route path="/balance" element={<Navigate to="/finance" replace />} />
