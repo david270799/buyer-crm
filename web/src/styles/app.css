@@ -1162,8 +1162,11 @@ table.orders .r {
 .checkbox {
   display: grid;
   place-items: center;
+  flex: none;
   width: 22px;
   height: 22px;
+  /* Browsers give buttons side padding: the tick would be pushed off-centre. */
+  padding: 0;
   border: 1.5px solid var(--border-strong);
   border-radius: 7px;
   background: var(--surface);
