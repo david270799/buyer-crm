@@ -191,24 +191,27 @@ export function AdminOrdersPage() {
           <b className="num" style={{ whiteSpace: "nowrap" }}>
             {ids.length}
           </b>
-          <button className="btn" onClick={() => setBulk("status")}>
-            <Tag size={16} /> Статус
-          </button>
-          <button className="btn" onClick={() => setBulk("ship")}>
-            <Truck size={16} /> Отправка
-          </button>
-          <button className="btn" onClick={() => setBulk("comment")}>
-            <MessageSquare size={16} />
-            <span>
-              Коммент<i className="long">арий</i>
-            </span>
-          </button>
-          <button className="btn" onClick={() => setBulk("attention")}>
-            <AlertTriangle size={16} /> Внимание
-          </button>
-          <button className="btn icon-only" onClick={() => setBulk("delete")} aria-label="Удалить" title="Удалить">
-            <Trash2 size={16} />
-          </button>
+          {/* Actions scroll sideways: there is room for more of them. */}
+          <div className="selection-actions">
+            <button className="btn" onClick={() => setBulk("status")}>
+              <Tag size={16} /> Статус
+            </button>
+            <button className="btn" onClick={() => setBulk("ship")}>
+              <Truck size={16} /> Отправка
+            </button>
+            <button className="btn" onClick={() => setBulk("comment")}>
+              <MessageSquare size={16} />
+              <span>
+                Коммент<i className="long">арий</i>
+              </span>
+            </button>
+            <button className="btn" onClick={() => setBulk("attention")}>
+              <AlertTriangle size={16} /> Внимание
+            </button>
+            <button className="btn" onClick={() => setBulk("delete")}>
+              <Trash2 size={16} /> Удалить
+            </button>
+          </div>
           <button className="btn icon-only" onClick={selection.clear} aria-label="Снять выбор">
             <X size={16} />
           </button>

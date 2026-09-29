@@ -1260,7 +1260,22 @@ table.orders .r {
   overflow-x: auto;
 }
 
+.selection-actions {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.selection-actions::-webkit-scrollbar {
+  display: none;
+}
+
 .selection-bar .btn {
+  flex: none;
   background: color-mix(in srgb, var(--accent-contrast) 14%, transparent);
   color: var(--accent-contrast);
   min-height: 36px;
@@ -1275,7 +1290,6 @@ table.orders .r {
 
 @media (max-width: 959px) {
   .selection-bar {
-    justify-content: space-between;
     padding: 8px 8px 8px 14px;
     overflow: hidden;
   }
