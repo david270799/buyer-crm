@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { useShipment, useShipments } from "../api/hooks";
-import type { Shipment } from "../api/types";
+import type { Order, Shipment } from "../api/types";
 import { PageHead } from "../components/Layout";
 import { Thumb } from "../components/orders";
 import { PhotoCarousel } from "../components/PhotoCarousel";
@@ -50,7 +50,12 @@ export function ShipmentsPage({ action }: { action?: ReactNode }) {
   );
 }
 
-export function ShipmentDetailsPage({ onEdit }: { onEdit?: (shipment: Shipment) => ReactNode }) {
+export function ShipmentDetailsPage({
+  onEdit,
+}: {
+  /** Admin buttons in the page head; gets the shipment and its orders. */
+  onEdit?: (shipment: Shipment, orders: Order[]) => ReactNode;
+}) {
   const { id = "" } = useParams();
   const { data, error, isLoading, refetch } = useShipment(id);
   if (isLoading) return <Loading rows={3} height={120} />;
@@ -65,7 +70,7 @@ export function ShipmentDetailsPage({ onEdit }: { onEdit?: (shipment: Shipment) 
       <PageHead
         title={`Отправка #${shipment.shipment_number ?? "—"}`}
         sub={shipment.id}
-        action={onEdit?.(shipment) ?? null}
+        action={onEdit?.(shipment, orders) ?? null}
       />
       <div className="details">
         <div className="stack">

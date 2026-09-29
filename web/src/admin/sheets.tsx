@@ -1,4 +1,4 @@
-import { Camera, Loader2, Plus, Sparkles, X } from "lucide-react";
+import { Camera, CheckCheck, Loader2, Plus, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -696,6 +696,56 @@ function parseWeight(text: string): number | null | "invalid" {
   if (!text.trim()) return null;
   const value = Number(text);
   return Number.isFinite(value) && value > 0 ? value : "invalid";
+}
+
+/** "Доставлена" on a shipment page: every order of the shipment → delivered. */
+export function ShipmentDeliveredButton({ orders }: { orders: Order[] }) {
+  const toast = useToast();
+  const setStatus = useBulkStatus();
+  const [confirming, setConfirming] = useState(false);
+  const pending = orders.filter((o) => o.status !== "delivered" && o.status !== "cancelled");
+  if (!orders.length) return null;
+  if (!pending.length) {
+    return (
+      <button className="btn small" disabled>
+        <CheckCheck size={14} /> Доставлена
+      </button>
+    );
+  }
+  return (
+    <>
+      <button className="btn small primary" onClick={() => setConfirming(true)}>
+        <CheckCheck size={14} /> Доставлена
+      </button>
+      {confirming && (
+        <Confirm
+          title="Отметить отправку доставленной?"
+          confirmLabel={`Доставлено: ${pending.length}`}
+          busy={setStatus.isPending}
+          onClose={() => setConfirming(false)}
+          onConfirm={() =>
+            setStatus.mutate(
+              { order_ids: pending.map((o) => o.id), status: "delivered" },
+              {
+                onSuccess: (r) => {
+                  toast(bulkSummary(r, "Доставлены"));
+                  setConfirming(false);
+                },
+                onError: (e) => toast(errorText(e), "error"),
+              },
+            )
+          }
+        >
+          <div className="small">
+            Все заказы этой отправки получат статус «Доставлен»: {pending.map((o) => o.id).join(", ")}.
+          </div>
+          <div className="small muted" style={{ marginTop: 8 }}>
+            Деньги не двигаются. Клиент увидит смену статуса, на фото в группе появится реакция.
+          </div>
+        </Confirm>
+      )}
+    </>
+  );
 }
 
 /** "+" on the shipments page: pick orders that can be sent, then the usual form. */
