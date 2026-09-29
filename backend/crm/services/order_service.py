@@ -819,7 +819,10 @@ class OrderService:
         self, actor: Actor, order_ids: Sequence[str], new_status: OrderStatus
     ) -> BulkResult:
         require_admin(actor)
-        if new_status in _STATUS_HAS_OWN_COMMAND:
+        # "Выкуплен" is set by /buy (it charges); the one exception is taking a
+        # mistaken "На складе" back — the order is already paid, no money moves.
+        rollback = new_status is OrderStatus.BOUGHT
+        if new_status in _STATUS_HAS_OWN_COMMAND and not rollback:
             raise ValidationError(_STATUS_HAS_OWN_COMMAND[new_status])
         ids = list(dict.fromkeys(normalize_order_id(i) for i in order_ids))
         require_bulk_size(ids)
@@ -841,6 +844,10 @@ class OrderService:
                     result.skipped.append((order_id, "отменён"))
                 elif order.status is new_status:
                     result.unchanged.append(order_id)
+                elif rollback and not (order.status is OrderStatus.WAREHOUSE and order.is_charged):
+                    result.skipped.append(
+                        (order_id, "«Выкуплен» можно вернуть только из «На складе»")
+                    )
                 elif new_status is OrderStatus.CARGO and not order.shipment_id:
                     result.skipped.append((order_id, "нет отправки — используйте /cargo"))
                 elif new_status is OrderStatus.WAREHOUSE and order.shipment_id:
@@ -850,16 +857,10 @@ class OrderService:
 
             now = self._clock.now()
             for order in to_update:
-                self._orders.update(
-                    tx,
-                    order.id,
-                    {
-                        "status": new_status.value,
-                        ts_field: now,
-                        "updated_at": now,
-                        "updated_by": actor.id,
-                    },
-                )
+                fields = {"status": new_status.value, "updated_at": now, "updated_by": actor.id}
+                if not rollback:  # keep the real purchase date (profit by month)
+                    fields[ts_field] = now
+                self._orders.update(tx, order.id, fields)
                 self._auditor.record(
                     tx,
                     actor,
@@ -872,8 +873,10 @@ class OrderService:
                 )
                 result.updated.append(order.id)
             if result.updated:
-                event_type, title = _STATUS_EVENTS.get(
-                    new_status, (EventType.ORDER_STATUS, "Статус обновлён")
+                event_type, title = (
+                    (EventType.ORDER_STATUS, "Статус возвращён: «Выкуплен»")
+                    if rollback
+                    else _STATUS_EVENTS.get(new_status, (EventType.ORDER_STATUS, "Статус обновлён"))
                 )
                 self._events.record(
                     tx,

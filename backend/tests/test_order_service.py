@@ -248,11 +248,41 @@ def test_set_status_reports_every_order(db, services, admin):
     assert audit_actions(db) == ["order.status"]
 
 
-@pytest.mark.parametrize("status", [OrderStatus.BOUGHT, OrderStatus.CANCELLED, OrderStatus.NEW])
+@pytest.mark.parametrize("status", [OrderStatus.CANCELLED, OrderStatus.NEW])
 def test_set_status_refuses_money_moving_statuses(db, services, admin, status):
     seed_order(db, "N1", status="bought", client_price=10)
     with pytest.raises(ValidationError):
         services.orders.set_status(admin, ["1"], status)
+
+
+def test_warehouse_goes_back_to_bought_without_money(db, services, admin):
+    for order_id in ("N1", "N2", "N3"):
+        seed_order(
+            db,
+            order_id,
+            status="warehouse",
+            client_price=120,
+            charged_amount_krw=120,
+            bought_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+        )
+    seed_order(
+        db,
+        "N4",
+        status="cargo",
+        client_price=120,
+        charged_amount_krw=120,
+        shipment_id="SHP-2026-001",
+    )
+    seed_order(db, "N5", status="warehouse")  # nothing charged: not a rollback, refuse
+
+    result = services.orders.set_status(admin, ["1", "2", "4", "5"], OrderStatus.BOUGHT)
+
+    assert result.updated == ["N1", "N2"]
+    assert [i for i, _ in result.skipped] == ["N4", "N5"]
+    order = db.get("orders", "N1")
+    assert order["status"] == "bought"
+    assert order["bought_at"] == datetime(2026, 9, 1, tzinfo=timezone.utc)  # date kept
+    assert balance(db) == START_BALANCE and ledger_entries(db) == {}
 
 
 def test_set_status_cargo_needs_a_shipment(db, services, admin):

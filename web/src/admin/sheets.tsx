@@ -1,4 +1,4 @@
-import { Camera, CheckCheck, Loader2, Plus, Sparkles, X } from "lucide-react";
+import { Camera, CheckCheck, Loader2, Plus, Sparkles, Undo2, X } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -945,6 +945,46 @@ function toSeoulDay(value: string | null): string {
 
 // --- order edit ------------------------------------------------------------------------
 
+/** Undo a mis-tap on the status: "На складе" → "Выкуплен", "Доставлен" → "Отправлен".
+ * No money moves: both statuses of each pair are already paid. */
+function StatusRollback({ order, onDone }: { order: Order; onDone: () => void }) {
+  const toast = useToast();
+  const setStatus = useBulkStatus();
+  const target: OrderStatus | null =
+    order.status === "warehouse" && (order.charged_amount_krw ?? 0) > 0
+      ? "bought"
+      : order.status === "delivered" && order.shipment_id
+        ? "cargo"
+        : null;
+  if (!target) return null;
+  return (
+    <div className="banner info row between" style={{ marginBottom: 14, gap: 10 }}>
+      <div className="small">
+        Статус: <b>{order.status_label}</b>
+      </div>
+      <button
+        type="button"
+        className="btn small"
+        disabled={setStatus.isPending}
+        onClick={() =>
+          setStatus.mutate(
+            { order_ids: [order.id], status: target },
+            {
+              onSuccess: (r) => {
+                toast(r.updated.length ? `Статус возвращён: «${STATUS_LABEL[target]}»` : bulkSummary(r), r.updated.length ? undefined : "error");
+                if (r.updated.length) onDone();
+              },
+              onError: (e) => toast(errorText(e), "error"),
+            },
+          )
+        }
+      >
+        <Undo2 size={14} /> Вернуть «{STATUS_LABEL[target]}»
+      </button>
+    </div>
+  );
+}
+
 export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () => void }) {
   const toast = useToast();
   const update = useUpdateOrder(order.id);
@@ -1004,6 +1044,7 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
         </>
       }
     >
+      <StatusRollback order={order} onDone={onClose} />
       <div className="form-grid two">
         <div className="full field">
           <span>Фото</span>
