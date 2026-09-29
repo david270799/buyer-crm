@@ -54,7 +54,9 @@ class NightlyBackup:
             await asyncio.sleep(seconds_until(self._hour, self._now()))
             await self.run_once()
 
-    async def run_once(self) -> Path | None:
+    async def run_once(self, to: int | None = None) -> Path | None:
+        """Make a copy and send it: to every admin (nightly, if sending is on)
+        or only to `to` (the /backup command, always sent)."""
         moment = self._now()
         try:
             archive = await asyncio.to_thread(
@@ -62,17 +64,17 @@ class NightlyBackup:
             )
         except Exception:  # noqa: BLE001 - tell the admins, try again tomorrow
             logger.exception("Nightly backup failed")
-            await self._tell("⚠️ Не удалось сделать ночную копию базы CRM. Подробности в логе.")
+            await self._tell("⚠️ Не удалось сделать копию базы CRM. Подробности в логе.", to)
             return None
         logger.info("Backup %s (%s KB)", archive.name, archive.stat().st_size // 1024)
-        if self._send:
-            await self._send_file(archive, moment)
+        if self._send or to is not None:
+            await self._send_file(archive, moment, to)
         return archive
 
-    async def _send_file(self, archive: Path, moment: datetime) -> None:
+    async def _send_file(self, archive: Path, moment: datetime, to: int | None) -> None:
         if archive.stat().st_size > TELEGRAM_FILE_LIMIT:
             await self._tell(
-                f"🗄 Копия базы сделана ({archive.name}), но слишком большая для Telegram."
+                f"🗄 Копия базы сделана ({archive.name}), но слишком большая для Telegram.", to
             )
             return
         caption = (
@@ -80,11 +82,14 @@ class NightlyBackup:
             "Храните её: из неё восстанавливаются все заказы, деньги и история "
             "(команда python -m crm.tools.backup --restore). Фото в копию не входят."
         )
-        for admin_id in sorted(self._admin_ids):
+        for admin_id in self._recipients(to):
             with contextlib.suppress(Exception):
                 await self._bot.send_document(admin_id, FSInputFile(archive), caption=caption)
 
-    async def _tell(self, text: str) -> None:
-        for admin_id in sorted(self._admin_ids):
+    def _recipients(self, to: int | None) -> list[int]:
+        return [to] if to is not None else sorted(self._admin_ids)
+
+    async def _tell(self, text: str, to: int | None = None) -> None:
+        for admin_id in self._recipients(to):
             with contextlib.suppress(Exception):
                 await self._bot.send_message(admin_id, text)

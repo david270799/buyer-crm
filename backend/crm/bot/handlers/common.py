@@ -7,6 +7,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, W
 
 from crm.bot import formatting as fmt
 from crm.bot.access import HasRole
+from crm.bot.backups import NightlyBackup
 from crm.bot.handlers.reply import answer, answer_privately
 from crm.config import Settings
 from crm.domain.enums import Role
@@ -140,6 +141,15 @@ async def unsetgroup(
     )
 
 
+async def backup(message: Message, backup: NightlyBackup | None = None) -> None:
+    """/backup — send a fresh copy of the database to this admin right now."""
+    if backup is None:
+        await answer_privately(message, "Копия базы доступна только при хранении в SQLite.")
+        return
+    await answer_privately(message, "🗄 Делаю копию базы, пришлю файлом…")
+    await backup.run_once(to=message.from_user.id)
+
+
 async def pin(message: Message, command: CommandObject, services: Services, actor: Actor) -> None:
     """/pin — is a Mini App PIN set; /pin off — remove a forgotten PIN.
     A new PIN is set only in the Mini App (the digits never go through a chat)."""
@@ -164,6 +174,7 @@ def build() -> Router:
     router.message.register(whoami, Command("whoami"), F.from_user)
     router.message.register(setclient, Command("setclient"), HasRole(Role.ADMIN))
     router.message.register(pin, Command("pin"), HasRole(Role.ADMIN))
+    router.message.register(backup, Command("backup"), HasRole(Role.ADMIN))
     router.message.register(setgroup, Command("setgroup"), HasRole(Role.ADMIN))
     router.message.register(unsetgroup, Command("unsetgroup"), HasRole(Role.ADMIN))
     return router

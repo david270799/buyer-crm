@@ -45,8 +45,9 @@ ADMIN_COMMANDS = [
     BotCommand(command="rate", description="Курс KRW/USD"),
     BotCommand(command="add", description="Принять фото как заказ (ответом на фото)"),
     BotCommand(command="setclient", description="Указать клиента (ответом на его сообщение)"),
-    BotCommand(command="setgroup", description="Рабочая группа: написать в группе"),
+    BotCommand(command="setgroup", description="Рабочая группа: /setgroup ID"),
     BotCommand(command="notify", description="Уведомления в личку"),
+    BotCommand(command="backup", description="Прислать копию базы сейчас"),
     BotCommand(command="pin", description="PIN для Mini App (/pin off — сбросить)"),
     BotCommand(command="help", description="Все команды"),
 ]
@@ -64,10 +65,13 @@ def create_bot(token: str) -> Bot:
     return Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
 
-def create_dispatcher(services: Services, settings: Settings) -> Dispatcher:
+def create_dispatcher(
+    services: Services, settings: Settings, backup: NightlyBackup | None = None
+) -> Dispatcher:
     dp = Dispatcher()
     dp["services"] = services
     dp["settings"] = settings
+    dp["backup"] = backup
     groups = services.groups
     access = AccessMiddleware(
         services.roles,
@@ -117,16 +121,7 @@ async def run_bot(
         await set_commands(bot, settings.admin_ids)
         if settings.mini_app_url:
             await set_menu_button(bot, settings.mini_app_url)
-        dp = create_dispatcher(services, settings)
-        notifier = TelegramNotifier(bot, services.notifications, settings.mini_app_url)
-        notifier_task = asyncio.create_task(notifier.run(), name="telegram-notifier")
-        notifier_task.add_done_callback(_report_notifier_exit)
-        background = [notifier_task]
-        if services.reactions is not None:
-            reactions = ReactionSyncer(bot, services.reactions)
-            reactions_task = asyncio.create_task(reactions.run(), name="order-reactions")
-            reactions_task.add_done_callback(_report_notifier_exit)
-            background.append(reactions_task)
+        nightly = None
         if isinstance(database, SqliteDatabase) and not database.read_only:
             nightly = NightlyBackup(
                 bot,
@@ -136,6 +131,17 @@ async def run_bot(
                 keep=settings.backup_keep,
                 send=settings.backup_to_telegram,
             )
+        dp = create_dispatcher(services, settings, nightly)
+        notifier = TelegramNotifier(bot, services.notifications, settings.mini_app_url)
+        notifier_task = asyncio.create_task(notifier.run(), name="telegram-notifier")
+        notifier_task.add_done_callback(_report_notifier_exit)
+        background = [notifier_task]
+        if services.reactions is not None:
+            reactions = ReactionSyncer(bot, services.reactions)
+            reactions_task = asyncio.create_task(reactions.run(), name="order-reactions")
+            reactions_task.add_done_callback(_report_notifier_exit)
+            background.append(reactions_task)
+        if nightly is not None:
             backup_task = asyncio.create_task(nightly.run(), name="nightly-backup")
             backup_task.add_done_callback(_report_notifier_exit)
             background.append(backup_task)
