@@ -37,6 +37,7 @@ from crm.repositories import (
     IntakeRepository,
     OrderRepository,
     ProfitRepository,
+    ShipmentRepository,
 )
 from crm.services.common import (
     UNSET,
@@ -330,6 +331,7 @@ class OrderService:
         self._intake = intake or IntakeRepository()
         self._blobs = blobs
         self._profit = profit
+        self._shipments = ShipmentRepository()
 
     # --- reads -------------------------------------------------------------
 
@@ -1045,8 +1047,6 @@ class OrderService:
             order = found.get(order_id)
             if order is None:
                 preview.not_found.append(order_id)
-            elif reason := _delete_blocker(order):
-                preview.skipped.append((order_id, reason))
             else:
                 preview.orders.append(order)
         return preview
@@ -1056,8 +1056,9 @@ class OrderService:
         the link to the Telegram message. What was still charged is refunded to
         the balance; ledger entries and audit logs stay (they are never deleted).
 
-        Orders in a shipment (sent) are refused: after shipping there are no
-        refunds. A deleted number is handed out again only from the end and only
+        Sent orders can be deleted too (the owner's decision): the order leaves
+        its shipment's `order_ids`; the shipment and its delivery charge stay.
+        A deleted number is handed out again only from the end and only
         if the order never had money history (see CounterRepository.get_floor).
         """
         require_admin(actor)
@@ -1075,11 +1076,7 @@ class OrderService:
                 if data is None:
                     result.not_found.append(order_id)
                     continue
-                order = Order.from_doc(order_id, data)
-                if reason := _delete_blocker(order):
-                    result.skipped.append((order_id, reason))
-                    continue
-                targets.append((order, data))
+                targets.append((Order.from_doc(order_id, data), data))
             if not targets:
                 return result
 
@@ -1104,6 +1101,11 @@ class OrderService:
                 key = self._intake.key(order.source_chat_id, order.source_message_id)
                 if self._intake.order_id(tx, key) == order.id:
                     intake_keys.append(key)
+            shipments = {
+                sid: shipment
+                for sid in {order.shipment_id for order, _ in targets if order.shipment_id}
+                if (shipment := self._shipments.get(tx, sid)) is not None
+            }
             all_orders = tx.query(self._orders.collection)
             current_next, floor = self._sequences.read_for_release(tx, ORDER_COUNTER)
 
@@ -1166,6 +1168,9 @@ class OrderService:
                     self._event_repo.delete(tx, event.id)
             for key in intake_keys:
                 self._intake.delete(tx, key)
+            for sid, shipment in shipments.items():
+                left = [i for i in shipment.order_ids if i not in deleted_ids]
+                self._shipments.update(tx, sid, {"order_ids": left, "updated_at": now})
             self._events.touched(tx)  # e.g. the photo's reaction in the group goes
             new_next = self._sequences.release(
                 tx,
@@ -1205,13 +1210,6 @@ class OrderService:
                 "Операция остановлена, чтобы не испортить данные."
             )
         return order
-
-
-def _delete_blocker(order: Order) -> str | None:
-    if order.status in (OrderStatus.CARGO, OrderStatus.DELIVERED) or order.shipment_id:
-        where = f" (отправка {order.shipment_id})" if order.shipment_id else ""
-        return f"уже отправлен{where} — после отправки заказ не удаляется"
-    return None
 
 
 def _fmt(amount: int | None) -> str:

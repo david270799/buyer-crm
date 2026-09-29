@@ -277,13 +277,13 @@ def test_bulk_delete_with_preview(db, api):
 
     body = {"order_ids": ["1", "2", "3"]}
     preview = api("POST", "/api/orders/bulk/delete/preview", json=body).json()
-    assert [o["id"] for o in preview["orders"]] == ["N1", "N2"]
+    assert [o["id"] for o in preview["orders"]] == ["N1", "N2", "N3"]
     assert preview["refund_krw"] == 120_000
-    assert [s["order_id"] for s in preview["skipped"]] == ["N3"]
+    assert preview["skipped"] == []
     assert api("POST", "/api/orders/bulk/delete", who=CLIENT_TG, json=body).status_code == 403
 
     deleted = api("POST", "/api/orders/bulk/delete", json=body).json()
-    assert deleted["deleted"] == ["N1", "N2"]
+    assert deleted["deleted"] == ["N1", "N2", "N3"]
     assert deleted["refunded_krw"] == 120_000
     assert deleted["change"]["amount_krw"] == 120_000
     assert api("GET", "/api/orders/N1").status_code == 404

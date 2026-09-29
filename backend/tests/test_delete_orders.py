@@ -86,18 +86,25 @@ def test_cancelled_order_is_deleted_without_a_second_refund(db, services, admin)
     assert balance(db) == START_BALANCE
 
 
-def test_shipped_orders_are_not_deleted(db, services, admin):
+def test_shipped_orders_are_deleted_and_leave_their_shipment(db, services, admin):
     seed_order(db, "N1", status="cargo", shipment_id="SHP-2026-001", charged_amount_krw=50_000)
-    seed_order(db, "N2", status="warehouse", shipment_id="SHP-2026-001")
-    seed_order(db, "N3")
+    seed_order(db, "N2", status="delivered", shipment_id="SHP-2026-001")
+    seed_order(db, "N3", status="cargo", shipment_id="SHP-2026-001")
+    db.run_transaction(
+        lambda tx: tx.set(
+            "shipments", "SHP-2026-001", {"order_ids": ["N1", "N2", "N3"], "shipping_cost_krw": 9}
+        )
+    )
 
-    result = services.orders.delete_orders(admin, ["N1", "N2", "N3", "N9"])
+    result = services.orders.delete_orders(admin, ["N1", "N2", "N9"])
 
-    assert result.deleted == ["N3"]
-    assert [order_id for order_id, _ in result.skipped] == ["N1", "N2"]
+    assert result.deleted == ["N1", "N2"] and result.skipped == []
     assert result.not_found == ["N9"]
-    assert db.get("orders", "N1") is not None
-    assert balance(db) == START_BALANCE
+    assert db.get("orders", "N1") is None
+    # What was charged for the order comes back; the shipment keeps the rest.
+    assert balance(db) == START_BALANCE + 50_000
+    shipment = db.get("shipments", "SHP-2026-001")
+    assert shipment["order_ids"] == ["N3"] and shipment["shipping_cost_krw"] == 9
 
 
 def test_preview_matches_what_would_be_deleted(db, services, admin):
@@ -107,9 +114,9 @@ def test_preview_matches_what_would_be_deleted(db, services, admin):
 
     preview = services.orders.preview_delete(admin, ["1", "2", "3", "4"])
 
-    assert [o.id for o in preview.orders] == ["N1", "N2"]
+    assert [o.id for o in preview.orders] == ["N1", "N2", "N3"]
     assert preview.refund_krw == 120_000
-    assert [order_id for order_id, _ in preview.skipped] == ["N3"]
+    assert preview.skipped == []
     assert preview.not_found == ["N4"]
     assert db.get("orders", "N1") is not None  # nothing changed
 

@@ -66,8 +66,6 @@ export function OrderAdminPanel({ order }: { order: Order }) {
   const beforeShipping = (status === "bought" || status === "warehouse") && !order.shipment_id;
   const canCancel = status === "new" || beforeShipping;
   const canRebuy = beforeShipping && (order.charged_amount_krw ?? 0) > 0;
-  // Same rule as the server: a sent order is never deleted.
-  const canDelete = status !== "cargo" && status !== "delivered" && !order.shipment_id;
   const purchases = order.purchases ?? [];
   const profit = order.profit ?? null;
   return (
@@ -157,11 +155,9 @@ export function OrderAdminPanel({ order }: { order: Order }) {
               <Ban size={16} /> Отменить
             </button>
           )}
-          {canDelete && (
-            <button className="btn ghost" onClick={() => setDialog("delete")}>
-              <Trash2 size={16} /> Удалить
-            </button>
-          )}
+          <button className="btn ghost" onClick={() => setDialog("delete")}>
+            <Trash2 size={16} /> Удалить
+          </button>
         </div>
       </div>
       {dialog === "buy" && <BuySheet order={order} onClose={() => setDialog(null)} />}
