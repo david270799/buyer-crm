@@ -377,3 +377,13 @@ async def test_notify_command(db, bot_env):
     assert "Формат: /notify" in wrong
     assert db.get("settings", "notifications")["recipient"] == "admins"
     assert all("Кому" not in text for text in client_reply)
+
+
+async def test_setgroup_with_id_in_private_chat(db, bot_env):
+    replies = await bot_env("/setgroup -1003713143896")
+
+    assert any("добавлена" in r for r in replies)
+    assert (
+        -1003713143896 in db.get("settings", "groups")["chats"]
+        or "-1003713143896" in (db.get("settings", "groups")["chats"])
+    )

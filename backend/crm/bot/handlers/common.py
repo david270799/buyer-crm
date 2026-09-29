@@ -92,11 +92,26 @@ async def setgroup(
 ) -> None:
     """/setgroup in a group: the bot works there (and only in the listed groups).
     In the private chat: shows the list. The command is removed from the group."""
+    arg = (command.args or "").strip()
+    if message.chat.type == ChatType.PRIVATE and arg.lstrip("-").isdigit():
+        chat_id = int(arg)
+        title = None
+        try:
+            title = (await message.bot.get_chat(chat_id)).title
+        except Exception:  # the bot may not be in the group yet: the ID is enough
+            pass
+        chats = await asyncio.to_thread(services.groups.add, actor, chat_id, title)
+        await answer(
+            message,
+            f"✅ Группа «{fmt.e(title or chat_id)}» добавлена.\n" + _groups_text(chats),
+        )
+        return
     if message.chat.type == ChatType.PRIVATE:
         chats = await asyncio.to_thread(services.groups.listing, actor)
         await answer(
             message,
-            _groups_text(chats) + "\n\nДобавить группу: напишите /setgroup в самой группе. "
+            _groups_text(chats)
+            + "\n\nДобавить группу: /setgroup ID (например, /setgroup -1003713143896). "
             "Убрать: /unsetgroup в группе или /unsetgroup ID здесь.",
         )
         return
