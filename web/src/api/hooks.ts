@@ -112,6 +112,14 @@ export const useAddProfit = () => {
   });
 };
 
+/** Admin PIN for the Mini App (0 = none). */
+export const useSecurity = () =>
+  useQuery({
+    queryKey: ["security"] as const,
+    queryFn: () => get<{ pin_set: boolean; pin_length: number }>("/api/security"),
+    retry: false,
+  });
+
 export const useSettings = () =>
   useQuery({
     queryKey: keys.settings,

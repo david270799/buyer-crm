@@ -16,6 +16,7 @@ import { OrderDetailsPage } from "../shared/OrderDetailsPage";
 import { EditButton, ShipmentDetailsPage, ShipmentsPage } from "../shared/ShipmentsPages";
 import { OrderAdminPanel } from "./OrderAdminPanel";
 import { AdminOrdersPage } from "./OrdersPage";
+import { PinSettings } from "./pin";
 import { ProfitSection } from "./profit";
 import { AiFillButton, MoneySheet, NewShipmentFlow, ShipmentDeliveredButton, PhotoInput, type PhotoValue, recognizedFields, ShipmentEditSheet, useBalance } from "./sheets";
 
@@ -336,6 +337,7 @@ function SettingsPage({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
     <>
       <PageHead title="Настройки" />
       <div className="stack">
+        <PinSettings />
         <div className="card pad stack">
           <h3>Курс KRW / USD</h3>
           <div className="small muted">

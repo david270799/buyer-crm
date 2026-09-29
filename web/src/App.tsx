@@ -2,6 +2,7 @@ import { LogIn, ShieldAlert, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { PinGate } from "./admin/pin";
 import { AdminApp } from "./admin/AdminApp";
 import { ApiError, hasCredentials, setDemoRole } from "./api/client";
 import { useConfig, useMe } from "./api/hooks";
@@ -117,5 +118,11 @@ export function App() {
       />
     );
   }
-  return me.data.role === "admin" ? <AdminApp onLeaveDemo={config.data?.demo ? leaveDemo : undefined} /> : <ClientApp />;
+  return me.data.role === "admin" ? (
+    <PinGate>
+      <AdminApp onLeaveDemo={config.data?.demo ? leaveDemo : undefined} />
+    </PinGate>
+  ) : (
+    <ClientApp />
+  );
 }

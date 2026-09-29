@@ -1799,3 +1799,95 @@ table.orders .r {
   background: transparent;
   border: 1px dashed var(--border-strong);
 }
+
+/* PIN lock: round phone-style keys, no system keyboard. */
+.lock-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px 16px calc(24px + var(--safe-bottom));
+  background: var(--bg);
+  color: var(--text);
+}
+
+.pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.pin-dots {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.pin-dots span {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--text);
+  border-radius: 50%;
+  transition: background 0.1s ease;
+}
+
+.pin-dots span.on {
+  background: var(--text);
+}
+
+.pin-dots.shake {
+  animation: pin-shake 0.4s ease;
+}
+
+@keyframes pin-shake {
+  20%,
+  60% {
+    transform: translateX(-10px);
+  }
+  40%,
+  80% {
+    transform: translateX(10px);
+  }
+}
+
+.pin-error {
+  min-height: 18px;
+  color: var(--negative, #c0392b);
+  font-size: 13px;
+}
+
+.pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 76px);
+  gap: 16px 24px;
+  justify-content: center;
+}
+
+.pin-key {
+  width: 76px;
+  height: 76px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 30px;
+  font-weight: 400;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.08s ease;
+}
+
+.pin-key:active {
+  background: var(--border-strong);
+}
+
+.pin-key.erase {
+  background: transparent;
+  display: grid;
+  place-items: center;
+}

@@ -159,6 +159,10 @@ class RecognizeIn(BaseModel):
     text: str | None = None
 
 
+class PinIn(BaseModel):
+    pin: str | None = Field(default=None, max_length=8)
+
+
 class BulkDiscountIn(BaseModel):
     order_ids: OrderIds
     percent: Decimal = Field(gt=0, lt=100)
@@ -674,6 +678,26 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
                 p.actor, services.notifications.get_settings(p.actor)
             ),
         }
+
+    @app.get("/api/security")
+    def security_status(p: Admin) -> dict[str, Any]:
+        length = services.security.pin_length(p.actor) if services.security else 0
+        return {"pin_set": length > 0, "pin_length": length}
+
+    @app.put("/api/security/pin")
+    def security_set_pin(body: PinIn, p: Admin) -> dict[str, Any]:
+        if services.security is None:
+            raise ConfigurationError("PIN не поддерживается.")
+        return {"pin_set": services.security.set_pin(p.actor, body.pin)}
+
+    @app.post("/api/security/unlock")
+    def security_unlock(body: PinIn, p: Admin) -> dict[str, Any]:
+        if services.security is None:
+            return {"ok": True}
+        ok = services.security.check(p.actor, body.pin or "")
+        if not ok:
+            raise ValidationError("Неверный PIN.")
+        return {"ok": True}
 
     @app.put("/api/settings/notifications")
     def set_notifications(body: NotificationsIn, p: Admin) -> dict[str, Any]:

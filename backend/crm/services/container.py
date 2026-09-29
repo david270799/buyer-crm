@@ -27,6 +27,7 @@ from crm.services.photo_recognition import PhotoRecognitionService
 from crm.services.profit_service import ProfitService
 from crm.services.reactions import ReactionService
 from crm.services.recognition import Recognizer
+from crm.services.security_service import SecurityService
 from crm.services.sequences import SequenceAllocator
 from crm.services.shipment_service import ShipmentService
 from crm.storage import Database
@@ -50,6 +51,7 @@ class Services:
     photo_recognition: PhotoRecognitionService | None = None
     reactions: ReactionService | None = None
     profit: ProfitService | None = None
+    security: SecurityService | None = None
 
 
 def build_services(
@@ -108,4 +110,5 @@ def build_services(
         photo_recognition=PhotoRecognitionService(blob_storage, recognizer),
         reactions=ReactionService(db, clock, orders_repo, recorder),
         profit=ProfitService(db, clock, profit_repo, auditor),
+        security=SecurityService(db, clock, auditor),
     )

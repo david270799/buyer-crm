@@ -79,10 +79,28 @@ async def setclient(
     await answer_privately(message, fmt.client_set(change))
 
 
+async def pin(message: Message, command: CommandObject, services: Services, actor: Actor) -> None:
+    """/pin — is a Mini App PIN set; /pin off — remove a forgotten PIN.
+    A new PIN is set only in the Mini App (the digits never go through a chat)."""
+    arg = (command.args or "").strip().lower()
+    if arg in ("off", "выкл", "сброс"):
+        await asyncio.to_thread(services.security.set_pin, actor, None)
+        text = "🔓 PIN для Mini App сброшен. Задать новый: Mini App → Настройки → «PIN-код»."
+    else:
+        is_set = await asyncio.to_thread(services.security.pin_set, actor)
+        text = (
+            "🔒 PIN для Mini App включён. Забыли — /pin off сбросит его."
+            if is_set
+            else "PIN для Mini App не задан. Задать: Mini App → Настройки → «PIN-код»."
+        )
+    await answer_privately(message, text)
+
+
 def build() -> Router:
     router = Router(name="common")
     router.message.register(start, CommandStart())
     router.message.register(start, Command("help"))
     router.message.register(whoami, Command("whoami"), F.from_user)
     router.message.register(setclient, Command("setclient"), HasRole(Role.ADMIN))
+    router.message.register(pin, Command("pin"), HasRole(Role.ADMIN))
     return router

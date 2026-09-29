@@ -46,6 +46,7 @@ ADMIN_COMMANDS = [
     BotCommand(command="add", description="Принять фото как заказ (ответом на фото)"),
     BotCommand(command="setclient", description="Указать клиента (ответом на его сообщение)"),
     BotCommand(command="notify", description="Уведомления в личку"),
+    BotCommand(command="pin", description="PIN для Mini App (/pin off — сбросить)"),
     BotCommand(command="help", description="Все команды"),
 ]
 
