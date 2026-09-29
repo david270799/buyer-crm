@@ -1,15 +1,15 @@
 """Orders from photos: one message with a photo → one new order.
 
-Who: in the orders group, anyone except the admin — the client and their
-assistants (the admin's own photos there, e.g. of parcels, are not orders);
-in a private chat with the bot, the client or the admin (e.g. forwarding a
-photo). Replies to other messages are conversation, not orders.
+Who: every post in the orders channel (only the client posts there; a
+channel post has no personal sender); in a private chat with the bot, the
+client or the admin (e.g. forwarding a photo). Photos in groups are not
+orders any more (the owner moved to a channel). Replies are not orders.
 
 Steps: download → square WebP (services/image_service) → Gemini
 (services/recognition) → store the photo → create the order
 (services/intake_service).
 
-The bot writes nothing in the group. When an order needs the admin
+The bot writes nothing in the channel. When an order needs the admin
 (model not recognised, no size, not a product, a failure), the admins get a
 private message with the photo and a link to the group message. In a private
 chat the bot answers with the order number.
@@ -71,12 +71,12 @@ def _file_id(message: Message) -> str | None:
 def is_order_photo(message: Message, role: Role | None) -> bool:
     if _file_id(message) is None or message.reply_to_message is not None:
         return False
-    sender = message.from_user
-    if sender is None or sender.is_bot:  # anonymous admins and channels post as bots
-        return False
+    if message.chat.type == ChatType.CHANNEL:
+        return True
     if message.chat.type == ChatType.PRIVATE:
-        return role in (Role.ADMIN, Role.CLIENT)
-    return role is not Role.ADMIN
+        sender = message.from_user
+        return sender is not None and not sender.is_bot and role in (Role.ADMIN, Role.CLIENT)
+    return False  # groups: orders come from the channel only
 
 
 def questions(order: Order, recognition: Recognition) -> list[str]:
@@ -236,7 +236,9 @@ class PhotoIntake:
 
 
 def _sender_name(message: Message) -> str:
-    return message.from_user.full_name if message.from_user else "кто-то"
+    if message.from_user:
+        return message.from_user.full_name
+    return message.author_signature or message.chat.title or "канал"
 
 
 def build(services: Services, settings: Settings) -> Router:
@@ -246,9 +248,9 @@ def build(services: Services, settings: Settings) -> Router:
     async def on_photo(message: Message, bot: Bot, actor: Actor | None, role: Role | None) -> None:
         if not is_order_photo(message, role):
             return
-        if message.chat.type != ChatType.PRIVATE:
-            # The client and their assistants order on the client's behalf.
-            actor = Actor.order_sender(message.from_user.id)
+        if message.chat.type == ChatType.CHANNEL:
+            # A channel post has no personal sender: the channel orders for the client.
+            actor = Actor.order_sender(message.chat.id)
         if actor is None:
             return
         await intake.handle(bot, message, actor)
@@ -295,5 +297,6 @@ def build(services: Services, settings: Settings) -> Router:
 
     router.message.register(on_add, Command("add"))
     router.message.register(on_photo, F.photo | F.document)
+    router.channel_post.register(on_photo, F.photo | F.document)
     router.my_chat_member.register(on_added_to_group, ChatMemberUpdatedFilter(JOIN_TRANSITION))
     return router

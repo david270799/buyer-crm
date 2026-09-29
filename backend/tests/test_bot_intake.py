@@ -160,14 +160,21 @@ def env(db, clock):
         dp = create_dispatcher(services, _settings())
 
         async def photo(
-            caption=None, user_id=CLIENT_TG, chat_id=GROUP, message_id=None, reply_to=None
+            caption=None,
+            user_id=CLIENT_TG,
+            chat_id=GROUP,
+            message_id=None,
+            reply_to=None,
+            in_group=False,
         ):
-            chat_type = "private" if chat_id > 0 else "supergroup"
+            # Orders come from the channel: a channel post has no personal sender.
+            channel = chat_id < 0 and not in_group
+            chat_type = "private" if chat_id > 0 else ("channel" if channel else "supergroup")
             message = Message(
                 message_id=message_id or next(_ids),
                 date=datetime.now(timezone.utc),
-                chat=Chat(id=chat_id, type=chat_type),
-                from_user=User(id=user_id, is_bot=False, first_name="U"),
+                chat=Chat(id=chat_id, type=chat_type, title="Заказы"),
+                from_user=None if channel else User(id=user_id, is_bot=False, first_name="U"),
                 photo=[
                     PhotoSize(file_id="small", file_unique_id="s", width=90, height=90),
                     PhotoSize(file_id="big", file_unique_id="b", width=1280, height=960),
@@ -175,7 +182,12 @@ def env(db, clock):
                 caption=caption,
                 reply_to_message=reply_to,
             )
-            await dp.feed_update(bot, Update(update_id=next(_ids), message=message))
+            update = (
+                Update(update_id=next(_ids), channel_post=message)
+                if channel
+                else Update(update_id=next(_ids), message=message)
+            )
+            await dp.feed_update(bot, update)
             return message
 
         async def text(value, user_id=ADMIN_TG, chat_id=GROUP, reply_to=None):
@@ -236,25 +248,25 @@ async def test_redelivered_photo_is_accepted_once(db, env):
     assert len(db.list_ids("orders")) == 1
 
 
-async def test_assistants_in_the_group_can_order(db, env):
+async def test_channel_post_is_an_order_for_the_client(db, env):
     e = env(FakeGemini())
-    await e["photo"]("42", user_id=555)  # the client's assistant
+    await e["photo"]("42")  # a channel post: no personal sender
 
     [order_id] = db.list_ids("orders")
-    assert db.get("orders", order_id)["created_by"] == "tg:555"
+    assert db.get("orders", order_id)["created_by"] == f"tg:{GROUP}"
     assert e["session"].to(GROUP) == []
 
 
 async def test_what_is_not_an_order(db, env):
     e = env(FakeGemini())
-    await e["photo"]("42", user_id=ADMIN_TG)  # the admin's own photo in the group
+    await e["photo"]("42", user_id=CLIENT_TG, in_group=True)  # groups: orders come from the channel
     await e["photo"]("42", user_id=555, chat_id=555)  # a stranger in a private chat
     await e["photo"](
         "42",
         reply_to=Message(
             message_id=1,
             date=datetime.now(timezone.utc),
-            chat=Chat(id=GROUP, type="supergroup"),
+            chat=Chat(id=GROUP, type="channel"),
             text="где мой заказ?",
         ),
     )  # a reply is conversation
