@@ -79,6 +79,52 @@ async def setclient(
     await answer_privately(message, fmt.client_set(change))
 
 
+def _groups_text(chats: dict[int, str]) -> str:
+    if not chats:
+        return "Ограничений нет: бот работает в любой группе, куда его добавил админ."
+    lines = ["Бот работает только в группах:"]
+    lines += [f" • {fmt.e(title)} (<code>{chat_id}</code>)" for chat_id, title in chats.items()]
+    return "\n".join(lines)
+
+
+async def setgroup(
+    message: Message, command: CommandObject, services: Services, actor: Actor
+) -> None:
+    """/setgroup in a group: the bot works there (and only in the listed groups).
+    In the private chat: shows the list. The command is removed from the group."""
+    if message.chat.type == ChatType.PRIVATE:
+        chats = await asyncio.to_thread(services.groups.listing, actor)
+        await answer(
+            message,
+            _groups_text(chats) + "\n\nДобавить группу: напишите /setgroup в самой группе. "
+            "Убрать: /unsetgroup в группе или /unsetgroup ID здесь.",
+        )
+        return
+    chats = await asyncio.to_thread(services.groups.add, actor, message.chat.id, message.chat.title)
+    await answer_privately(
+        message,
+        f"✅ Группа «{fmt.e(message.chat.title or message.chat.id)}» добавлена.\n"
+        + _groups_text(chats),
+    )
+
+
+async def unsetgroup(
+    message: Message, command: CommandObject, services: Services, actor: Actor
+) -> None:
+    arg = (command.args or "").strip()
+    if message.chat.type != ChatType.PRIVATE:
+        chat_id = message.chat.id
+    elif arg.lstrip("-").isdigit():
+        chat_id = int(arg)
+    else:
+        await answer(message, "Формат: /unsetgroup в группе или /unsetgroup ID в личке.")
+        return
+    chats = await asyncio.to_thread(services.groups.remove, actor, chat_id)
+    await answer_privately(
+        message, f"Группа <code>{chat_id}</code> убрана.\n" + _groups_text(chats)
+    )
+
+
 async def pin(message: Message, command: CommandObject, services: Services, actor: Actor) -> None:
     """/pin — is a Mini App PIN set; /pin off — remove a forgotten PIN.
     A new PIN is set only in the Mini App (the digits never go through a chat)."""
@@ -103,4 +149,6 @@ def build() -> Router:
     router.message.register(whoami, Command("whoami"), F.from_user)
     router.message.register(setclient, Command("setclient"), HasRole(Role.ADMIN))
     router.message.register(pin, Command("pin"), HasRole(Role.ADMIN))
+    router.message.register(setgroup, Command("setgroup"), HasRole(Role.ADMIN))
+    router.message.register(unsetgroup, Command("unsetgroup"), HasRole(Role.ADMIN))
     return router

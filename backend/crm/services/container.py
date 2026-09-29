@@ -18,6 +18,7 @@ from crm.services.client_service import ClientService
 from crm.services.common import Auditor, Clock, SystemClock
 from crm.services.events import EventRecorder, EventService
 from crm.services.finance_service import FinanceService
+from crm.services.group_service import GroupService
 from crm.services.image_service import ImageService
 from crm.services.intake_service import IntakeService
 from crm.services.ledger import BalanceLedger
@@ -52,6 +53,7 @@ class Services:
     reactions: ReactionService | None = None
     profit: ProfitService | None = None
     security: SecurityService | None = None
+    groups: GroupService | None = None
 
 
 def build_services(
@@ -60,6 +62,7 @@ def build_services(
     clock: Clock | None = None,
     blob_storage: BlobStorage | None = None,
     recognizer: Recognizer | None = None,
+    allowed_chat_ids: frozenset[int] = frozenset(),
 ) -> Services:
     clock = clock or SystemClock()
     orders_repo = OrderRepository()
@@ -111,4 +114,5 @@ def build_services(
         reactions=ReactionService(db, clock, orders_repo, recorder),
         profit=ProfitService(db, clock, profit_repo, auditor),
         security=SecurityService(db, clock, auditor),
+        groups=GroupService(db, clock, auditor, allowed_chat_ids),
     )

@@ -69,7 +69,13 @@ def build_app(settings: Settings, demo: bool):
     from crm.services.recognition import create_recognizer
 
     recognizer = create_recognizer(settings.gemini_api_key, settings.gemini_model)
-    services = build_services(db, admin_ids, blob_storage=blobs, recognizer=recognizer)
+    services = build_services(
+        db,
+        admin_ids,
+        blob_storage=blobs,
+        recognizer=recognizer,
+        allowed_chat_ids=settings.allowed_chat_ids,
+    )
     web_dist = Path(os.environ.get("WEB_DIST") or DEFAULT_WEB_DIST)
     if not (web_dist / "index.html").is_file():
         logger.warning("Mini App не собран (%s) — работает только API. См. web/README.", web_dist)

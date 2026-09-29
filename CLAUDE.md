@@ -177,6 +177,7 @@ web/
 | `profit_entries/{id}` | доп. прибыль админа (`/profit`, «Моя прибыль» в «Финансах»): `amount_krw`, `comment`; только админ, баланс клиента не меняет, входит в прибыль сводки |
 | `settings/general` | `krw_per_usd` |
 | `settings/security` | PIN админа для Mini App: `pin_hash` (PBKDF2, соль), `pin_length`; сам код не хранится. Экран PIN — только для админа, сброс `/pin off` |
+| `settings/groups` | `chats` {id: название} — разрешённые группы, задаются `/setgroup` (плюс `ALLOWED_CHAT_IDS` из env) |
 | `settings/notifications` | уведомления в личку: `recipient` (`off`/`admins`/`client`), `level` (`important`/`all`) |
 | `counters/orders`, `counters/shipments` | `next_id`; увеличиваются только в транзакции; после удаления заказов номера возвращаются только с конца, не ниже `floor` (номера с историей денег) |
 | `events/{id}`, `event_reads/tg:{id}` | лента событий для клиента (история заказа, колокольчик) + outbox доставки в Telegram; отметка «прочитано» |

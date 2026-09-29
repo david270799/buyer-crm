@@ -45,6 +45,7 @@ ADMIN_COMMANDS = [
     BotCommand(command="rate", description="Курс KRW/USD"),
     BotCommand(command="add", description="Принять фото как заказ (ответом на фото)"),
     BotCommand(command="setclient", description="Указать клиента (ответом на его сообщение)"),
+    BotCommand(command="setgroup", description="Рабочая группа: написать в группе"),
     BotCommand(command="notify", description="Уведомления в личку"),
     BotCommand(command="pin", description="PIN для Mini App (/pin off — сбросить)"),
     BotCommand(command="help", description="Все команды"),
@@ -67,7 +68,12 @@ def create_dispatcher(services: Services, settings: Settings) -> Dispatcher:
     dp = Dispatcher()
     dp["services"] = services
     dp["settings"] = settings
-    access = AccessMiddleware(services.roles, settings.allowed_chat_ids)
+    groups = services.groups
+    access = AccessMiddleware(
+        services.roles,
+        settings.allowed_chat_ids,
+        (lambda: groups.allowed_ids() | settings.allowed_chat_ids) if groups else None,
+    )
     dp.message.outer_middleware(access)
     dp.callback_query.outer_middleware(access)
     dp.include_router(build_router(services, settings))
