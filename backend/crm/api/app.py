@@ -159,6 +159,12 @@ class RecognizeIn(BaseModel):
     text: str | None = None
 
 
+class BulkDiscountIn(BaseModel):
+    order_ids: OrderIds
+    percent: Decimal = Field(gt=0, lt=100)
+    idempotency_key: IdempotencyKey
+
+
 class BulkDeleteIn(BaseModel):
     order_ids: OrderIds
 
@@ -534,6 +540,23 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         return _bulk_json(
             services.orders.bulk_update(p.actor, body.order_ids, BulkUpdate(**fields))
         )
+
+    @app.post("/api/orders/bulk/discount")
+    def bulk_discount(body: BulkDiscountIn, p: Admin) -> dict[str, Any]:
+        result = services.orders.discount(
+            p.actor, body.order_ids, body.percent, f"ma-{body.idempotency_key}"
+        )
+        return {
+            "updated": [
+                {"order_id": i, "old_price": old, "new_price": new}
+                for i, old, new in result.updated
+            ],
+            "unchanged": result.unchanged,
+            "not_found": result.not_found,
+            "skipped": [{"order_id": i, "reason": r} for i, r in result.skipped],
+            "refunded_krw": result.refunded_krw,
+            "change": change_json(result.change),
+        }
 
     @app.post("/api/orders/bulk/delete/preview")
     def bulk_delete_preview(body: BulkDeleteIn, p: Admin) -> dict[str, Any]:

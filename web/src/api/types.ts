@@ -59,6 +59,7 @@ export type EventType =
   | "order_warehouse"
   | "order_delivered"
   | "order_status"
+  | "order_discount"
   | "comment"
   | "attention"
   | "shipment_sent"
@@ -106,7 +107,8 @@ export type LedgerType =
   | "order_rebuy"
   | "deposit"
   | "adjustment"
-  | "shipping_charge";
+  | "shipping_charge"
+  | "order_discount";
 
 export interface LedgerItem {
   id: string;

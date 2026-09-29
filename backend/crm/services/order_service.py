@@ -16,6 +16,7 @@ import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from crm.domain.enums import (
@@ -62,6 +63,7 @@ from crm.storage.blobs import BlobStorage
 logger = logging.getLogger(__name__)
 
 ORDER_COUNTER = "orders"
+_SENT = (OrderStatus.CARGO, OrderStatus.DELIVERED)
 
 _MAX_SHORT_TEXT = 200
 _MAX_LONG_TEXT = 2000
@@ -134,6 +136,18 @@ class DeleteResult:
     @property
     def refunded_krw(self) -> int:
         return sum(amount for _, amount in self.refunds)
+
+
+@dataclass
+class DiscountResult:
+    # (order_id, old client price, new client price)
+    updated: list[tuple[str, int, int]] = field(default_factory=list)
+    unchanged: list[str] = field(default_factory=list)
+    not_found: list[str] = field(default_factory=list)
+    skipped: list[tuple[str, str]] = field(default_factory=list)
+    # Refunded to the balance for orders already paid.
+    refunded_krw: int = 0
+    change: BalanceChange | None = None
 
 
 @dataclass
@@ -1036,6 +1050,149 @@ class OrderService:
         except DocumentExistsError:
             raise ConflictError(
                 f"Перезаказ по заказу {order_id} уже проведён. Обновите данные и повторите."
+            ) from None
+
+    # --- discount ----------------------------------------------------------
+
+    def discount(
+        self,
+        actor: Actor,
+        order_ids: Sequence[str],
+        percent: Decimal,
+        idempotency_key: str | None = None,
+    ) -> DiscountResult:
+        """Lower the client price of each order by `percent` (to the won, no rounding
+        to hundreds). For an order already paid the discount comes back to the
+        balance — one ledger entry per order, so a later cancel or delete still
+        nets to zero. Only before shipping (the owner's decision); cancelled
+        orders and orders without a price are skipped. A repeated request with
+        the same key changes nothing."""
+        require_admin(actor)
+        percent = Decimal(str(percent))
+        if not (Decimal(0) < percent < Decimal(100)):
+            raise ValidationError("Скидка должна быть больше 0% и меньше 100%.")
+        if percent != percent.quantize(Decimal("0.01")):
+            raise ValidationError("Скидка — не больше двух знаков после запятой.")
+        ids = list(dict.fromkeys(normalize_order_id(i) for i in order_ids))
+        require_bulk_size(ids)
+        key = idempotency_key or self._db.new_id()
+        label = f"{percent.normalize():f}%"
+
+        def fn(tx: Transaction) -> DiscountResult:
+            result = DiscountResult()
+            raw = tx.get_many(self._orders.collection, ids)
+            targets: list[tuple[Order, dict[str, Any], int]] = []
+            for order_id in ids:
+                data = raw.get(order_id)
+                if data is None:
+                    result.not_found.append(order_id)
+                    continue
+                order = Order.from_doc(order_id, data)
+                if any(d.get("key") == key for d in data.get("discounts") or []):
+                    result.unchanged.append(order_id)
+                elif order.status in (OrderStatus.CANCELLED, None):
+                    result.skipped.append((order_id, "отменён"))
+                elif (
+                    order.status in (OrderStatus.CARGO, OrderStatus.DELIVERED) or order.shipment_id
+                ):
+                    result.skipped.append((order_id, "уже отправлен — скидка только до отправки"))
+                elif not order.client_price:
+                    result.skipped.append((order_id, "нет цены для клиента"))
+                else:
+                    cut = int(
+                        (Decimal(order.client_price) * percent / 100).quantize(
+                            Decimal(1), rounding=ROUND_HALF_UP
+                        )
+                    )
+                    if cut <= 0:
+                        result.skipped.append((order_id, "скидка меньше 1 ₩"))
+                    else:
+                        targets.append((order, data, cut))
+            if not targets:
+                return result
+            client = (
+                self._ledger.load_client(tx)
+                if any(o.charged_amount_krw > 0 for o, _, _ in targets)
+                else None
+            )
+            now = self._clock.now()
+            for order, data, cut in targets:
+                old_price = order.client_price or 0
+                new_price = old_price - cut
+                fields: dict[str, Any] = {
+                    "client_price": new_price,
+                    "discounts": [
+                        *(data.get("discounts") or []),
+                        {
+                            "key": key,
+                            "percent": str(percent),
+                            "old": old_price,
+                            "new": new_price,
+                            "at": now,
+                            "by": actor.id,
+                        },
+                    ],
+                    "updated_at": now,
+                    "updated_by": actor.id,
+                }
+                if order.purchase_price is not None:
+                    fields["profit"] = new_price - order.purchase_price
+                refund = min(cut, order.charged_amount_krw)
+                if refund > 0:
+                    fields["charged_amount_krw"] = order.charged_amount_krw - refund
+                self._orders.update(tx, order.id, fields)
+                if refund > 0 and client is not None:
+                    result.change = self._ledger.apply(
+                        tx,
+                        client,
+                        entry_id=f"order_discount_{order.id}_{key}",
+                        type=LedgerType.ORDER_DISCOUNT,
+                        amount_krw=refund,
+                        actor=actor,
+                        now=now,
+                        order_id=order.id,
+                        comment=f"Скидка {label}",
+                    )
+                    result.refunded_krw += refund
+                self._auditor.record(
+                    tx,
+                    actor,
+                    now,
+                    action="order.discount",
+                    entity_type="order",
+                    entity_id=order.id,
+                    before={
+                        "client_price": old_price,
+                        "charged_amount_krw": order.charged_amount_krw,
+                    },
+                    after={
+                        "client_price": new_price,
+                        "percent": str(percent),
+                        "refunded_krw": refund,
+                    },
+                )
+                result.updated.append((order.id, old_price, new_price))
+            updated_ids = [order_id for order_id, _, _ in result.updated]
+            self._events.record(
+                tx,
+                actor,
+                now,
+                EventType.ORDER_DISCOUNT,
+                f"Скидка {label}: {_ids(updated_ids)}",
+                body="\n".join(
+                    f"{order_id}: {format_krw(old)} → {format_krw(new)}"
+                    for order_id, old, new in result.updated
+                ),
+                order_ids=updated_ids,
+                amount_krw=result.refunded_krw or None,
+            )
+            return result
+
+        try:
+            return self._db.run_transaction(fn)
+        except DocumentExistsError:
+            raise ConflictError(
+                "Эта скидка уже проведена. Обновите данные и проверьте заказы."
             ) from None
 
     # --- delete ------------------------------------------------------------

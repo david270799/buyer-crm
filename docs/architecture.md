@@ -92,7 +92,7 @@ Mini App и AI-ассистент вызывают **те же сервисы**.
 `created_at`, `created_by`, `source`.
 
 ID детерминированные там, где это даёт идемпотентность:
-`order_charge_n5`, `order_refund_n5`, `order_rebuy_n5_1` (…`_2` при следующем перезаказе),
+`order_charge_n5`, `order_refund_n5`, `order_discount_N5_<ключ>`, `order_rebuy_n5_1` (…`_2` при следующем перезаказе),
 `shipping_charge_SHP-2026-001_1` (…`_2` при изменении стоимости),
 `deposit_tg<chat>_<message>`, `adjustment_tg<chat>_<message>`, `deposit_ma-<ключ формы Mini App>`.
 

@@ -7,6 +7,7 @@ import {
   uploadImage,
   useBulkStatus,
   useBulkUpdate,
+  useBulkDiscount,
   useBuy,
   useCancel,
   useCreateShipment,
@@ -696,6 +697,99 @@ function parseWeight(text: string): number | null | "invalid" {
   if (!text.trim()) return null;
   const value = Number(text);
   return Number.isFinite(value) && value > 0 ? value : "invalid";
+}
+
+/** Same rule as the server: before shipping, with a price, not cancelled. */
+function discountable(o: Order): boolean {
+  return (o.status === "new" || o.status === "bought" || o.status === "warehouse") && !o.shipment_id && (o.client_price ?? 0) > 0;
+}
+
+/** "Скидка" for the selected orders: a percent off the client price. Paid orders get
+ * the difference back on the balance (a "Скидка N%" line the client sees). */
+export function DiscountSheet({ orders, onClose, onDone }: { orders: Order[]; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const mutation = useBulkDiscount();
+  const [text, setText] = useState("");
+  const [key] = useState(() => crypto.getRandomValues(new Uint32Array(3)).join("-"));
+  const percent = Number(text.replace(",", "."));
+  const valid = text.trim() !== "" && percent > 0 && percent < 100 && /^\d+([.,]\d{1,2})?$/.test(text.trim());
+  const eligible = orders.filter(discountable);
+  const others = orders.filter((o) => !discountable(o));
+  const rows = eligible.map((o) => {
+    const cut = valid ? Math.round(((o.client_price ?? 0) * percent) / 100) : 0;
+    return { order: o, cut, price: (o.client_price ?? 0) - cut, refund: Math.min(cut, o.charged_amount_krw ?? 0) };
+  });
+  const refund = rows.reduce((sum, r) => sum + r.refund, 0);
+  return (
+    <Sheet
+      title={`Скидка: ${orders.length} шт.`}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" onClick={onClose}>
+            Отмена
+          </button>
+          <button
+            className="btn primary"
+            disabled={!valid || !eligible.length || mutation.isPending}
+            onClick={() =>
+              mutation.mutate(
+                { order_ids: eligible.map((o) => o.id), percent, idempotency_key: key },
+                {
+                  onSuccess: (r) => {
+                    const lines = [`Скидка ${percent}%: ${r.updated.map((u) => u.order_id).join(", ") || "—"}`];
+                    if (r.refunded_krw) lines.push(`Вернулось на баланс: ${krw(r.refunded_krw)}`);
+                    for (const s of r.skipped) lines.push(`${s.order_id}: ${s.reason}`);
+                    toast(lines.join("\n"));
+                    onDone();
+                  },
+                  onError: (e) => toast(errorText(e), "error"),
+                },
+              )
+            }
+          >
+            {mutation.isPending ? "Применяем…" : "Применить скидку"}
+          </button>
+        </>
+      }
+    >
+      <div className="stack">
+        <Field label="Скидка, %" hint="Цена для клиента уменьшится на этот процент (без округления)">
+          <input
+            className="input num"
+            inputMode="decimal"
+            autoFocus
+            placeholder="10"
+            value={text}
+            onChange={(e) => setText(e.target.value.replace(/[^\d.,]/g, ""))}
+          />
+        </Field>
+        {valid && rows.length > 0 && (
+          <div className="list">
+            {rows.map((r) => (
+              <div key={r.order.id} className="list-item" style={{ cursor: "default" }}>
+                <div className="grow">
+                  <div className="title">
+                    {r.order.id} · {[r.order.brand, r.order.model].filter(Boolean).join(" ") || "Без названия"}
+                  </div>
+                  <div className="small muted num">
+                    {krw(r.order.client_price)} → <b>{krw(r.price)}</b>
+                  </div>
+                </div>
+                <div className="amount small">−{krw(r.cut)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {valid && refund > 0 && <BalancePreview delta={refund} label="Вернётся на баланс (уже оплаченные)" />}
+        {others.length > 0 && (
+          <div className="small muted">
+            Без скидки (отправлены, отменены или без цены): {others.map((o) => o.id).join(", ")}
+          </div>
+        )}
+      </div>
+    </Sheet>
+  );
 }
 
 /** "Доставлена" on a shipment page: every order of the shipment → delivered. */

@@ -393,6 +393,7 @@ EVENT_ICONS = {
     EventType.ORDER_WAREHOUSE: "📦",
     EventType.ORDER_DELIVERED: "✅",
     EventType.ORDER_STATUS: "•",
+    EventType.ORDER_DISCOUNT: "🎁",
     EventType.COMMENT: "💬",
     EventType.ATTENTION: "⚠️",
     EventType.SHIPMENT_SENT: "🚚",

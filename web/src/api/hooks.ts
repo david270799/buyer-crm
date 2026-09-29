@@ -251,6 +251,22 @@ export const useBulkUpdate = () => {
   });
 };
 
+export const useBulkDiscount = () => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (body: { order_ids: string[]; percent: number; idempotency_key: string }) =>
+      post<{
+        updated: { order_id: string; old_price: number; new_price: number }[];
+        unchanged: string[];
+        not_found: string[];
+        skipped: { order_id: string; reason: string }[];
+        refunded_krw: number;
+        change: BalanceChange | null;
+      }>("/api/orders/bulk/discount", body),
+    onSuccess: refresh,
+  });
+};
+
 export const useDeletePreview = (ids: string[]) =>
   useQuery({
     queryKey: ["delete-preview", ids] as const,

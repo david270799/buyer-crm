@@ -1,4 +1,5 @@
 import {
+  Gift,
   AlertTriangle,
   ArrowDownLeft,
   Bell,
@@ -27,6 +28,7 @@ const ICONS: Record<EventType, LucideIcon> = {
   order_warehouse: Warehouse,
   order_delivered: PackageCheck,
   order_status: ClipboardList,
+  order_discount: Gift,
   comment: MessageSquare,
   attention: AlertTriangle,
   shipment_sent: Truck,

@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ChevronRight, RotateCcw, SlidersHorizontal, Truck } from "lucide-react";
+import { ArrowDownLeft, ChevronRight, Gift, RotateCcw, SlidersHorizontal, Truck } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import type { Balance, LedgerItem } from "../api/types";
@@ -39,6 +39,8 @@ function EntryIcon({ item }: { item: LedgerItem }) {
       ? ArrowDownLeft
       : item.type === "shipping_charge"
         ? Truck
+        : item.type === "order_discount"
+          ? Gift
         : item.type === "order_refund" || item.type === "order_rebuy"
           ? RotateCcw
           : SlidersHorizontal;
@@ -53,7 +55,14 @@ function entryTitle(item: LedgerItem): string {
   if (item.type === "shipping_charge") return item.shipment_id ? `Доставка · ${item.shipment_id}` : "Доставка";
   if (item.order_id) {
     const title = item.order?.title;
-    const prefix = item.type === "order_refund" ? "Возврат" : item.type === "order_rebuy" ? "Перезаказ" : null;
+    const prefix =
+      item.type === "order_refund"
+        ? "Возврат"
+        : item.type === "order_rebuy"
+          ? "Перезаказ"
+          : item.type === "order_discount"
+            ? (item.comment ?? "Скидка")
+            : null;
     return [prefix, item.order_id, title].filter(Boolean).join(" · ");
   }
   return item.type ? LEDGER_LABEL[item.type] : "Операция";

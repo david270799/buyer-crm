@@ -1,4 +1,4 @@
-import { AlertTriangle, MessageSquare, Plus, Search, Tag, Trash2, Truck, X } from "lucide-react";
+import { AlertTriangle, MessageSquare, Percent, Plus, Search, Tag, Trash2, Truck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -10,9 +10,9 @@ import { StatusBadge } from "../components/status";
 import { Checkbox, Empty, ErrorState, Loading, useDebounced, useLongPress, useSelection } from "../components/ui";
 import { krw, plural, shortDate } from "../lib/format";
 import { StatusChips, useOrderFilters } from "../shared/filters";
-import { AttentionSheet, BulkStatusSheet, CommentSheet, DeleteConfirm, ShipmentSheet } from "./sheets";
+import { AttentionSheet, BulkStatusSheet, CommentSheet, DeleteConfirm, DiscountSheet, ShipmentSheet } from "./sheets";
 
-type Bulk = "status" | "ship" | "comment" | "attention" | "delete" | null;
+type Bulk = "status" | "ship" | "comment" | "attention" | "discount" | "delete" | null;
 const PAGE = 50;
 
 function OrderRow({ order, selection }: { order: Order; selection: ReturnType<typeof useSelection> }) {
@@ -208,6 +208,9 @@ export function AdminOrdersPage() {
             <button className="btn" onClick={() => setBulk("attention")}>
               <AlertTriangle size={16} /> Внимание
             </button>
+            <button className="btn" onClick={() => setBulk("discount")}>
+              <Percent size={16} /> Скидка
+            </button>
             <button className="btn" onClick={() => setBulk("delete")}>
               <Trash2 size={16} /> Удалить
             </button>
@@ -222,6 +225,13 @@ export function AdminOrdersPage() {
       {bulk === "comment" && <CommentSheet ids={ids} onClose={() => setBulk(null)} onDone={done} />}
       {bulk === "attention" && <AttentionSheet ids={ids} onClose={() => setBulk(null)} onDone={done} />}
       {bulk === "delete" && <DeleteConfirm ids={ids} onClose={() => setBulk(null)} onDone={done} />}
+      {bulk === "discount" && (
+        <DiscountSheet
+          orders={(data?.items ?? []).filter((o) => ids.includes(o.id))}
+          onClose={() => setBulk(null)}
+          onDone={done}
+        />
+      )}
     </>
   );
 }

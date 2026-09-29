@@ -25,6 +25,7 @@ class EventType(StrEnum):
     ORDER_WAREHOUSE = "order_warehouse"
     ORDER_DELIVERED = "order_delivered"
     ORDER_STATUS = "order_status"
+    ORDER_DISCOUNT = "order_discount"
     COMMENT = "comment"
     ATTENTION = "attention"
     SHIPMENT_SENT = "shipment_sent"
@@ -38,6 +39,7 @@ class EventType(StrEnum):
 IMPORTANT_EVENTS = frozenset(
     {
         EventType.ORDER_REBOUGHT,
+        EventType.ORDER_DISCOUNT,
         EventType.ORDER_CANCELLED,
         EventType.SHIPMENT_SENT,
         EventType.ATTENTION,
