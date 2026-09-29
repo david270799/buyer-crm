@@ -1,4 +1,4 @@
-import { Camera, Loader2, Sparkles } from "lucide-react";
+import { Camera, Loader2, Plus, Sparkles, X } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -168,6 +168,78 @@ export function PhotoInput({ value, onChange }: { value: PhotoValue; onChange: (
           {enabled ? "Сожмём до WebP, пропорции сохранятся" : "Хранилище фото не настроено"}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Photos of a shipment, also for shipments saved with a single photo. */
+export function shipmentPhotos(shipment: Shipment): PhotoValue[] {
+  if (shipment.photos?.length) return shipment.photos;
+  return shipment.photo_url ? [{ photo_url: shipment.photo_url, thumbnail_url: shipment.thumbnail_url }] : [];
+}
+
+function photoList(photos: PhotoValue[]): { photo_url: string; thumbnail_url: string | null }[] {
+  return photos.filter((p) => p.photo_url).map((p) => ({ photo_url: p.photo_url!, thumbnail_url: p.thumbnail_url }));
+}
+
+const MAX_SHIPMENT_PHOTOS = 10;
+
+/** Several photos: small tiles with a remove button, and "+" to add more. */
+export function PhotosInput({ value, onChange }: { value: PhotoValue[]; onChange: (v: PhotoValue[]) => void }) {
+  const settings = useSettings();
+  const toast = useToast();
+  const [busy, setBusy] = useState(0);
+  const enabled = settings.data?.uploads_enabled ?? true;
+  const room = MAX_SHIPMENT_PHOTOS - value.length;
+  return (
+    <div className="photo-tiles">
+      {value.map((photo, index) => (
+        <div key={`${photo.photo_url}-${index}`} className="photo-tile">
+          <img src={photo.thumbnail_url ?? photo.photo_url ?? ""} alt={`Фото ${index + 1}`} />
+          <button
+            type="button"
+            className="remove"
+            aria-label="Убрать фото"
+            onClick={() => onChange(value.filter((_, i) => i !== index))}
+          >
+            <X size={12} />
+          </button>
+        </div>
+      ))}
+      {Array.from({ length: busy }, (_, i) => (
+        <div key={`busy-${i}`} className="photo-tile add">
+          <Loader2 className="spin" size={18} />
+        </div>
+      ))}
+      {room > busy && (
+        <label className={`photo-tile add ${enabled ? "" : "disabled"}`} aria-label="Добавить фото">
+          <Plus size={18} />
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            disabled={!enabled}
+            onChange={async (e) => {
+              const files = Array.from(e.target.files ?? []).slice(0, room - busy);
+              e.target.value = "";
+              if (!files.length) return;
+              setBusy((n) => n + files.length);
+              const added: PhotoValue[] = [];
+              for (const file of files) {
+                try {
+                  added.push(await uploadImage(file));
+                } catch (error) {
+                  toast(errorText(error), "error");
+                } finally {
+                  setBusy((n) => n - 1);
+                }
+              }
+              if (added.length) onChange([...value, ...added]);
+            }}
+          />
+        </label>
+      )}
     </div>
   );
 }
@@ -585,7 +657,7 @@ interface ShipmentFormValue {
   shipping_cost_krw: number | null;
   shipment_date: string;
   comment: string;
-  photo: PhotoValue;
+  photos: PhotoValue[];
 }
 
 function ShipmentFields({ value, onChange }: { value: ShipmentFormValue; onChange: (v: ShipmentFormValue) => void }) {
@@ -607,9 +679,9 @@ function ShipmentFields({ value, onChange }: { value: ShipmentFormValue; onChang
       <Field label="Дата отправки">
         <input className="input" type="date" value={value.shipment_date} onChange={(e) => set("shipment_date", e.target.value)} />
       </Field>
-      <div className="field">
+      <div className="full field">
         <span>Фото отправки</span>
-        <PhotoInput value={value.photo} onChange={(photo) => set("photo", photo)} />
+        <PhotosInput value={value.photos} onChange={(photos) => set("photos", photos)} />
       </div>
       <div className="full">
         <Field label="Комментарий">
@@ -700,7 +772,7 @@ export function ShipmentSheet({ ids, onClose, onDone }: { ids: string[]; onClose
     shipping_cost_krw: null,
     shipment_date: todayKey(),
     comment: "",
-    photo: { photo_url: null, thumbnail_url: null },
+    photos: [],
   });
   const weight = parseWeight(form.weight_kg);
   return (
@@ -725,8 +797,7 @@ export function ShipmentSheet({ ids, onClose, onDone }: { ids: string[]; onClose
                   shipping_cost_krw: form.shipping_cost_krw,
                   shipment_date: form.shipment_date || null,
                   comment: form.comment.trim() || null,
-                  photo_url: form.photo.photo_url,
-                  thumbnail_url: form.photo.thumbnail_url,
+                  photos: photoList(form.photos),
                 },
                 {
                   onSuccess: (r) => {
@@ -768,7 +839,7 @@ export function ShipmentEditSheet({ shipment, onClose }: { shipment: Shipment; o
     shipping_cost_krw: shipment.shipping_cost_krw,
     shipment_date: toSeoulDay(shipment.shipment_date),
     comment: shipment.comment ?? "",
-    photo: { photo_url: shipment.photo_url, thumbnail_url: shipment.thumbnail_url },
+    photos: shipmentPhotos(shipment),
   });
   const weight = parseWeight(form.weight_kg);
   const charged = shipment.shipping_charged_krw ?? 0;
@@ -794,8 +865,7 @@ export function ShipmentEditSheet({ shipment, onClose }: { shipment: Shipment; o
                   shipping_cost_krw: form.shipping_cost_krw,
                   shipment_date: form.shipment_date || null,
                   comment: form.comment.trim() || null,
-                  photo_url: form.photo.photo_url,
-                  thumbnail_url: form.photo.thumbnail_url,
+                  photos: photoList(form.photos),
                 },
                 {
                   onSuccess: (r) => {

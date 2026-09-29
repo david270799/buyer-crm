@@ -58,6 +58,9 @@ class ShipmentDetails:
     comment: str | None = None
     photo_url: str | None = None
     thumbnail_url: str | None = None
+    # Several photos: [{"photo_url", "thumbnail_url"}]; the first also fills
+    # photo_url / thumbnail_url (lists, bot and older code use those).
+    photos: list[dict[str, Any]] | None = None
 
 
 @dataclass
@@ -72,6 +75,7 @@ class ShipmentUpdate:
     comment: str | None = UNSET
     photo_url: str | None = UNSET
     thumbnail_url: str | None = UNSET
+    photos: list[dict[str, Any]] | None = UNSET
 
     def provided(self) -> dict[str, Any]:
         return provided_fields(self)
@@ -126,17 +130,51 @@ def _validate_fields(values: dict[str, Any]) -> dict[str, Any]:
             cleaned[name] = _clean_text(value, "Комментарий")
         elif name in ("photo_url", "thumbnail_url"):
             cleaned[name] = _clean_text(value, "Фото")
+        elif name == "photos":
+            cleaned[name] = _clean_photos(value) if value is not None else None
         elif name == "shipment_date":
             if value is not None and not isinstance(value, datetime):
                 raise ValidationError("Некорректная дата отправки.")
             cleaned[name] = value
         else:  # pragma: no cover - programming error
             raise ValueError(f"Unknown shipment field {name}")
+    if cleaned.get("photos") is not None:
+        first = cleaned["photos"][0] if cleaned["photos"] else {}
+        cleaned["photo_url"] = first.get("photo_url")
+        cleaned["thumbnail_url"] = first.get("thumbnail_url")
+    elif "photo_url" in cleaned and cleaned.get("photo_url") is not None:
+        # A single photo set the old way replaces the whole list.
+        url = cleaned["photo_url"]
+        cleaned["photos"] = (
+            [{"photo_url": url, "thumbnail_url": cleaned.get("thumbnail_url")}] if url else []
+        )
     return cleaned
+
+
+def _clean_photos(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise ValidationError("Некорректный список фото.")
+    if len(value) > MAX_SHIPMENT_PHOTOS:
+        raise ValidationError(f"У отправки может быть не больше {MAX_SHIPMENT_PHOTOS} фото.")
+    photos = []
+    for item in value:
+        if not isinstance(item, dict) or not isinstance(item.get("photo_url"), str):
+            raise ValidationError("Некорректное фото в списке.")
+        thumb = item.get("thumbnail_url")
+        photos.append(
+            {
+                "photo_url": _clean_text(item["photo_url"], "Фото"),
+                "thumbnail_url": _clean_text(thumb, "Фото") if isinstance(thumb, str) else None,
+            }
+        )
+    return [p for p in photos if p["photo_url"]]
 
 
 def _details_fields(details: ShipmentDetails) -> dict[str, Any]:
     return _validate_fields({f.name: getattr(details, f.name) for f in fields(details)})
+
+
+MAX_SHIPMENT_PHOTOS = 10
 
 
 def shipping_entry_id(shipment_id: str, seq: int) -> str:
@@ -581,6 +619,7 @@ def _shipment_doc(shipment: Shipment) -> dict[str, Any]:
         "shipment_date": shipment.shipment_date,
         "photo_url": shipment.photo_url,
         "thumbnail_url": shipment.thumbnail_url,
+        "photos": [dict(p) for p in shipment.photos],
         "order_ids": shipment.order_ids,
         "comment": shipment.comment,
         "created_at": shipment.created_at,

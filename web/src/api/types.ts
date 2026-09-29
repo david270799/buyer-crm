@@ -90,6 +90,8 @@ export interface Shipment {
   shipment_date: string | null;
   photo_url: string | null;
   thumbnail_url: string | null;
+  /** All photos; the first is also photo_url / thumbnail_url. */
+  photos?: { photo_url: string; thumbnail_url: string | null }[];
   order_ids: string[];
   order_count: number;
   comment: string | null;

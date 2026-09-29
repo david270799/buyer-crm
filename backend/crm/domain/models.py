@@ -187,10 +187,25 @@ class Shipment:
     shipping_charge_seq: int = 0
     thumbnail_url: str | None = None
     updated_at: datetime | None = None
+    # All photos (the first one is also photo_url / thumbnail_url).
+    photos: list[dict[str, str | None]] = field(default_factory=list)
 
     @classmethod
     def from_doc(cls, doc_id: str, data: Doc) -> "Shipment":
         order_ids = data.get("order_ids")
+        photos = [
+            {"photo_url": p["photo_url"], "thumbnail_url": _str_or_none(p.get("thumbnail_url"))}
+            for p in data.get("photos") or []
+            if isinstance(p, dict) and isinstance(p.get("photo_url"), str)
+        ]
+        if not photos and _str_or_none(data.get("photo_url")):
+            # Shipments saved before several photos existed.
+            photos = [
+                {
+                    "photo_url": data["photo_url"],
+                    "thumbnail_url": _str_or_none(data.get("thumbnail_url")),
+                }
+            ]
         return cls(
             id=doc_id,
             shipment_number=_int_or_none(data.get("shipment_number")),
@@ -208,6 +223,7 @@ class Shipment:
             shipping_charge_seq=_int_or_none(data.get("shipping_charge_seq")) or 0,
             thumbnail_url=_str_or_none(data.get("thumbnail_url")),
             updated_at=_dt(data.get("updated_at")),
+            photos=photos,
         )
 
 

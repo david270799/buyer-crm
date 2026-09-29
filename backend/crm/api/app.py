@@ -170,6 +170,11 @@ class BulkUpdateIn(BaseModel):
     attention_required: bool | None = None
 
 
+class PhotoIn(BaseModel):
+    photo_url: str
+    thumbnail_url: str | None = None
+
+
 class ShipmentIn(BaseModel):
     order_ids: OrderIds
     tracking_code: str | None = None
@@ -180,6 +185,7 @@ class ShipmentIn(BaseModel):
     comment: str | None = None
     photo_url: str | None = None
     thumbnail_url: str | None = None
+    photos: list[PhotoIn] | None = None
 
 
 class ShipmentPatchIn(BaseModel):
@@ -191,6 +197,7 @@ class ShipmentPatchIn(BaseModel):
     comment: str | None = None
     photo_url: str | None = None
     thumbnail_url: str | None = None
+    photos: list[PhotoIn] | None = None
 
 
 class MoneyIn(BaseModel):
@@ -562,6 +569,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             comment=body.comment,
             photo_url=body.photo_url,
             thumbnail_url=body.thumbnail_url,
+            photos=[p.model_dump() for p in body.photos] if body.photos is not None else None,
         )
         result = services.shipments.ship_orders(
             p.actor, body.order_ids, body.tracking_code or None, details

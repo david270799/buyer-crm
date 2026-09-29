@@ -275,6 +275,7 @@ export interface ShipmentInput {
   comment?: string | null;
   photo_url?: string | null;
   thumbnail_url?: string | null;
+  photos?: { photo_url: string; thumbnail_url: string | null }[];
 }
 
 export const useCreateShipment = () => {

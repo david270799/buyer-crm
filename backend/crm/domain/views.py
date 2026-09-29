@@ -68,6 +68,7 @@ def shipment_view(shipment: Shipment, role: Role) -> dict[str, Any]:
         "shipment_date": shipment.shipment_date,
         "photo_url": shipment.photo_url,
         "thumbnail_url": shipment.thumbnail_url,
+        "photos": [dict(p) for p in shipment.photos],
         "order_ids": list(shipment.order_ids),
         "order_count": len(shipment.order_ids),
         "comment": shipment.comment,

@@ -5,7 +5,8 @@ import { Link, useParams } from "react-router-dom";
 import { useShipment, useShipments } from "../api/hooks";
 import type { Shipment } from "../api/types";
 import { PageHead } from "../components/Layout";
-import { Photo, Thumb } from "../components/orders";
+import { Thumb } from "../components/orders";
+import { PhotoCarousel } from "../components/PhotoCarousel";
 import { StatusBadge } from "../components/status";
 import { Empty, ErrorState, Loading } from "../components/ui";
 import { date, items, krw, orderTitle } from "../lib/format";
@@ -55,6 +56,10 @@ export function ShipmentDetailsPage({ onEdit }: { onEdit?: (shipment: Shipment) 
   if (isLoading) return <Loading rows={3} height={120} />;
   if (error || !data) return <ErrorState error={error} onRetry={refetch} />;
   const { shipment, orders } = data;
+  const photos =
+    shipment.photos?.length || !shipment.photo_url
+      ? (shipment.photos ?? [])
+      : [{ photo_url: shipment.photo_url, thumbnail_url: shipment.thumbnail_url }];
   return (
     <>
       <PageHead
@@ -64,8 +69,8 @@ export function ShipmentDetailsPage({ onEdit }: { onEdit?: (shipment: Shipment) 
       />
       <div className="details">
         <div className="stack">
-          {shipment.photo_url ? (
-            <Photo src={shipment.photo_url} alt="Фото отправки" className="large contain" />
+          {photos.length ? (
+            <PhotoCarousel photos={photos} alt="Фото отправки" />
           ) : (
             <div className="card pad muted small row">
               <Package size={18} /> Фото отправки пока нет
