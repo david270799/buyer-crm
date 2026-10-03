@@ -97,6 +97,8 @@ export interface Shipment {
   order_count: number;
   comment: string | null;
   created_at: string | null;
+  /** Every order delivered → «Доставлена», otherwise «В пути». */
+  delivered?: boolean;
   // Admin only
   shipping_charged_krw?: number;
 }

@@ -28,20 +28,23 @@ export function ShipmentsPage({ action }: { action?: ReactNode }) {
           {data.items.map((s) => (
             <Link key={s.id} to={`/shipments/${s.id}`} className="list-item">
               {s.thumbnail_url || s.photo_url ? (
-                <Thumb src={s.thumbnail_url ?? s.photo_url} alt={`Отправка ${s.shipment_number}`} />
+                <Thumb src={s.thumbnail_url ?? s.photo_url} alt={s.tracking_code ?? `${s.shipment_number}`} />
               ) : (
                 <div className="thumb icon">
                   <Package size={18} strokeWidth={1.8} />
                 </div>
               )}
               <div className="grow">
-                <div className="title">Отправка #{s.shipment_number ?? "—"}</div>
+                <div className="title num">{s.tracking_code ?? "Без трек-номера"}</div>
                 <div className="small muted">
-                  {date(s.shipment_date ?? s.created_at)} · {items(s.order_count)}
+                  {s.shipment_number ?? "—"} · {date(s.shipment_date ?? s.created_at)} · {items(s.order_count)}
                   {s.weight_kg ? ` · ${s.weight_kg} кг` : ""}
                 </div>
               </div>
-              {s.shipping_cost_krw ? <div className="amount small muted">{krw(s.shipping_cost_krw)}</div> : null}
+              <div className="stack" style={{ gap: 4, alignItems: "flex-end" }}>
+                <ShipmentStatus delivered={s.delivered} />
+                {s.shipping_cost_krw ? <div className="amount small muted">{krw(s.shipping_cost_krw)}</div> : null}
+              </div>
             </Link>
           ))}
         </div>
@@ -68,8 +71,13 @@ export function ShipmentDetailsPage({
   return (
     <>
       <PageHead
-        title={`Отправка #${shipment.shipment_number ?? "—"}`}
-        sub={shipment.id}
+        title={shipment.tracking_code ?? "Без трек-номера"}
+        sub={
+          <span className="row" style={{ gap: 8 }}>
+            <span>{shipment.shipment_number ?? "—"}</span>
+            <ShipmentStatus delivered={shipment.delivered} />
+          </span>
+        }
         action={onEdit?.(shipment, orders) ?? null}
       />
       <div className="details">
@@ -133,6 +141,15 @@ export function ShipmentDetailsPage({
         </div>
       </div>
     </>
+  );
+}
+
+/** «В пути» (blue) until every order is delivered, then «Доставлена» (green). */
+export function ShipmentStatus({ delivered }: { delivered?: boolean }) {
+  return delivered ? (
+    <span className="badge s-delivered">Доставлена</span>
+  ) : (
+    <span className="badge s-cargo">В пути</span>
   );
 }
 

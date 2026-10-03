@@ -1,4 +1,4 @@
-import { Camera, CheckCheck, Loader2, Plus, Sparkles, Undo2, X } from "lucide-react";
+import { Camera, CheckCheck, Loader2, Plus, Sparkles, Split, Undo2, X } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -20,6 +20,7 @@ import {
   useSettings,
   useUpdateOrder,
   useUpdateShipment,
+  useSplitShipment,
 } from "../api/hooks";
 import type { BulkResult, Order, OrderStatus, PhotoRecognition, Shipment } from "../api/types";
 import { Thumb } from "../components/orders";
@@ -990,7 +991,7 @@ export function ShipmentEditSheet({ shipment, onClose }: { shipment: Shipment; o
   const delta = -((form.shipping_cost_krw ?? 0) - charged);
   return (
     <Sheet
-      title={`Отправка #${shipment.shipment_number}`}
+      title="Изменить отправку"
       onClose={onClose}
       footer={
         <>
@@ -1255,6 +1256,87 @@ export function MoneySheet({ kind, onClose }: { kind: "deposit" | "adjust"; onCl
         <Field label={adjust ? "Причина (обязательно)" : "Комментарий"} hint="Клиент увидит комментарий в истории баланса">
           <input className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder={adjust ? "Комиссия банка" : "Перевод 26.09"} />
         </Field>
+      </div>
+    </Sheet>
+  );
+}
+
+/** The cargo sent part of a shipment separately: chosen orders → a new shipment. */
+export function ShipmentSplitButton({ shipment, orders }: { shipment: Shipment; orders: Order[] }) {
+  const [open, setOpen] = useState(false);
+  if (orders.length < 2) return null;
+  return (
+    <>
+      <button className="btn small" onClick={() => setOpen(true)}>
+        <Split size={14} /> Разделить
+      </button>
+      {open && <ShipmentSplitSheet shipment={shipment} orders={orders} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function ShipmentSplitSheet({ shipment, orders, onClose }: { shipment: Shipment; orders: Order[]; onClose: () => void }) {
+  const toast = useToast();
+  const navigate = useNavigate();
+  const split = useSplitShipment(shipment.id);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [tracking, setTracking] = useState("");
+  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const valid = picked.length > 0 && picked.length < orders.length;
+  return (
+    <Sheet
+      title="Разделить отправку"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" onClick={onClose}>
+            Отмена
+          </button>
+          <button
+            className="btn primary"
+            disabled={!valid || split.isPending}
+            onClick={async () => {
+              // mutateAsync: the sheet may unmount when the shipment refreshes.
+              try {
+                const r = await split.mutateAsync({ order_ids: picked, tracking_code: tracking.trim() || null });
+                toast(`Создана отправка ${r.shipment.shipment_number}`);
+                onClose();
+                navigate(`/shipments/${r.shipment.id}`);
+              } catch (e) {
+                toast(errorText(e), "error");
+              }
+            }}
+          >
+            {split.isPending ? <Loader2 size={16} className="spin" /> : null} Разделить
+          </button>
+        </>
+      }
+    >
+      <div className="stack">
+        <div className="small muted">
+          Отметьте заказы, которые карго отправило отдельной частью. Они перейдут в новую отправку со своим
+          трек-номером и статусом. Деньги не двигаются: стоимость доставки новой части укажите потом через «Изменить».
+        </div>
+        <Field label="Трек-номер второй части">
+          <input className="input" value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="можно позже" />
+        </Field>
+        <div className="card list">
+          {orders.map((o) => (
+            <div key={o.id} className="list-item" onClick={() => toggle(o.id)}>
+              <Checkbox checked={picked.includes(o.id)} onChange={() => {}} label={o.id} />
+              <Thumb src={o.thumbnail_url ?? o.photo_url} alt={o.id} />
+              <div className="grow">
+                <div className="title">
+                  {o.id} · {[o.brand, o.model].filter(Boolean).join(" ") || "Без названия"}
+                </div>
+                {o.size && <div className="small muted">{o.size}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+        {picked.length === orders.length && (
+          <div className="small negative">В этой отправке должен остаться хотя бы один заказ.</div>
+        )}
       </div>
     </Sheet>
   );

@@ -36,9 +36,9 @@ export function ShipmentLink({ shipment }: { shipment: Shipment }) {
         <Package size={18} strokeWidth={1.8} />
       </div>
       <div className="grow">
-        <div style={{ fontWeight: 600 }}>Отправка #{shipment.shipment_number ?? "—"}</div>
+        <div style={{ fontWeight: 600 }}>{shipment.tracking_code ?? "Отправка без трек-номера"}</div>
         <div className="small muted">
-          {date(shipment.shipment_date ?? shipment.created_at)} · {items(shipment.order_count)}
+          {shipment.shipment_number ?? "—"} · {date(shipment.shipment_date ?? shipment.created_at)} · {items(shipment.order_count)}
           {shipment.weight_kg ? ` · ${shipment.weight_kg} кг` : ""}
         </div>
       </div>

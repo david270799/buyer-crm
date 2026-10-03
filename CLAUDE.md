@@ -172,7 +172,7 @@ web/
 |---|---|
 | `client_info/main_client` | клиент: `telegram_id`, `name`, `balance` (KRW), `balance_updated_at`. Создаётся `/setclient` с балансом 0 |
 | `orders/N{n}` | заказ: статус, бренд/модель/размер, цены (`purchase_price`, `client_price`, `profit`), `charged_amount_krw`, `refunded_amount_krw`, `shipment_id`, фото, `source_url` (только админ), `client_comment` / `internal_comment`, `attention_required`, `purchases[]` (история закупок, только админ), `recognition` (что прочитал Gemini, только админ), временные метки и `created_by`/`updated_by` |
-| `shipments/SHP-YYYY-NNN` | физическая отправка: `shipment_number` («Отправка #18»), трек, коробка, вес, `shipping_cost_krw`, `shipping_charged_krw`, фото, `order_ids[]` |
+| `shipments/SHP-YYYY-NNN` | физическая отправка: `shipment_number` («Отправка #18»), трек, коробка, вес, `shipping_cost_krw`, `shipping_charged_krw`, фото, `order_ids[]`, `split_from` (если отделена «Разделить»; деньги при разделении не двигаются) |
 | `transactions/{id}` | ledger баланса, только добавление: `type` (`order_charge`, `order_refund`, `order_rebuy`, `order_discount`, `deposit`, `adjustment`, `shipping_charge`), `amount_krw` со знаком, `balance_before/after`, связи. ID детерминированные → идемпотентность |
 | `profit_entries/{id}` | доп. прибыль админа (`/profit`, «Моя прибыль» в «Финансах»): `amount_krw`, `comment`; только админ, баланс клиента не меняет, входит в прибыль сводки |
 | `settings/general` | `krw_per_usd` |

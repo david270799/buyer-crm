@@ -319,6 +319,15 @@ export const useUpdateShipment = (id: string) => {
   });
 };
 
+export const useSplitShipment = (id: string) => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (body: { order_ids: string[]; tracking_code?: string | null }) =>
+      post<{ shipment: Shipment }>(`/api/shipments/${id}/split`, body),
+    onSuccess: refresh,
+  });
+};
+
 export const useMoney = (kind: "deposit" | "adjust") => {
   const refresh = useInvalidateAll();
   return useMutation({

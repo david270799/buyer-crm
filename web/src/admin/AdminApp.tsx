@@ -18,7 +18,7 @@ import { OrderAdminPanel } from "./OrderAdminPanel";
 import { AdminOrdersPage } from "./OrdersPage";
 import { PinSettings } from "./pin";
 import { ProfitSection } from "./profit";
-import { AiFillButton, MoneySheet, NewShipmentFlow, ShipmentDeliveredButton, PhotoInput, type PhotoValue, recognizedFields, ShipmentEditSheet, useBalance } from "./sheets";
+import { AiFillButton, MoneySheet, NewShipmentFlow, ShipmentDeliveredButton, ShipmentSplitButton, PhotoInput, type PhotoValue, recognizedFields, ShipmentEditSheet, useBalance } from "./sheets";
 
 const NAV: NavItem[] = [
   { to: "/", label: "Сводка", icon: LayoutGrid },
@@ -392,6 +392,7 @@ function AdminShipmentDetails() {
       <ShipmentDetailsPage
         onEdit={(shipment, orders) => (
           <div className="row" style={{ gap: 6 }}>
+            <ShipmentSplitButton shipment={shipment} orders={orders} />
             <ShipmentDeliveredButton orders={orders} />
             <EditButton onClick={() => setEditing(shipment)} />
           </div>

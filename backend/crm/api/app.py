@@ -198,6 +198,11 @@ class ShipmentIn(BaseModel):
     photos: list[PhotoIn] | None = None
 
 
+class ShipmentSplitIn(BaseModel):
+    order_ids: list[str] = Field(min_length=1, max_length=100)
+    tracking_code: str | None = Field(default=None, max_length=100)
+
+
 class ShipmentPatchIn(BaseModel):
     tracking_code: str | None = None
     box_number: str | None = None
@@ -443,13 +448,17 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
     @app.get("/api/shipments")
     def list_shipments(p: Any_, limit: Annotated[int, Query(ge=1, le=200)] = 50) -> dict[str, Any]:
         items = services.shipments.list_shipments(p.actor, limit=limit)
-        return {"items": [shipment_view(s, p.role) for s in items]}
+        delivered = services.shipments.delivered_ids(items)
+        return {
+            "items": [{**shipment_view(s, p.role), "delivered": s.id in delivered} for s in items]
+        }
 
     @app.get("/api/shipments/{reference}")
     def get_shipment(reference: str, p: Any_) -> dict[str, Any]:
         shipment, orders = services.shipments.get_shipment(p.actor, reference)
+        delivered = services.shipments.delivered_ids([shipment])
         return {
-            "shipment": shipment_view(shipment, p.role),
+            "shipment": {**shipment_view(shipment, p.role), "delivered": bool(delivered)},
             "orders": [order_json(o, p.role) for o in orders],
         }
 
@@ -621,6 +630,13 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "shipment": shipment_view(result.shipment, p.role),
             "change": change_json(result.shipping_change),
         }
+
+    @app.post("/api/shipments/{reference}/split")
+    def split_shipment(reference: str, body: ShipmentSplitIn, p: Admin) -> dict[str, Any]:
+        shipment = services.shipments.split_shipment(
+            p.actor, reference, body.order_ids, body.tracking_code or None
+        )
+        return {"shipment": shipment_view(shipment, p.role)}
 
     # --- admin: finance & settings ----------------------------------------
 
