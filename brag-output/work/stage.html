@@ -1,125 +1,248 @@
 <!doctype html><html lang="ru"><head><meta charset="utf-8">
 <style>
-:root{--deep:#151b24;--warm:#f4f3ef;--ink:#263140;--font:"Inter",-apple-system,"Segoe UI",Roboto,"Liberation Sans",Arial,sans-serif}
+:root{--deep:#10151d;--warm:#f4f3ef;--ink:#263140;--font:"Inter",-apple-system,"Segoe UI",Roboto,"Liberation Sans",Arial,sans-serif}
 *{box-sizing:border-box;margin:0}
 html,body{width:1080px;height:1920px;overflow:hidden;background:var(--deep);font-family:var(--font)}
-#bg{position:absolute;inset:0;background:radial-gradient(900px 700px at 80% 0%,#33425a 0%,transparent 70%),linear-gradient(180deg,#1d2633 0%,#151b24 100%)}
-.cap{position:absolute;left:80px;right:80px;top:110px;opacity:0;color:#fff}
-.eyebrow{font-size:28px;letter-spacing:.22em;text-transform:uppercase;color:#9fb0c6;font-weight:600;margin-bottom:22px}
-.h{font-size:80px;line-height:1.06;font-weight:700;letter-spacing:-.02em}
-.sub{font-size:36px;line-height:1.3;color:#b9c5d6;margin-top:22px}
-.shell{position:absolute;overflow:hidden;background:var(--warm);box-shadow:0 0 0 12px #0c1016,0 0 0 13px rgba(255,255,255,.14),0 60px 120px rgba(0,0,0,.55);opacity:0;visibility:hidden}
-#big{left:90px;top:520px;width:900px;height:1300px;border-radius:64px}
-#pc{left:30px;top:640px;width:500px;height:1180px;border-radius:48px}
-#pa{left:550px;top:640px;width:500px;height:1180px;border-radius:48px}
-iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0;background:var(--warm)}
-#fa,#fc{width:390px;height:563px;transform:scale(2.3077)}
-#fc2,#fa2{width:390px;height:920px;transform:scale(1.282)}
-#fa,#fc{opacity:0}
-.lab{position:absolute;top:566px;width:500px;text-align:center;font-size:30px;letter-spacing:.2em;font-weight:700;color:#cfd8e6;opacity:0}
-.lab span{display:inline-block;padding:12px 26px;border-radius:40px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2)}
-#win{position:absolute;left:40px;top:560px;width:1000px;height:1080px;border-radius:26px;overflow:hidden;background:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.16),0 60px 120px rgba(0,0,0,.55);opacity:0;visibility:hidden}
-#bar{height:64px;background:#e9e8e4;display:flex;align-items:center;padding:0 22px;gap:12px;border-bottom:1px solid #d6d4cd}
-#bar i{width:16px;height:16px;border-radius:50%;background:#c9c7c0;display:block}
-#url{margin-left:18px;flex:1;height:38px;border-radius:19px;background:#fff;color:#4a5260;font-size:22px;display:flex;align-items:center;padding:0 18px}
-#fd{position:absolute;left:0;top:64px;width:1280px;height:1300px;transform:scale(.78125)}
-/* mock chat */
-#chatbox{position:absolute;left:0;top:0;width:390px;height:563px;transform-origin:0 0;transform:scale(2.3077);background:#e8ecf1;font-family:var(--font);color:#1c2430;opacity:0}
-.chead{height:50px;background:#fff;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid #dde2e8;font-weight:700;font-size:15px}
-.av{width:32px;height:32px;border-radius:50%;background:#263140;color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px}
+#world{position:absolute;inset:0;transform-origin:540px 960px}
+#bg{position:absolute;inset:0;background:linear-gradient(180deg,#18212e 0%,#10151d 100%)}
+.blob{position:absolute;border-radius:50%;filter:blur(90px);opacity:.55}
+/* captions */
+.cap{position:absolute;left:70px;right:70px;top:96px;color:#fff;opacity:0}
+.cap .pre{font-size:40px;font-weight:600;color:#9fb0c6;margin-bottom:12px}
+.cap .h{font-size:78px;line-height:1.08;font-weight:800;letter-spacing:-.025em}
+.cap .sub{font-size:38px;line-height:1.3;color:#b9c5d6;margin-top:20px}
+.cap .w{display:inline-block;opacity:0}
+.ln{position:relative;display:inline-block}
+.st{position:absolute;left:-6px;top:54%;height:9px;border-radius:5px;background:#ff5a5f;width:0;box-shadow:0 0 18px rgba(255,90,95,.6)}
+/* phone */
+.phone{position:absolute;left:0;top:0;width:422px;height:876px;transform-origin:0 0;opacity:0}
+.body{position:absolute;inset:0;border-radius:66px;background:linear-gradient(145deg,#2c3039,#14161b 60%,#22252c);box-shadow:inset 0 0 0 2px rgba(255,255,255,.12),0 40px 90px rgba(0,0,0,.55)}
+.sbtn{position:absolute;background:#22252b;border-radius:3px}
+.screen{position:absolute;left:16px;top:16px;width:390px;height:844px;border-radius:50px;overflow:hidden;background:var(--warm)}
+.island{position:absolute;left:135px;top:11px;width:120px;height:34px;border-radius:20px;background:#000;z-index:50}
+.sbar{position:absolute;left:0;right:0;top:0;height:47px;z-index:40;display:flex;align-items:center;justify-content:space-between;padding:6px 30px 0 40px;font-size:15px;font-weight:700;color:#111}
+.sbar .ic{display:flex;gap:6px;align-items:center}
+.sig{display:flex;gap:2px;align-items:flex-end}.sig i{display:block;width:3px;background:#111;border-radius:1px}
+.bat{width:24px;height:12px;border:1.5px solid #111;border-radius:4px;padding:1.5px;position:relative}.bat i{display:block;height:100%;width:78%;background:#111;border-radius:1.5px}
+.tghead{position:absolute;left:0;right:0;top:47px;height:48px;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;padding:0 14px;font-size:15px;z-index:30}
+.tghead .cl{color:#2a7bd1;font-weight:500}.tghead .tt{font-weight:700;color:#111;text-align:center;line-height:1.1}.tghead .tt small{display:block;font-weight:400;color:#8a929c;font-size:11px}.tghead .dots{color:#2a7bd1;font-weight:800;letter-spacing:1px}
+iframe{position:absolute;left:0;border:0;background:var(--warm)}
+#fc,#fa2{width:390px;height:749px}
+#fa2{top:95px}
+/* chats */
+.chat{position:absolute;inset:0;background:#e6ebf1;opacity:0}
+.chead{position:absolute;left:0;right:0;top:47px;height:56px;background:#fff;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid #dde2e8;font-weight:700;font-size:15px;color:#1c2430}
+.av{width:36px;height:36px;border-radius:50%;background:#263140;color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px}
 .chead small{display:block;font-weight:400;color:#7d8896;font-size:11px}
-.msgs{position:absolute;left:0;right:0;top:50px;padding:10px 12px;display:flex;flex-direction:column;gap:7px}
-.m{max-width:78%;padding:7px 10px;border-radius:14px;font-size:14px;line-height:1.3;background:#fff;opacity:0;align-self:flex-start;box-shadow:0 1px 1px rgba(0,0,0,.06)}
-.m.r{align-self:flex-end;background:#d6e4f4}
-.m img{display:block;width:150px;height:130px;object-fit:cover;border-radius:9px;margin-bottom:5px}
+.msgs{position:absolute;left:0;right:0;top:110px;padding:8px 12px;display:flex;flex-direction:column;gap:8px}
+.m{max-width:80%;padding:8px 11px;border-radius:16px;font-size:15px;line-height:1.3;background:#fff;color:#1c2430;align-self:flex-start;box-shadow:0 1px 1px rgba(0,0,0,.06);opacity:0}
+.m.r{align-self:flex-end;background:#d4e5f7}
 .m b{display:block;font-size:11px;color:#3b6aa5;margin-bottom:2px}
-#chat2{position:absolute;inset:0;opacity:0}
-#inbtn{margin:6px 12px 0;height:38px;border-radius:12px;background:#263140;color:#fff;display:grid;place-items:center;font-size:14px;font-weight:600;max-width:78%}
-#cbar{position:absolute;left:0;right:0;bottom:0;height:54px;background:#fff;border-top:1px solid #dde2e8;display:flex;align-items:center;gap:10px;padding:0 12px}
-#cbar .menu{height:32px;padding:0 14px;border-radius:16px;background:#263140;color:#fff;font-size:13px;font-weight:700;display:grid;place-items:center}
-#cbar .inp{flex:1;height:32px;border-radius:16px;background:#eef1f5;color:#9aa5b3;font-size:13px;display:flex;align-items:center;padding:0 12px}
-#tap{position:absolute;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;border:5px solid rgba(255,255,255,.95);background:rgba(38,49,64,.3);opacity:0;pointer-events:none;z-index:20;box-shadow:0 0 0 3px rgba(38,49,64,.4)}
-#ring{position:absolute;border:5px solid #f0c24b;border-radius:26px;opacity:0;z-index:15;box-shadow:0 0 40px rgba(240,194,75,.45)}
-#chips{position:absolute;left:80px;right:80px;top:800px;display:flex;flex-wrap:wrap;gap:26px;justify-content:center}
-.chip{font-size:52px;font-weight:700;color:#fff;padding:26px 44px;border-radius:70px;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.22);opacity:0}
+.xl{border-collapse:collapse;font-size:7px;background:#fff;margin-top:3px}
+.xl td{border:1px solid #c9ced6;padding:1px 3px;color:#333;white-space:nowrap}
+.xl tr:first-child td{background:#1f6e43;color:#fff;font-weight:700}
+.xl td.y{background:#ffe58a}.xl td.rd{background:#ffb3b3}
+.inbar{position:absolute;left:0;right:0;bottom:0;height:78px;background:#fff;border-top:1px solid #dde2e8;display:flex;align-items:flex-start;gap:10px;padding:12px 12px}
+.inbar .menu{height:34px;padding:0 14px;border-radius:17px;background:#263140;color:#fff;font-size:13px;font-weight:700;display:grid;place-items:center}
+.inbar .inp{flex:1;height:34px;border-radius:17px;background:#eef1f5;color:#9aa5b3;font-size:14px;display:flex;align-items:center;padding:0 14px}
+#inbtn{margin-top:6px;height:42px;border-radius:12px;background:#263140;color:#fff;display:grid;place-items:center;font-size:15px;font-weight:700;width:80%}
+/* sheet (mini app window) */
+#sheet{position:absolute;left:0;right:0;top:47px;bottom:0;background:var(--warm);transform:translateY(110%);z-index:20;box-shadow:0 -10px 40px rgba(0,0,0,.25);border-radius:14px 14px 0 0;overflow:hidden}
+#sheet .tghead{top:0;border-radius:14px 14px 0 0}
+#sbody{position:absolute;left:0;right:0;top:48px;bottom:0}
+#spin{position:absolute;left:50%;top:42%;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:4px solid #d9dde3;border-top-color:#263140}
+#spint{position:absolute;left:0;right:0;top:calc(42% + 40px);text-align:center;font-size:14px;color:#7d8896}
+/* flashback over the app */
+#fb{position:absolute;inset:0;z-index:35;opacity:0;background:rgba(16,21,29,.45);backdrop-filter:blur(5px)}
+#fbb{position:absolute;left:40px;right:40px;top:330px;background:#fff;border-radius:22px;padding:18px 20px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+#fbb b{display:block;font-size:13px;color:#3b6aa5;margin-bottom:6px}
+#fbt{font-size:24px;font-weight:700;color:#1c2430;position:relative;display:inline-block}
+#fbs{position:absolute;left:-4px;top:52%;height:5px;background:#ff5a5f;border-radius:3px;width:0}
+/* chaos + glitch */
+#chaos{position:absolute;inset:0;pointer-events:none;z-index:60}
+.cb{position:absolute;padding:14px 20px;border-radius:24px;background:#fff;color:#1c2430;font-size:30px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.35);white-space:nowrap;opacity:0}
+.cb b{display:block;font-size:18px;color:#3b6aa5;font-weight:700}
+.cb.r{background:#ffe9e9}
+#glitch{position:absolute;inset:0;z-index:70;pointer-events:none;opacity:0}
+.gb{position:absolute;left:0;right:0;mix-blend-mode:difference}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;z-index:80;pointer-events:none}
+/* split labels, rings, callouts, tap */
+.lab{position:absolute;top:520px;width:506px;text-align:center;opacity:0;font-size:28px;letter-spacing:.2em;font-weight:800;color:#dfe6f0}
+.lab span{display:inline-block;padding:10px 24px;border-radius:40px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.22)}
+.ring{position:absolute;border:5px solid #ffc83d;border-radius:18px;opacity:0;z-index:90;box-shadow:0 0 0 4000px rgba(0,0,0,0),0 0 36px rgba(255,200,61,.55)}
+.ring.g{border-color:#3ddc84;box-shadow:0 0 36px rgba(61,220,132,.55)}
+.co{position:absolute;z-index:91;opacity:0;padding:12px 20px;border-radius:16px;background:#ffc83d;color:#1a1300;font-size:26px;font-weight:800;white-space:nowrap;box-shadow:0 12px 30px rgba(0,0,0,.35)}
+.co.g{background:#3ddc84;color:#062312}
+#tap{position:absolute;width:110px;height:110px;margin:-55px 0 0 -55px;border-radius:50%;border:5px solid rgba(255,255,255,.95);background:rgba(38,49,64,.35);opacity:0;pointer-events:none;z-index:95;box-shadow:0 0 0 3px rgba(38,49,64,.45)}
+#scan{position:absolute;z-index:92;opacity:0;border-radius:12px;overflow:hidden;background:rgba(80,140,255,.18);box-shadow:0 0 0 3px rgba(120,170,255,.9),0 0 40px rgba(80,140,255,.6)}
+#scan i{position:absolute;left:0;right:0;height:6px;background:linear-gradient(90deg,transparent,#9fd0ff,transparent);box-shadow:0 0 24px 8px rgba(120,190,255,.7)}
+/* laptop */
+#laptop{position:absolute;left:20px;top:640px;width:1040px;opacity:0;transform-origin:520px 400px}
+#lscr{margin:0 auto;width:940px;height:606px;border-radius:22px 22px 6px 6px;background:#0b0d10;padding:22px 20px 22px;position:relative;box-shadow:inset 0 0 0 2px #2a2e35,0 40px 90px rgba(0,0,0,.5)}
+#lscr .cam{position:absolute;left:50%;top:8px;width:7px;height:7px;margin-left:-3px;border-radius:50%;background:#2a2f37}
+#lview{position:relative;width:900px;height:562px;overflow:hidden;border-radius:4px;background:#fff}
+#lbar{height:34px;background:#ecebe7;display:flex;align-items:center;gap:8px;padding:0 12px;border-bottom:1px solid #d6d4cd}
+#lbar i{width:11px;height:11px;border-radius:50%;background:#cfccc4;display:block}
+#lurl{margin-left:12px;flex:1;height:24px;border-radius:12px;background:#fff;color:#4a5260;font-size:14px;display:flex;align-items:center;padding:0 12px}
+#fd{top:34px;width:1280px;height:751px;transform-origin:0 0;transform:scale(.703125)}
+#lbase{margin:0 auto;width:1040px;height:30px;background:linear-gradient(180deg,#cfd3d9,#8e949c);clip-path:polygon(0 0,100% 0,96% 100%,4% 100%);position:relative}
+#lbase:after{content:"";position:absolute;left:50%;top:0;width:150px;height:9px;margin-left:-75px;background:#a9aeb5;border-radius:0 0 10px 10px}
+/* chips */
+#chips{position:absolute;left:60px;right:60px;top:700px;display:flex;flex-wrap:wrap;gap:34px 28px;justify-content:center;perspective:900px}
+.chip{font-size:58px;font-weight:800;color:#fff;padding:30px 50px;border-radius:80px;background:linear-gradient(180deg,#3a4a63,#243041);border:2px solid rgba(255,255,255,.25);box-shadow:0 14px 0 #121923,0 30px 50px rgba(0,0,0,.45),inset 0 2px 0 rgba(255,255,255,.25);opacity:0}
 #outro{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;opacity:0}
-#outro .logo{width:190px;height:190px;border-radius:50px;background:#f4f3ef;color:#263140;font-size:124px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:60px}
-#outro .nm{font-size:132px;font-weight:700;letter-spacing:-.03em;color:#fff}
-#fade{position:absolute;inset:0;background:#151b24;opacity:0;pointer-events:none;z-index:30}
+#outro .logo{width:200px;height:200px;border-radius:54px;background:#f4f3ef;color:#263140;font-size:130px;font-weight:900;display:flex;align-items:center;justify-content:center;margin-bottom:64px;box-shadow:0 0 120px rgba(120,160,230,.35)}
+#outro .nm{font-size:136px;font-weight:800;letter-spacing:-.03em;color:#fff}
+#fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;z-index:99}
 </style></head><body>
-<div id="bg"></div>
-<div class="cap" id="c1"><div class="eyebrow">Buyer CRM</div><div class="h">Заказы клиентов<br>тонут в чатах?</div></div>
-<div class="cap" id="c2"><div class="eyebrow">Telegram</div><div class="h">Откройте бота —<br>CRM внутри</div></div>
-<div class="cap" id="c3"><div class="eyebrow">Искусственный интеллект</div><div class="h">Загрузили фото —<br>ИИ нашёл модель</div></div>
-<div class="cap" id="c4"><div class="eyebrow">Клиент</div><div class="h">Заказы, статусы<br>и баланс</div><div class="sub">Всё, что нужно клиенту, — в одном приложении</div></div>
-<div class="cap" id="c5"><div class="eyebrow">Отправки</div><div class="h">Отправки с треком<br>и стоимостью</div></div>
-<div class="cap" id="c6"><div class="eyebrow">Клиент и админ</div><div class="h">Клиент видит своё.<br>Вы — всё.</div></div>
-<div class="cap" id="c7"><div class="eyebrow">Веб-версия</div><div class="h">Не только Telegram —<br>полноценный сайт</div></div>
-<div class="cap" id="c8"><div class="eyebrow">Для любого бизнеса</div><div class="h">Подстроим<br>под ваш бизнес</div></div>
-<div class="shell" id="big">
-  <div id="chatbox">
-    <div id="chat1">
-      <div class="chead"><div class="av">Г</div><div>Заказы<small>группа</small></div></div>
-      <div class="msgs">
-        <div class="m r" id="m1"><img src="/__assets/3c.jpg"><b>Анна</b>255 пж</div>
-        <div class="m r" id="m2"><img src="/__assets/2.jpg"><b>Игорь</b>вот эту, L?</div>
-        <div class="m" id="m3"><b>Менеджер</b>а какой размер?</div>
-        <div class="m r" id="m4"><b>Анна</b>где мой заказ??</div>
-        <div class="m" id="m5"><b>Менеджер</b>когда пополнишь баланс?</div>
-      </div>
-    </div>
-    <div id="chat2">
-      <div class="chead"><div class="av">B</div><div>Buyer CRM<small>бот</small></div></div>
-      <div class="msgs"><div class="m" id="mb" style="max-width:86%;opacity:1"><b>Buyer CRM</b>Здравствуйте! Откройте CRM, чтобы увидеть заказы, баланс и отправки.</div><div id="inbtn">Открыть CRM</div></div>
-      <div id="cbar"><div class="menu">CRM</div><div class="inp">Сообщение</div></div>
-    </div>
+<div id="world">
+<div id="bg"><div class="blob" id="b1" style="width:800px;height:800px;background:#2b4a7a"></div><div class="blob" id="b2" style="width:700px;height:700px;background:#3b2d6b"></div></div>
+
+<div class="cap" id="c2"><div class="h">Есть решение.</div><div class="sub">Ваша личная CRM в компактном приложении.</div></div>
+<div class="cap" id="c3"><div class="pre">Больше никаких:</div><div class="h"><span class="ln">«Какой у меня<i class="st"></i></span><br><span class="ln">баланс?»<i class="st"></i></span></div></div>
+<div class="cap" id="c4"><div class="pre">Никаких:</div><div class="h"><span class="ln">«Вы отправили?<i class="st"></i></span><br><span class="ln">Какой трек?»<i class="st"></i></span></div></div>
+<div class="cap" id="c5"><div class="pre">Никаких:</div><div class="h"><span class="ln">«Заказ уже<i class="st"></i></span><br><span class="ln">выкуплен?»<i class="st"></i></span></div></div>
+<div class="cap" id="c6"><div class="h">Клиент видит своё.<br>Вы видите всё.</div></div>
+<div class="cap" id="c7"><div class="h">Загрузили фото.<br>ИИ всё заполнил.</div></div>
+<div class="cap" id="c8"><div class="h">Полноценный сайт<br>для работы с ПК.</div></div>
+<div class="cap" id="c9"><div class="h">Настроим<br>под ваш бизнес.</div></div>
+
+<div class="lab" id="lc" style="left:20px"><span>КЛИЕНТ</span></div>
+<div class="lab" id="la" style="left:554px"><span>АДМИНИСТРАТОР</span></div>
+
+<div id="laptop"><div id="lscr"><i class="cam"></i><div id="lview"><div id="lbar"><i></i><i></i><i></i><div id="lurl">🔒&nbsp; crm.ваш-бизнес.рф</div></div><iframe id="fd" name="fd" src="http://localhost:8080/#/orders"></iframe></div></div><div id="lbase"></div></div>
+
+<!-- phone 1: chats, then the client mini app -->
+<div class="phone" id="p1"><div class="body"></div>
+ <div class="sbtn" style="left:-5px;top:170px;width:6px;height:36px"></div><div class="sbtn" style="left:-5px;top:230px;width:6px;height:64px"></div><div class="sbtn" style="left:-5px;top:310px;width:6px;height:64px"></div><div class="sbtn" style="right:-5px;top:250px;width:6px;height:100px"></div>
+ <div class="screen">
+  <div class="island"></div>
+  <div class="sbar"><span>9:41</span><span class="ic"><span class="sig"><i style="height:4px"></i><i style="height:7px"></i><i style="height:10px"></i><i style="height:13px"></i></span><span class="bat"><i></i></span></span></div>
+  <div class="chat" id="chat1">
+   <div class="chead"><div class="av">З</div><div>Заказы клиентов<small>14 участников</small></div></div>
+   <div class="msgs">
+    <div class="m" id="m1"><b>Анна</b>Где мой заказ?</div>
+    <div class="m" id="m2"><b>Анна</b>Отправили?</div>
+    <div class="m" id="m3"><b>Анна</b>Какой у меня баланс?</div>
+    <div class="m r" id="m4" style="max-width:88%"><b>Вы</b><table class="xl" id="xl"></table><div style="font-size:12px;margin-top:4px">вот таблица, там всё есть</div></div>
+   </div>
+   <div class="inbar"><div class="inp">Сообщение</div></div>
   </div>
-  <iframe id="fa" name="fa" src="http://localhost:8080/"></iframe>
-  <iframe id="fc" name="fc" src="http://localhost:8080/"></iframe>
+  <div class="chat" id="chat2">
+   <div class="chead"><div class="av">B</div><div>Buyer CRM<small>бот</small></div></div>
+   <div class="msgs"><div class="m" id="mb" style="max-width:88%"><b>Buyer CRM</b>Здравствуйте! Здесь ваши заказы, баланс и отправки. Нажмите, чтобы открыть CRM.</div><div id="inbtn">Открыть CRM</div></div>
+   <div class="inbar"><div class="menu">CRM</div><div class="inp">Сообщение</div></div>
+  </div>
+  <div id="sheet"><div class="tghead"><span class="cl">Закрыть</span><span class="tt">Buyer CRM<small>мини-приложение</small></span><span class="dots">⋯</span></div>
+   <div id="sbody"><div id="spin"></div><div id="spint">Загрузка…</div><iframe id="fc" name="fc" src="http://localhost:8080/" style="top:0;opacity:0"></iframe></div></div>
+  <div id="fb"><div id="fbb"><b>Клиент</b><span id="fbt"><span id="fbtx"></span><i id="fbs"></i></span></div></div>
+ </div>
 </div>
-<div class="lab" id="lc" style="left:30px"><span>КЛИЕНТ</span></div>
-<div class="lab" id="la" style="left:550px"><span>АДМИНИСТРАТОР</span></div>
-<div class="shell" id="pc"><iframe id="fc2" name="fc2" src="http://localhost:8080/#/orders/N5"></iframe></div>
-<div class="shell" id="pa"><iframe id="fa2" name="fa2" src="http://localhost:8080/#/orders/N5"></iframe></div>
-<div id="win"><div id="bar"><i></i><i></i><i></i><div id="url">🔒&nbsp; crm.ваш-бизнес.рф</div></div><iframe id="fd" name="fd" src="http://localhost:8080/#/orders"></iframe></div>
-<div id="chips"><div class="chip">Выкуп товаров</div><div class="chip">Доставка</div><div class="chip">Склад</div><div class="chip">Услуги</div><div class="chip">Подписки</div><div class="chip">Свой бизнес</div></div>
+
+<!-- phone 2: admin mini app -->
+<div class="phone" id="p2"><div class="body"></div>
+ <div class="sbtn" style="left:-5px;top:170px;width:6px;height:36px"></div><div class="sbtn" style="left:-5px;top:230px;width:6px;height:64px"></div><div class="sbtn" style="left:-5px;top:310px;width:6px;height:64px"></div><div class="sbtn" style="right:-5px;top:250px;width:6px;height:100px"></div>
+ <div class="screen">
+  <div class="island"></div>
+  <div class="sbar"><span>9:41</span><span class="ic"><span class="sig"><i style="height:4px"></i><i style="height:7px"></i><i style="height:10px"></i><i style="height:13px"></i></span><span class="bat"><i></i></span></span></div>
+  <div class="tghead"><span class="cl">Закрыть</span><span class="tt">Buyer CRM<small>мини-приложение</small></span><span class="dots">⋯</span></div>
+  <iframe id="fa2" name="fa2" src="http://localhost:8080/#/orders/N6"></iframe>
+ </div>
+</div>
+
+<div id="chips"><div class="chip">Выкуп</div><div class="chip">Доставка</div><div class="chip">Склад</div><div class="chip">Подписки</div><div class="chip">Свои статусы</div></div>
 <div id="outro"><div class="logo">B</div><div class="nm">Buyer CRM</div></div>
-<div id="ring"></div><div id="tap"></div><div id="fade"></div>
+<div id="chaos"></div>
+<div id="rings"></div>
+<div id="scan"><i></i></div>
+<div id="tap"></div>
+</div>
+<div id="glitch"></div>
+<div id="flash"></div>
+<div id="fade"></div>
 <script>
 const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
 const ease=x=>1-Math.pow(1-clamp(x),3);
-const inout=x=>{x=clamp(x);return x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2};
+const eio=x=>{x=clamp(x);return x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2};
+const back=x=>{x=clamp(x);const c1=1.70158,c3=c1+1;return 1+c3*Math.pow(x-1,3)+c1*Math.pow(x-1,2)};
+const lerp=(a,b,k)=>a+(b-a)*k;
 const $=id=>document.getElementById(id);
-function cap(el,tin,tout,t){const a=ease((t-tin)/.7),b=ease((t-tout)/.5);el.style.opacity=clamp(a-b);el.style.transform=`translateY(${(1-a)*34-b*20}px)`}
-function vis(el,o){el.style.opacity=o;el.style.visibility=o>0.001?'visible':'hidden'}
-window.setT=function(t,tap,ringBox){
-  cap($('c1'),.25,4.0,t);cap($('c2'),4.4,8.0,t);cap($('c3'),8.4,19.0,t);cap($('c4'),19.4,31.0,t);
-  cap($('c5'),31.4,36.0,t);cap($('c6'),36.4,48.0,t);cap($('c7'),48.4,54.0,t);cap($('c8'),54.4,58.2,t);
-  // big phone: in at start, out at 36.2
-  const bin=ease((t-.1)/.9),bout=inout((t-35.9)/.6);
-  const big=$('big');vis(big,clamp(bin*(1-bout)));big.style.transform=`translateY(${(1-bin)*140+bout*160}px)`;
-  // chat 1 → chat 2 → admin app → client app
-  const chatO=t<6.9?1:1-ease((t-6.9)/.25);$('chatbox').style.opacity=clamp(chatO)
-  $('chat1').style.opacity=t<4.2?1:0;$('chat2').style.opacity=t<4.2?0:1;
-  [1,2,3,4,5].forEach((n,i)=>{const o=ease((t-(.7+i*.6))/.35);const m=$('m'+n);m.style.opacity=o;m.style.transform=`translateY(${(1-o)*14}px)`});
-  const aO=clamp(ease((t-7.15)/.5))*(1-ease((t-19.0)/.4));vis($('fa'),aO);
-  $('fa').style.transform=`scale(${2.3077*(1+.02*(1-ease((t-7.15)/.6)))})`;
-  vis($('fc'),ease((t-19.0)/.4));
-  // split phones
-  const sIn=inout((t-36.5)/.7),sOut=inout((t-47.9)/.5);
-  const so=clamp(sIn*(1-sOut));
-  [$('pc'),$('pa')].forEach((p,i)=>{vis(p,so);p.style.transform=`translateY(${(1-sIn)*180+sOut*160}px)`});
-  $('lc').style.opacity=so;$('la').style.opacity=so;
-  // desktop window
-  const wIn=inout((t-48.3)/.8),wOut=inout((t-53.9)/.5);
-  const w=$('win');vis(w,clamp(wIn*(1-wOut)));w.style.transform=`translateY(${(1-wIn)*180+wOut*160}px)`;
+let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646};
+// excel mock
+(()=>{const t=$('xl');const hd=['Заказ','Модель','Закупка','Цена','Оплата','Остаток'];let h='<tr>'+hd.map(x=>'<td>'+x+'</td>').join('')+'</tr>';
+ for(let r=0;r<9;r++){h+='<tr>';for(let c=0;c<6;c++){const v=c==0?('N'+(r+1)):c==1?['AM90','Bloom','Cloud5','Skin','Irony','TF WR','Adistar','Scout','Rep'][r]:Math.round(rnd()*900+50)*1000;const cls=rnd()<.18?'y':rnd()<.12?'rd':'';h+='<td class="'+cls+'">'+(typeof v=='number'?v.toLocaleString('ru-RU'):v)+'</td>'}h+='</tr>'}t.innerHTML=h})();
+// chaos bubbles
+const CH=window.CHAOS||[];
+const TXT=['Что с выкупом?','Какой трек?','Посчитай остаток','Где мой заказ?','Отправили уже?','Сколько за доставку?','Я перевёл, проверь','Почему списали?','Скинь фото коробки','Какой курс?','Ответь пж','???','Заказ N7 где?','Когда будет?','Размер 270 есть?','Сколько осталось?'];
+const NM=['Анна','Игорь','Дмитрий','Алия','Тимур','Ольга','Руслан','Мария','Саша'];
+window.initChaos=function(times){const box=$('chaos');times.forEach((tm,i)=>{const d=document.createElement('div');d.className='cb'+(rnd()<.25?' r':'');
+  d.innerHTML='<b>'+NM[Math.floor(rnd()*NM.length)]+'</b>'+TXT[i%TXT.length];d.dataset.t=tm;d.dataset.rot=(rnd()*20-10).toFixed(1);
+  d.style.left=Math.round(rnd()*720+20)+'px';d.style.top=Math.round(rnd()*1700+60)+'px';box.appendChild(d)})};
+// glitch bars
+(()=>{const g=$('glitch');for(let i=0;i<14;i++){const b=document.createElement('div');b.className='gb';b.style.top=Math.round(rnd()*1900)+'px';b.style.height=Math.round(rnd()*70+8)+'px';b.style.background=['#ff2d55','#00e5ff','#ffffff','#7c4dff'][i%4];b.style.transform='translateX('+Math.round(rnd()*200-100)+'px)';g.appendChild(b)}})();
+// word stagger setup
+document.querySelectorAll('.cap .h, .cap .sub, .cap .pre').forEach(el=>{
+  const walk=n=>{[...n.childNodes].forEach(c=>{if(c.nodeType===3&&c.textContent.trim()){const f=document.createDocumentFragment();c.textContent.split(/(\s+)/).forEach(p=>{if(!p)return;if(/^\s+$/.test(p))f.appendChild(document.createTextNode(p));else{const s=document.createElement('span');s.className='w';s.textContent=p;f.appendChild(s)}});n.replaceChild(f,c)}else if(c.nodeType===1&&c.tagName!=='I')walk(c)})};walk(el)});
+const CAPS=[['c2',7.25,11.75],['c3',12.15,18.7],['c4',19.15,25.7],['c5',26.15,33.7],['c6',34.25,47.7],['c7',48.25,56.75],['c8',57.25,62.7],['c9',63.2,67.7]];
+function caps(t){CAPS.forEach(([id,a,b])=>{const el=$(id);const out=ease((t-b)/.45);const on=t>=a-.05&&t<b+.5;el.style.opacity=on?1-out:0;el.style.transform=`translateY(${-out*30}px)`;
+  if(!on)return;[...el.querySelectorAll('.w')].forEach((w,i)=>{const k=back((t-a-i*.06)/.45);w.style.opacity=clamp((t-a-i*.06)/.25);w.style.transform=`translateY(${(1-k)*40}px)`});
+  [...el.querySelectorAll('.st')].forEach((s,i)=>{const k=eio((t-a-1.0-i*.22)/.35);s.style.width=(k*104)+'%'});
+  [...el.querySelectorAll('.ln')].forEach((l,i)=>{l.style.opacity=1-.45*clamp((t-a-1.0-i*.22)/.35)})})}
+function ph(id,x,y,s,o,extra=''){const p=$(id);p.style.opacity=o;p.style.visibility=o>.001?'visible':'hidden';p.style.transform=`translate(${x}px,${y}px) scale(${s}) ${extra}`}
+const A=[213,470,1.55],L=[20,590,1.2],R=[554,590,1.2],S=[700,1120,.78];
+const mix=(P,Q,k)=>[lerp(P[0],Q[0],k),lerp(P[1],Q[1],k),lerp(P[2],Q[2],k)];
+window.setT=function(t,x){x=x||{};
+  // background drift
+  $('b1').style.transform=`translate(${-200+Math.sin(t*.21)*180}px,${-150+Math.cos(t*.17)*120}px)`;
+  $('b2').style.transform=`translate(${520+Math.cos(t*.19)*160}px,${1100+Math.sin(t*.23)*160}px)`;
+  caps(t);
+  // phone 1
+  let P=A.slice(),o1=ease(t/.6),extra='';
+  if(t<.6)P[1]+= (1-ease(t/.6))*220;
+  if(t>3.6&&t<6.9){const a=clamp((t-3.6)/2.7)*16;extra=`translate(${Math.sin(t*61)*a}px,${Math.cos(t*47)*a}px) rotate(${Math.sin(t*33)*a*.08}deg)`}
+  if(t>=34)P=mix(A,L,eio((t-34)/1.0));
+  if(t>=48){P=mix(L,[-600,590,1.2],eio((t-48)/.9));o1*=1-eio((t-48.2)/.7)}
+  ph('p1',P[0],P[1],P[2],o1,extra);
+  // phone 2 (admin)
+  let Q=[1150,590,1.2],o2=0;
+  if(t>=34){Q=mix([1150,590,1.2],R,eio((t-34.1)/1.0));o2=1}
+  if(t>=48)Q=mix(R,A,eio((t-48.1)/.9));
+  if(t>=57)Q=mix(A,S,eio((t-57)/1.2));
+  if(t>=63){Q=mix(S,[760,1300,.6],eio((t-63)/.6));o2=1-eio((t-63)/.6)}
+  ph('p2',Q[0],Q[1],Q[2],o2);
+  $('lc').style.opacity=clamp((t-34.8)/.4)*(1-clamp((t-47.8)/.3));$('la').style.opacity=$('lc').style.opacity;
+  // chats
+  $('chat1').style.opacity=t<6.9?1:0;$('chat2').style.opacity=(t>=6.9&&t<10.6)?1:0;
+  ['m1','m2','m3','m4'].forEach((id,i)=>{const k=back((t-[.5,1.1,1.7,2.5][i])/.35);const m=$(id);m.style.opacity=clamp((t-[.5,1.1,1.7,2.5][i])/.2);m.style.transform=`translateY(${(1-k)*16}px) scale(${.9+.1*k})`});
+  {const k=back((t-7.6)/.35);$('mb').style.opacity=clamp((t-7.6)/.2);$('mb').style.transform=`translateY(${(1-k)*16}px)`;$('inbtn').style.opacity=clamp((t-7.9)/.25)}
+  // chaos
+  document.querySelectorAll('.cb').forEach(d=>{const tm=+d.dataset.t;const k=back((t-tm)/.22);d.style.opacity=t<6.9?clamp((t-tm)/.1):0;d.style.transform=`rotate(${d.dataset.rot}deg) scale(${.6+.4*k})`});
+  // glitch + flash
+  const g=$('glitch');if(t>=6.3&&t<6.9){g.style.opacity=(Math.floor(t*30)%2)?1:.55;[...g.children].forEach((b,i)=>{b.style.transform=`translateX(${Math.sin(t*90+i)*160}px)`});
+    $('world').style.transform=`translate(${Math.sin(t*120)*24}px,${Math.cos(t*97)*14}px) skewX(${Math.sin(t*70)*4}deg)`;$('world').style.filter=`hue-rotate(${Math.sin(t*50)*90}deg) saturate(1.8) contrast(1.2)`}
+  else{g.style.opacity=0;$('world').style.transform='none';$('world').style.filter='none'}
+  $('flash').style.opacity=t<6.6?0:t<6.72?(t-6.6)/.12:clamp(1-(t-6.72)/.35);
+  // sheet
+  const sk=eio((t-9.0)/.55);$('sheet').style.transform=`translateY(${(1-sk)*110}%)`;
+  $('spin').style.transform=`rotate(${t*540}deg)`;const so=(t>=9.4&&t<10.6)?1:0;$('spin').style.opacity=so;$('spint').style.opacity=so;
+  $('fc').style.opacity=clamp((t-10.4)/.35);
+  // flashbacks
+  const FB=[[12,'Какой у меня баланс?'],[19,'Вы отправили? Какой трек?'],[26,'Заказ уже выкуплен?']];let fo=0;
+  FB.forEach(([a,txt])=>{if(t>=a-.01&&t<a+1.6){$('fbtx').textContent=txt;const inn=ease((t-a)/.25),out=eio((t-a-1.15)/.35);fo=inn;$('fb').style.opacity=inn*(1-out);
+    $('fbb').style.transform=`translateX(${-out*420}px) scale(${.85+.15*back((t-a)/.35)}) rotate(${-out*8}deg)`;$('fbs').style.width=(eio((t-a-.55)/.3)*104)+'%'}});
+  if(!fo)$('fb').style.opacity=0;
+  // laptop
+  const li=eio((t-57.2)/1.2),lo=eio((t-63)/.6);$('laptop').style.opacity=t<57.2?0:li*(1-lo);$('laptop').style.transform=`translateY(${(1-li)*120+lo*80}px) scale(${(.86+.14*li)*(1-.1*lo)})`;
   // chips
-  [...document.querySelectorAll('.chip')].forEach((c,i)=>{const a=ease((t-(55.0+i*.28))/.4),b=ease((t-58.0)/.4);c.style.opacity=clamp(a-b);c.style.transform=`scale(${.85+.15*a})`});
+  [...document.querySelectorAll('.chip')].forEach((c,i)=>{const a=63.7+i*.42;const k=back((t-a)/.5);const out=eio((t-67.6)/.4);c.style.opacity=clamp((t-a)/.15)*(1-out);
+    c.style.transform=`translateY(${(1-k)*160}px) rotateX(${(1-k)*70+Math.sin(t*2+i)*6}deg) rotateY(${Math.cos(t*1.6+i)*8}deg) scale(${(.5+.5*k)*(1-.2*out)})`});
   // outro
-  const o=ease((t-58.9)/.8);$('outro').style.opacity=o;$('outro').style.transform=`translateY(${(1-o)*30}px)`;
-  $('fade').style.opacity=clamp((t-62.0)/.6);
-  // tap ripple (stage coordinates) and highlight ring
-  if(tap){const k=tap.k;$('tap').style.opacity=k<.15?k/.15:clamp(1-(k-.15)/.35);$('tap').style.left=tap.x+'px';$('tap').style.top=tap.y+'px';$('tap').style.transform=`scale(${.55+k*.9})`}else $('tap').style.opacity=0;
-  if(ringBox){const r=$('ring');r.style.opacity=ringBox.o;r.style.left=ringBox.x+'px';r.style.top=ringBox.y+'px';r.style.width=ringBox.w+'px';r.style.height=ringBox.h+'px'}else $('ring').style.opacity=0;
+  const oo=back((t-68.3)/.7);$('outro').style.opacity=clamp((t-68.3)/.3);$('outro').style.transform=`scale(${.85+.15*oo})`;
+  $('fade').style.opacity=clamp((t-74.0)/1.0);
+  // overlays from python: tap, rings, callouts
+  const tp=$('tap');if(x.tap){const k=x.tap.k;tp.style.opacity=k<.15?k/.15:clamp(1-(k-.15)/.35);tp.style.left=x.tap.x+'px';tp.style.top=x.tap.y+'px';tp.style.transform=`scale(${.55+k*.9})`}else tp.style.opacity=0;
+  const sc=$('scan');if(x.scan){sc.style.cssText=`left:${x.scan.x}px;top:${x.scan.y}px;width:${x.scan.w}px;height:${x.scan.h}px;opacity:${x.scan.o}`;sc.firstChild.style.top=(x.scan.k*100)+'%'}else sc.style.opacity=0;
+  const R0=$('rings');R0.innerHTML='';(x.rings||[]).forEach(r=>{const d=document.createElement('div');d.className='ring'+(r.g?' g':'');d.style.cssText=`left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px;opacity:${r.o};transform:scale(${1.08-.08*clamp(r.o*1.4)})`;R0.appendChild(d)});
+  (x.callouts||[]).forEach(c=>{const d=document.createElement('div');d.className='co'+(c.g?' g':'');d.textContent=c.text;d.style.cssText=`left:${c.x}px;top:${c.y}px;opacity:${c.o};transform:translate(${c.ax||0}%,0) translateY(${(1-c.o)*20}px) scale(${.9+.1*c.o})`;R0.appendChild(d)});
 };
 </script></body></html>

@@ -43,3 +43,4 @@ ui-debug.log
 brag-output/work/frames/
 brag-output/work/audio.wav
 brag-output/work/*.log
+brag-output/work/server.pid
