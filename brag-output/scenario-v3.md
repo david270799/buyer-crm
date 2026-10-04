@@ -71,4 +71,4 @@ Buyer CRM — экосистема (Telegram-мини-приложение + в�
 ## Товары для демо (фото в brag-output/work/assets/)
 1 Nike Tech Fleece Windrunner (6.jpg) · 2 Nike Air Max 90 (7c.jpg) · 3 adidas Adistar Cushion (8.jpg) · 4 Swatch Skin (9c.jpg) · 5 Swatch Irony (10c.jpg)
 плюс прежние: On Cloud 5 Waterproof (1.jpg), adidas Sportswear Denim Track Top (2.jpg), Nike Air Max Flyknit Bloom (3c.jpg), Timex Expedition Scout (4.jpg), Represent Denim Track Jacket & Pants (5.jpg).
-Фото отправки (склад, стопка коробок Nike/adidas/The North Face) владелец показал в чате, но файл на диск не попал: его нужно прислать ещё раз.
+Фото отправки (склад, стопка коробок Nike/adidas/The North Face): `brag-output/work/assets/11.jpg`.
