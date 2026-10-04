@@ -36,6 +36,7 @@ from crm.services.order_service import (
     _clean_url,
     _describe,
 )
+from crm.services.order_split import PlannedItem, plan
 from crm.services.recognition import Recognition, extract_urls
 from crm.services.sequences import SequenceAllocator
 from crm.storage import Database, DocumentExistsError, Transaction
@@ -56,6 +57,8 @@ class IncomingOrder:
 class IntakeResult:
     order: Order
     already_done: bool
+    # More orders from the same photo ("3ta", several links); see order_split.
+    extra: tuple[Order, ...] = ()
 
 
 def _safe(clean, value: str | None, *args) -> str | None:
@@ -127,12 +130,18 @@ class IntakeService:
         if actor.role not in (Role.ADMIN, Role.CLIENT):
             raise PermissionDeniedError("Заказы принимаются только от клиента и администратора.")
         recognition = incoming.recognition
-        link = recognition.link if recognition.link in extract_urls(incoming.caption) else None
-        fields = {
-            "brand": _safe(_clean_text, _no_links(recognition.brand), "Бренд", _MAX_SHORT_TEXT),
-            "model": _safe(_clean_text, _no_links(recognition.model), "Модель", _MAX_SHORT_TEXT),
-            "size": _safe(_clean_text, _no_links(recognition.size), "Размер", _MAX_SHORT_TEXT),
-            "source_url": _safe(_clean_url, link, "Ссылка"),
+        caption_links = extract_urls(incoming.caption)
+
+        def item_fields(item: PlannedItem) -> dict[str, Any]:
+            link = item.link if item.link in caption_links else None
+            return {
+                "brand": _safe(_clean_text, _no_links(item.brand), "Бренд", _MAX_SHORT_TEXT),
+                "model": _safe(_clean_text, _no_links(item.model), "Модель", _MAX_SHORT_TEXT),
+                "size": _safe(_clean_text, _no_links(item.size), "Размер", _MAX_SHORT_TEXT),
+                "source_url": _safe(_clean_url, link, "Ссылка"),
+            }
+
+        common = {
             "photo_url": incoming.photo.photo_url if incoming.photo else None,
             "thumbnail_url": incoming.photo.thumbnail_url if incoming.photo else None,
             "client_comment": _safe(
@@ -142,6 +151,7 @@ class IntakeService:
                 _MAX_LONG_TEXT,
             ),
         }
+        items = [item_fields(item) for item in plan(incoming.caption, recognition)]
         key = IntakeRepository.key(incoming.chat_id, incoming.message_id)
 
         def fn(tx: Transaction) -> IntakeResult:
@@ -150,67 +160,81 @@ class IntakeService:
                 existing = self._orders.get(tx, existing_id)
                 if existing is not None:
                     return IntakeResult(order=existing, already_done=True)
-            number = self._sequences.reserve(
-                tx, ORDER_COUNTER, lambda n: self._orders.exists(tx, make_order_id(n))
-            )
-            order_id = make_order_id(number)
+            # Read phase: all the numbers first (N orders in one transaction).
+            numbers = [
+                self._sequences.reserve(
+                    tx, ORDER_COUNTER, lambda n: self._orders.exists(tx, make_order_id(n))
+                )
+            ]
+            while len(numbers) < len(items):
+                n = numbers[-1] + 1
+                while self._orders.exists(tx, make_order_id(n)):
+                    n += 1
+                numbers.append(n)
             now = self._clock.now()
-            data = {
-                "order_id": order_id,
-                "status": OrderStatus.NEW.value,
-                **fields,
-                "purchase_price": None,
-                "client_price": None,
-                "profit": None,
-                "charged_amount_krw": 0,  # only /buy charges
-                "cargo_code": None,
-                "shipment_id": None,
-                "internal_comment": None,
-                "source_chat_id": incoming.chat_id,
-                "source_message_id": incoming.message_id,
-                "attention_required": False,
-                "recognition": recognition_doc(recognition, now),
-                "created_at": now,
-                "updated_at": now,
-                "created_by": actor.id,
-                "updated_by": actor.id,
-            }
-            self._orders.create(tx, order_id, data)
+            created: list[Order] = []
+            for index, (number, fields) in enumerate(zip(numbers, items, strict=True)):
+                order_id = make_order_id(number)
+                main = index == 0
+                data = {
+                    "order_id": order_id,
+                    "status": OrderStatus.NEW.value,
+                    **fields,
+                    **common,
+                    "purchase_price": None,
+                    "client_price": None,
+                    "profit": None,
+                    "charged_amount_krw": 0,  # only /buy charges
+                    "cargo_code": None,
+                    "shipment_id": None,
+                    "internal_comment": None if main else f"Из того же фото, что {created[0].id}",
+                    # Only the main order is tied to the message (its reaction).
+                    "source_chat_id": incoming.chat_id if main else None,
+                    "source_message_id": incoming.message_id if main else None,
+                    "attention_required": False,
+                    "recognition": recognition_doc(recognition, now),
+                    "created_at": now,
+                    "updated_at": now,
+                    "created_by": actor.id,
+                    "updated_by": actor.id,
+                }
+                self._orders.create(tx, order_id, data)
+                self._auditor.record(
+                    tx,
+                    actor,
+                    now,
+                    action="order.intake",
+                    entity_type="order",
+                    entity_id=order_id,
+                    before=None,
+                    after={
+                        "status": OrderStatus.NEW.value,
+                        "chat_id": incoming.chat_id,
+                        "message_id": incoming.message_id,
+                        "recognized_by": recognition.engine,
+                    },
+                )
+                order = Order.from_doc(order_id, data)
+                created.append(order)
+                self._events.record(
+                    tx,
+                    actor,
+                    now,
+                    EventType.ORDER_CREATED,
+                    f"Новый заказ {order_id}",
+                    body=_describe(order),
+                    order_ids=[order_id],
+                )
             self._intake.create(
                 tx,
                 key,
-                order_id=order_id,
+                order_id=created[0].id,
                 chat_id=incoming.chat_id,
                 message_id=incoming.message_id,
                 now=now,
             )
-            self._sequences.commit(tx, ORDER_COUNTER, number, now)
-            self._auditor.record(
-                tx,
-                actor,
-                now,
-                action="order.intake",
-                entity_type="order",
-                entity_id=order_id,
-                before=None,
-                after={
-                    "status": OrderStatus.NEW.value,
-                    "chat_id": incoming.chat_id,
-                    "message_id": incoming.message_id,
-                    "recognized_by": recognition.engine,
-                },
-            )
-            created = Order.from_doc(order_id, data)
-            self._events.record(
-                tx,
-                actor,
-                now,
-                EventType.ORDER_CREATED,
-                f"Новый заказ {order_id}",
-                body=_describe(created),
-                order_ids=[order_id],
-            )
-            return IntakeResult(order=created, already_done=False)
+            self._sequences.commit(tx, ORDER_COUNTER, numbers[-1], now)
+            return IntakeResult(order=created[0], already_done=False, extra=tuple(created[1:]))
 
         try:
             return self._sequences.run(ORDER_COUNTER, self._max_order_number, self._clock.now, fn)

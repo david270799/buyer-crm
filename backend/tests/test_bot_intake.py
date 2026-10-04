@@ -445,3 +445,36 @@ def test_setclient_creates_a_missing_client_with_zero_balance(db, services, admi
     assert change.before is None
     stored = db.get("client_info", "main_client")
     assert stored["telegram_id"] == 3003 and stored["balance"] == 0
+
+
+async def test_quantity_ta_creates_several_orders(db, env):
+    gemini = FakeGemini()
+    e = env(gemini)
+    await e["photo"]("42 3ta")
+
+    assert sorted(db.list_ids("orders")) == ["N1", "N2", "N3"]
+    assert gemini.calls == ["42"]  # "3ta" is not shown to Gemini as a size
+    sizes = {db.get("orders", i)["size"] for i in ("N1", "N2", "N3")}
+    assert sizes == {"42"}
+    # Only the first order is tied to the message (its reaction).
+    assert db.get("orders", "N1")["source_message_id"] is not None
+    assert db.get("orders", "N2")["source_message_id"] is None
+    assert any("N1, N2, N3" in t for t in e["session"].to(ADMIN_TG))
+
+
+async def test_two_links_two_orders_with_their_sizes(db, env):
+    e = env(FakeGemini())
+    await e["photo"]("https://shop.example.kr/jacket M\nhttps://shop.example.kr/pants 30")
+
+    first, second = db.get("orders", "N1"), db.get("orders", "N2")
+    assert (first["source_url"], first["size"]) == ("https://shop.example.kr/jacket", "M")
+    assert (second["source_url"], second["size"]) == ("https://shop.example.kr/pants", "30")
+    assert first["brand"] is None and second["model"] is None  # several items in one photo
+    assert sorted(db.list_ids("orders")) == ["N1", "N2"]
+
+
+async def test_redelivered_ta_photo_creates_nothing_more(db, env):
+    e = env(FakeGemini())
+    first = await e["photo"]("42 2ta")
+    await e["photo"]("42 2ta", message_id=first.message_id)
+    assert sorted(db.list_ids("orders")) == ["N1", "N2"]

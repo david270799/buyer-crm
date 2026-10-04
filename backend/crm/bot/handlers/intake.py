@@ -39,6 +39,7 @@ from crm.services.common import Actor
 from crm.services.container import Services
 from crm.services.image_service import ORDER_PHOTOS_FOLDER, StoredImage, process_image
 from crm.services.intake_service import IncomingOrder
+from crm.services.order_split import strip_quantity
 from crm.services.recognition import Recognition, recognize_safely
 
 logger = logging.getLogger(__name__)
@@ -109,7 +110,8 @@ class PhotoIntake:
         buffer = await bot.download(file_id)
         data = buffer.read() if buffer else b""
         main, thumb, size = await asyncio.to_thread(process_image, data)
-        caption = message.caption or message.text
+        # "3ta" is a quantity, not a size: Gemini reads the caption without it.
+        caption = strip_quantity(message.caption or message.text)
         recognition = await asyncio.to_thread(
             recognize_safely, self._services.recognizer, main, caption
         )
@@ -189,6 +191,14 @@ class PhotoIntake:
             if result.already_done:
                 return
             order = result.order
+            if result.extra:
+                ids = ", ".join(o.id for o in (order, *result.extra))
+                text = f"📦 Из одного фото создано заказов: {1 + len(result.extra)} — {ids}."
+                if private:
+                    with contextlib.suppress(Exception):
+                        await message.reply(text)
+                else:
+                    await self.tell_admins(bot, text)
             if private:
                 await message.reply(
                     fmt.intake_accepted(order, audience_for(actor.role, message.chat))
