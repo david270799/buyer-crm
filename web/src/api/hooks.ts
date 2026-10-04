@@ -319,6 +319,14 @@ export const useUpdateShipment = (id: string) => {
   });
 };
 
+export const useDuplicateOrder = (id: string) => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (count: number) => post<{ items: Order[] }>(`/api/orders/${id}/duplicate`, { count }),
+    onSuccess: refresh,
+  });
+};
+
 export const useSplitShipment = (id: string) => {
   const refresh = useInvalidateAll();
   return useMutation({

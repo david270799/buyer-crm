@@ -1,4 +1,4 @@
-import { Ban, ExternalLink, Pencil, Repeat, ShoppingBag, Sparkles, Trash2, Truck, Warehouse } from "lucide-react";
+import { Ban, Copy, ExternalLink, Pencil, Repeat, ShoppingBag, Sparkles, Trash2, Truck, Warehouse } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -6,9 +6,9 @@ import { useBulkStatus } from "../api/hooks";
 import type { Order, OrderStatus, Recognition } from "../api/types";
 import { errorText, useToast } from "../components/ui";
 import { date, krw } from "../lib/format";
-import { bulkSummary, BuySheet, CancelConfirm, DeleteConfirm, EditOrderSheet, RebuySheet, ShipmentSheet } from "./sheets";
+import { bulkSummary, BuySheet, CancelConfirm, DeleteConfirm, DuplicateConfirm, EditOrderSheet, RebuySheet, ShipmentSheet } from "./sheets";
 
-type Dialog = "buy" | "cancel" | "edit" | "ship" | "rebuy" | "delete" | null;
+type Dialog = "buy" | "cancel" | "edit" | "ship" | "rebuy" | "delete" | "copy" | null;
 
 function shopName(url: string | null | undefined): string {
   if (!url) return "без ссылки";
@@ -155,6 +155,9 @@ export function OrderAdminPanel({ order }: { order: Order }) {
               <Ban size={16} /> Отменить
             </button>
           )}
+          <button className="btn" onClick={() => setDialog("copy")}>
+            <Copy size={16} /> Копия
+          </button>
           <button className="btn ghost" onClick={() => setDialog("delete")}>
             <Trash2 size={16} /> Удалить
           </button>
@@ -164,6 +167,7 @@ export function OrderAdminPanel({ order }: { order: Order }) {
       {dialog === "cancel" && <CancelConfirm order={order} onClose={() => setDialog(null)} />}
       {dialog === "rebuy" && <RebuySheet order={order} onClose={() => setDialog(null)} />}
       {dialog === "edit" && <EditOrderSheet order={order} onClose={() => setDialog(null)} />}
+      {dialog === "copy" && <DuplicateConfirm order={order} onClose={() => setDialog(null)} />}
       {dialog === "delete" && (
         <DeleteConfirm ids={[order.id]} onClose={() => setDialog(null)} onDone={() => navigate("/orders", { replace: true })} />
       )}

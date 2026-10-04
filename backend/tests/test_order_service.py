@@ -513,3 +513,25 @@ def test_bulk_update(db, services, admin):
         assert doc["attention_required"] is True and doc["client_comment"] == "Задержка"
     with pytest.raises(ValidationError):
         services.orders.bulk_update(admin, ["1"], BulkUpdate())
+
+
+def test_duplicate_copies_the_item_without_prices(db, services, admin, client_actor):
+    from crm.domain.errors import PermissionDeniedError
+    from crm.services.order_service import NewOrder
+
+    source = services.orders.create_order(
+        admin, NewOrder(brand="Nike", model="Dunk", size="42", photo_url="/media/a.webp")
+    )
+    services.orders.buy(admin, source.id, 100_000, 120_000)
+    before = balance(db)
+
+    copies = services.orders.duplicate(admin, source.id, 2)
+
+    assert [c.id for c in copies] == ["N2", "N3"]
+    for copy in copies:
+        assert copy.status.value == "new" and copy.client_price is None
+        assert (copy.brand, copy.model, copy.size) == ("Nike", "Dunk", "42")
+        assert copy.photo_url == "/media/a.webp" and copy.source_message_id is None
+    assert balance(db) == before
+    with pytest.raises(PermissionDeniedError):
+        services.orders.duplicate(client_actor, source.id)

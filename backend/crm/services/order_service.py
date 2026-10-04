@@ -612,6 +612,27 @@ class OrderService:
 
         return self._sequences.run(ORDER_COUNTER, self._max_order_number, self._clock.now, fn)
 
+    def duplicate(self, actor: Actor, order_id: str, count: int = 1) -> list[Order]:
+        """«Копия»: the client wants the same item several times. Each copy is a new
+        order `new` with the same photo, brand, model, size and comments, but no
+        prices and no link to the Telegram message (the photo's reaction follows
+        the original). Prices are set on each copy separately."""
+        require_admin(actor)
+        if not 1 <= count <= 10:
+            raise ValidationError("Количество копий — от 1 до 10.")
+        source = self.get_order(actor, order_id)
+        template = NewOrder(
+            brand=source.brand,
+            model=source.model,
+            size=source.size,
+            source_url=source.source_url,
+            client_comment=source.client_comment,
+            internal_comment=f"Копия {source.id}",
+            photo_url=source.photo_url,
+            thumbnail_url=source.thumbnail_url,
+        )
+        return [self.create_order(actor, template) for _ in range(count)]
+
     def _max_order_number(self) -> int:
         numbers = (order_number(doc_id) for doc_id in self._db.list_ids(self._orders.collection))
         return max((n for n in numbers if n is not None), default=0)

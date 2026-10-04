@@ -21,6 +21,7 @@ import {
   useUpdateOrder,
   useUpdateShipment,
   useSplitShipment,
+  useDuplicateOrder,
 } from "../api/hooks";
 import type { BulkResult, Order, OrderStatus, PhotoRecognition, Shipment } from "../api/types";
 import { Thumb } from "../components/orders";
@@ -1339,5 +1340,47 @@ function ShipmentSplitSheet({ shipment, orders, onClose }: { shipment: Shipment;
         )}
       </div>
     </Sheet>
+  );
+}
+
+/** «Копия»: the client wants the same item several times — new orders with the same photo. */
+export function DuplicateConfirm({ order, onClose }: { order: Order; onClose: () => void }) {
+  const toast = useToast();
+  const duplicate = useDuplicateOrder(order.id);
+  const [count, setCount] = useState(1);
+  return (
+    <Confirm
+      title={`Копия ${order.id}`}
+      confirmLabel={count === 1 ? "Создать копию" : `Создать копии: ${count}`}
+      busy={duplicate.isPending}
+      onClose={onClose}
+      onConfirm={() =>
+        duplicate.mutateAsync(count).then(
+          (r) => {
+            toast(`Создано: ${r.items.map((o) => o.id).join(", ")}`);
+            onClose();
+          },
+          (e) => toast(errorText(e), "error"),
+        )
+      }
+    >
+      <div className="stack" style={{ gap: 12 }}>
+        <div className="small muted">
+          Новый заказ с тем же фото, брендом, моделью и размером — без цен. Цену каждой копии укажите отдельно
+          («Выкуп»). Деньги не двигаются.
+        </div>
+        <div className="row" style={{ gap: 12, justifyContent: "center" }}>
+          <button className="btn" disabled={count <= 1} onClick={() => setCount((c) => c - 1)}>
+            −
+          </button>
+          <div className="num" style={{ fontSize: 22, fontWeight: 600, minWidth: 32, textAlign: "center" }}>
+            {count}
+          </div>
+          <button className="btn" disabled={count >= 10} onClick={() => setCount((c) => c + 1)}>
+            +
+          </button>
+        </div>
+      </div>
+    </Confirm>
   );
 }

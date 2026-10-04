@@ -198,6 +198,10 @@ class ShipmentIn(BaseModel):
     photos: list[PhotoIn] | None = None
 
 
+class DuplicateIn(BaseModel):
+    count: int = Field(default=1, ge=1, le=10)
+
+
 class ShipmentSplitIn(BaseModel):
     order_ids: list[str] = Field(min_length=1, max_length=100)
     tracking_code: str | None = Field(default=None, max_length=100)
@@ -630,6 +634,11 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "shipment": shipment_view(result.shipment, p.role),
             "change": change_json(result.shipping_change),
         }
+
+    @app.post("/api/orders/{order_id}/duplicate")
+    def duplicate_order(order_id: str, body: DuplicateIn, p: Admin) -> dict[str, Any]:
+        copies = services.orders.duplicate(p.actor, order_id, body.count)
+        return {"items": [order_json(o, p.role) for o in copies]}
 
     @app.post("/api/shipments/{reference}/split")
     def split_shipment(reference: str, body: ShipmentSplitIn, p: Admin) -> dict[str, Any]:
