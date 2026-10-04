@@ -128,3 +128,34 @@ def test_closed_shop_and_rights():
         service.import_link(ADMIN, "https://shop.kr/1")
     with pytest.raises(PermissionDeniedError):
         service.import_link(CLIENT, "https://shop.kr/1")
+
+
+class KoreanGemini(FakeGemini):
+    """Answers in Korean first, in English when asked again."""
+
+    def read_listing(self, image, text):
+        self.calls.append((image is not None, text))
+        if "MUST be in English" in text:
+            return {"brand": "Nike", "model": "Dunk Low", "category": None, "confidence": 0.9}
+        return {"brand": "나이키", "model": "덩크 로우", "category": None, "confidence": 0.9}
+
+
+def test_korean_answer_is_translated_on_a_second_try():
+    gemini = KoreanGemini()
+    page = PageInfo(title="나이키 덩크 로우", site="shop.kr")
+    result = LinkImportService(None, gemini, FakeFetcher(page)).import_link(ADMIN, "https://s.kr/1")
+    assert (result.brand, result.model) == ("Nike", "Dunk Low")
+    assert len(gemini.calls) == 2
+
+
+def test_korean_never_reaches_the_form():
+    class StubbornGemini(FakeGemini):
+        def read_listing(self, image, text):
+            return {"brand": "나이키", "model": "덩크", "category": None, "confidence": 0.9}
+
+    page = PageInfo(title="나이키 덩크", brand="나이키", site="shop.kr")
+    for gemini in (StubbornGemini(), FakeGemini(fail=True), None):
+        result = LinkImportService(None, gemini, FakeFetcher(page)).import_link(
+            ADMIN, "https://s.kr/1"
+        )
+        assert result.brand is None and result.model is None

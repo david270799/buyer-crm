@@ -14,6 +14,7 @@ Nothing is saved: the result goes back to the form, the admin saves it.
 import ipaddress
 import json
 import logging
+import re
 import socket
 from dataclasses import dataclass
 from html.parser import HTMLParser
@@ -41,6 +42,17 @@ _HEADERS = {
     ),
     "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
 }
+
+
+_HANGUL_RE = re.compile(r"[\u1100-\u11ff\u3130-\u318f\uac00-\ud7af]")
+_TRANSLATE_AGAIN = (
+    "\n\nThe previous answer kept Korean letters. Brand and model MUST be in English "
+    "(Latin letters): translate or transliterate the Korean name."
+)
+
+
+def has_hangul(value: str | None) -> bool:
+    return bool(value and _HANGUL_RE.search(value))
 
 
 class LinkError(Exception):
@@ -270,10 +282,18 @@ class LinkImportService:
         else:
             notes.append("на странице нет фото товара")
 
-        brand, model, category, engine = page.brand, page.title, None, None
+        # Names must be in English: page text in Korean never goes into the form as is.
+        brand = page.brand if not has_hangul(page.brand) else None
+        model = page.title if not has_hangul(page.title) else None
+        category, engine = None, None
         if self._recognizer is not None and hasattr(self._recognizer, "read_listing"):
             try:
                 answer = self._recognizer.read_listing(image, _page_text(page))
+                if has_hangul(answer.get("brand")) or has_hangul(answer.get("model")):
+                    # Gemini kept the Korean name: ask once more, explicitly to translate.
+                    answer = self._recognizer.read_listing(
+                        image, _page_text(page) + _TRANSLATE_AGAIN
+                    )
                 engine = self._recognizer.engine
                 sure = answer.get("confidence", 0) >= MIN_CONFIDENCE
                 brand = answer.get("brand") if sure else None
@@ -284,7 +304,11 @@ class LinkImportService:
             except RecognitionError as exc:
                 notes.append(f"Gemini: {exc}")
         elif self._recognizer is None:
-            notes.append("Gemini не подключён — название как на сайте")
+            notes.append("Gemini не подключён — название не переведено")
+        if has_hangul(brand) or has_hangul(model):
+            notes.append("название не удалось перевести на английский — впишите вручную")
+            brand = None if has_hangul(brand) else brand
+            model = None if has_hangul(model) else model
         logger.info(
             "Link import %s: brand=%s model=%s photo=%s", page.site, brand, model, bool(photo)
         )
