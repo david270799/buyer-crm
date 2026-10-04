@@ -7,6 +7,7 @@ import type {
   BulkResult,
   DeletePreview,
   DeleteResult,
+  LinkImport,
   PhotoRecognition,
   LedgerItem,
   Me,
@@ -366,6 +367,10 @@ export const useSetNotifications = () => {
 };
 
 /** Gemini reads an uploaded photo; the answer only fills the form, nothing is saved. */
+export function recognizeLink(url: string): Promise<LinkImport> {
+  return post<LinkImport>("/api/recognize-link", { url });
+}
+
 export function recognizePhoto(photo_url: string): Promise<PhotoRecognition> {
   return post<PhotoRecognition>("/api/recognize", { photo_url });
 }

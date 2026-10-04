@@ -167,6 +167,18 @@ export interface PhotoRecognition {
   not_a_product: boolean;
 }
 
+export interface LinkImport {
+  brand: string | null;
+  model: string | null;
+  category: string | null;
+  title: string | null;
+  photo_url: string | null;
+  thumbnail_url: string | null;
+  engine: string | null;
+  /** What did not work (no photo, Gemini unsure...). */
+  note: string | null;
+}
+
 export interface DeletePreview {
   orders: Order[];
   refund_krw: number;

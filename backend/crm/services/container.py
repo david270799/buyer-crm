@@ -22,6 +22,7 @@ from crm.services.group_service import GroupService
 from crm.services.image_service import ImageService
 from crm.services.intake_service import IntakeService
 from crm.services.ledger import BalanceLedger
+from crm.services.link_import import LinkImportService
 from crm.services.notifications import NotificationService
 from crm.services.order_service import OrderService
 from crm.services.photo_recognition import PhotoRecognitionService
@@ -50,6 +51,7 @@ class Services:
     # None without GEMINI_API_KEY: orders are still accepted, fields stay empty.
     recognizer: Recognizer | None = None
     photo_recognition: PhotoRecognitionService | None = None
+    link_import: LinkImportService | None = None
     reactions: ReactionService | None = None
     profit: ProfitService | None = None
     security: SecurityService | None = None
@@ -111,6 +113,9 @@ def build_services(
         images=ImageService(blob_storage, clock) if blob_storage is not None else None,
         recognizer=recognizer,
         photo_recognition=PhotoRecognitionService(blob_storage, recognizer),
+        link_import=LinkImportService(
+            ImageService(blob_storage, clock) if blob_storage is not None else None, recognizer
+        ),
         reactions=ReactionService(db, clock, orders_repo, recorder),
         profit=ProfitService(db, clock, profit_repo, auditor),
         security=SecurityService(db, clock, auditor),

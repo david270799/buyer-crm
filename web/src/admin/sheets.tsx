@@ -22,8 +22,9 @@ import {
   useUpdateShipment,
   useSplitShipment,
   useDuplicateOrder,
+  recognizeLink,
 } from "../api/hooks";
-import type { BulkResult, Order, OrderStatus, PhotoRecognition, Shipment } from "../api/types";
+import type { BulkResult, LinkImport, Order, OrderStatus, PhotoRecognition, Shipment } from "../api/types";
 import { Thumb } from "../components/orders";
 import { Checkbox, Confirm, errorText, Field, MoneyInput, Sheet, Switch, useToast } from "../components/ui";
 import { krw, STATUS_LABEL, todayKey } from "../lib/format";
@@ -1165,6 +1166,13 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
         <Field label="Ссылка" hint="Видите только вы">
           <input className="input" value={form.source_url} onChange={(e) => set("source_url", e.target.value)} placeholder="https://" />
         </Field>
+        <LinkFill
+          url={form.source_url}
+          onBrandModel={(brand, model) =>
+            setForm((f) => ({ ...f, brand: brand ?? f.brand, model: model ?? f.model }))
+          }
+          onPhoto={(photo) => setForm((f) => ({ ...f, photo }))}
+        />
         {editablePrices && (
           <>
             <Field label="Закупка (черновик)">
@@ -1382,5 +1390,66 @@ export function DuplicateConfirm({ order, onClose }: { order: Order; onClose: ()
         </div>
       </div>
     </Confirm>
+  );
+}
+
+/** «Из ссылки»: the server opens the shop page; Gemini gives brand and model in English.
+ * Only fills the form — nothing is saved until «Сохранить». */
+function LinkFill({
+  url,
+  onBrandModel,
+  onPhoto,
+}: {
+  url: string;
+  onBrandModel: (brand: string | null, model: string | null) => void;
+  onPhoto: (photo: PhotoValue) => void;
+}) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [found, setFound] = useState<LinkImport | null>(null);
+  const run = async () => {
+    if (!url.trim()) {
+      toast("Сначала впишите ссылку", "error");
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await recognizeLink(url.trim());
+      setFound(r);
+      onBrandModel(r.brand, r.model);
+      toast(r.brand || r.model ? `Со страницы: ${[r.brand, r.model].filter(Boolean).join(" ")}` : "Название не определено");
+    } catch (error) {
+      toast(errorText(error), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="full stack" style={{ gap: 8 }}>
+      <button type="button" className="btn small" onClick={run} disabled={busy}>
+        {busy ? <Loader2 className="spin" size={14} /> : <Sparkles size={14} />} Из ссылки: название и фото
+      </button>
+      {found && (
+        <div className="card pad stack" style={{ gap: 8 }}>
+          {found.title && <div className="small muted">На сайте: {found.title}</div>}
+          {found.note && <div className="small muted">⚠️ {found.note}</div>}
+          {found.photo_url && (
+            <div className="row" style={{ gap: 10 }}>
+              <Thumb src={found.thumbnail_url ?? found.photo_url} alt="Фото с сайта" />
+              <button
+                type="button"
+                className="btn small"
+                onClick={() => {
+                  onPhoto({ photo_url: found.photo_url, thumbnail_url: found.thumbnail_url });
+                  toast("Фото с сайта поставлено — сохраните заказ");
+                }}
+              >
+                Поставить это фото
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

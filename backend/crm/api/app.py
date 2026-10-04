@@ -198,6 +198,10 @@ class ShipmentIn(BaseModel):
     photos: list[PhotoIn] | None = None
 
 
+class LinkIn(BaseModel):
+    url: str = Field(min_length=1, max_length=2000)
+
+
 class DuplicateIn(BaseModel):
     count: int = Field(default=1, ge=1, le=10)
 
@@ -749,6 +753,22 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "confidence": result.confidence,
             "not_a_product": result.not_a_product,
             "engine": result.engine,
+        }
+
+    @app.post("/api/recognize-link")
+    def recognize_link(body: LinkIn, p: Admin) -> dict[str, Any]:
+        if services.link_import is None:
+            raise ConfigurationError("Чтение ссылок не подключено.")
+        result = services.link_import.import_link(p.actor, body.url)
+        return {
+            "brand": result.brand,
+            "model": result.model,
+            "category": result.category,
+            "title": result.title,
+            "photo_url": result.photo.photo_url if result.photo else None,
+            "thumbnail_url": result.photo.thumbnail_url if result.photo else None,
+            "engine": result.engine,
+            "note": result.note,
         }
 
     @app.post("/api/images")
