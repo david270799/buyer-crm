@@ -1,0 +1,125 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<style>
+:root{--deep:#151b24;--warm:#f4f3ef;--ink:#263140;--font:"Inter",-apple-system,"Segoe UI",Roboto,"Liberation Sans",Arial,sans-serif}
+*{box-sizing:border-box;margin:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:var(--deep);font-family:var(--font)}
+#bg{position:absolute;inset:0;background:radial-gradient(900px 700px at 80% 0%,#33425a 0%,transparent 70%),linear-gradient(180deg,#1d2633 0%,#151b24 100%)}
+.cap{position:absolute;left:80px;right:80px;top:110px;opacity:0;color:#fff}
+.eyebrow{font-size:28px;letter-spacing:.22em;text-transform:uppercase;color:#9fb0c6;font-weight:600;margin-bottom:22px}
+.h{font-size:80px;line-height:1.06;font-weight:700;letter-spacing:-.02em}
+.sub{font-size:36px;line-height:1.3;color:#b9c5d6;margin-top:22px}
+.shell{position:absolute;overflow:hidden;background:var(--warm);box-shadow:0 0 0 12px #0c1016,0 0 0 13px rgba(255,255,255,.14),0 60px 120px rgba(0,0,0,.55);opacity:0;visibility:hidden}
+#big{left:90px;top:520px;width:900px;height:1300px;border-radius:64px}
+#pc{left:30px;top:640px;width:500px;height:1180px;border-radius:48px}
+#pa{left:550px;top:640px;width:500px;height:1180px;border-radius:48px}
+iframe{position:absolute;left:0;top:0;border:0;transform-origin:0 0;background:var(--warm)}
+#fa,#fc{width:390px;height:563px;transform:scale(2.3077)}
+#fc2,#fa2{width:390px;height:920px;transform:scale(1.282)}
+#fa,#fc{opacity:0}
+.lab{position:absolute;top:566px;width:500px;text-align:center;font-size:30px;letter-spacing:.2em;font-weight:700;color:#cfd8e6;opacity:0}
+.lab span{display:inline-block;padding:12px 26px;border-radius:40px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2)}
+#win{position:absolute;left:40px;top:560px;width:1000px;height:1080px;border-radius:26px;overflow:hidden;background:#fff;box-shadow:0 0 0 1px rgba(255,255,255,.16),0 60px 120px rgba(0,0,0,.55);opacity:0;visibility:hidden}
+#bar{height:64px;background:#e9e8e4;display:flex;align-items:center;padding:0 22px;gap:12px;border-bottom:1px solid #d6d4cd}
+#bar i{width:16px;height:16px;border-radius:50%;background:#c9c7c0;display:block}
+#url{margin-left:18px;flex:1;height:38px;border-radius:19px;background:#fff;color:#4a5260;font-size:22px;display:flex;align-items:center;padding:0 18px}
+#fd{position:absolute;left:0;top:64px;width:1280px;height:1300px;transform:scale(.78125)}
+/* mock chat */
+#chatbox{position:absolute;left:0;top:0;width:390px;height:563px;transform-origin:0 0;transform:scale(2.3077);background:#e8ecf1;font-family:var(--font);color:#1c2430;opacity:0}
+.chead{height:50px;background:#fff;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid #dde2e8;font-weight:700;font-size:15px}
+.av{width:32px;height:32px;border-radius:50%;background:#263140;color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px}
+.chead small{display:block;font-weight:400;color:#7d8896;font-size:11px}
+.msgs{position:absolute;left:0;right:0;top:50px;padding:10px 12px;display:flex;flex-direction:column;gap:7px}
+.m{max-width:78%;padding:7px 10px;border-radius:14px;font-size:14px;line-height:1.3;background:#fff;opacity:0;align-self:flex-start;box-shadow:0 1px 1px rgba(0,0,0,.06)}
+.m.r{align-self:flex-end;background:#d6e4f4}
+.m img{display:block;width:150px;height:130px;object-fit:cover;border-radius:9px;margin-bottom:5px}
+.m b{display:block;font-size:11px;color:#3b6aa5;margin-bottom:2px}
+#chat2{position:absolute;inset:0;opacity:0}
+#inbtn{margin:6px 12px 0;height:38px;border-radius:12px;background:#263140;color:#fff;display:grid;place-items:center;font-size:14px;font-weight:600;max-width:78%}
+#cbar{position:absolute;left:0;right:0;bottom:0;height:54px;background:#fff;border-top:1px solid #dde2e8;display:flex;align-items:center;gap:10px;padding:0 12px}
+#cbar .menu{height:32px;padding:0 14px;border-radius:16px;background:#263140;color:#fff;font-size:13px;font-weight:700;display:grid;place-items:center}
+#cbar .inp{flex:1;height:32px;border-radius:16px;background:#eef1f5;color:#9aa5b3;font-size:13px;display:flex;align-items:center;padding:0 12px}
+#tap{position:absolute;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;border:5px solid rgba(255,255,255,.95);background:rgba(38,49,64,.3);opacity:0;pointer-events:none;z-index:20;box-shadow:0 0 0 3px rgba(38,49,64,.4)}
+#ring{position:absolute;border:5px solid #f0c24b;border-radius:26px;opacity:0;z-index:15;box-shadow:0 0 40px rgba(240,194,75,.45)}
+#chips{position:absolute;left:80px;right:80px;top:800px;display:flex;flex-wrap:wrap;gap:26px;justify-content:center}
+.chip{font-size:52px;font-weight:700;color:#fff;padding:26px 44px;border-radius:70px;background:rgba(255,255,255,.1);border:2px solid rgba(255,255,255,.22);opacity:0}
+#outro{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;opacity:0}
+#outro .logo{width:190px;height:190px;border-radius:50px;background:#f4f3ef;color:#263140;font-size:124px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:60px}
+#outro .nm{font-size:132px;font-weight:700;letter-spacing:-.03em;color:#fff}
+#fade{position:absolute;inset:0;background:#151b24;opacity:0;pointer-events:none;z-index:30}
+</style></head><body>
+<div id="bg"></div>
+<div class="cap" id="c1"><div class="eyebrow">Buyer CRM</div><div class="h">Заказы клиентов<br>тонут в чатах?</div></div>
+<div class="cap" id="c2"><div class="eyebrow">Telegram</div><div class="h">Откройте бота —<br>CRM внутри</div></div>
+<div class="cap" id="c3"><div class="eyebrow">Искусственный интеллект</div><div class="h">Загрузили фото —<br>ИИ нашёл модель</div></div>
+<div class="cap" id="c4"><div class="eyebrow">Клиент</div><div class="h">Заказы, статусы<br>и баланс</div><div class="sub">Всё, что нужно клиенту, — в одном приложении</div></div>
+<div class="cap" id="c5"><div class="eyebrow">Отправки</div><div class="h">Отправки с треком<br>и стоимостью</div></div>
+<div class="cap" id="c6"><div class="eyebrow">Клиент и админ</div><div class="h">Клиент видит своё.<br>Вы — всё.</div></div>
+<div class="cap" id="c7"><div class="eyebrow">Веб-версия</div><div class="h">Не только Telegram —<br>полноценный сайт</div></div>
+<div class="cap" id="c8"><div class="eyebrow">Для любого бизнеса</div><div class="h">Подстроим<br>под ваш бизнес</div></div>
+<div class="shell" id="big">
+  <div id="chatbox">
+    <div id="chat1">
+      <div class="chead"><div class="av">Г</div><div>Заказы<small>группа</small></div></div>
+      <div class="msgs">
+        <div class="m r" id="m1"><img src="/__assets/3c.jpg"><b>Анна</b>255 пж</div>
+        <div class="m r" id="m2"><img src="/__assets/2.jpg"><b>Игорь</b>вот эту, L?</div>
+        <div class="m" id="m3"><b>Менеджер</b>а какой размер?</div>
+        <div class="m r" id="m4"><b>Анна</b>где мой заказ??</div>
+        <div class="m" id="m5"><b>Менеджер</b>когда пополнишь баланс?</div>
+      </div>
+    </div>
+    <div id="chat2">
+      <div class="chead"><div class="av">B</div><div>Buyer CRM<small>бот</small></div></div>
+      <div class="msgs"><div class="m" id="mb" style="max-width:86%;opacity:1"><b>Buyer CRM</b>Здравствуйте! Откройте CRM, чтобы увидеть заказы, баланс и отправки.</div><div id="inbtn">Открыть CRM</div></div>
+      <div id="cbar"><div class="menu">CRM</div><div class="inp">Сообщение</div></div>
+    </div>
+  </div>
+  <iframe id="fa" name="fa" src="http://localhost:8080/"></iframe>
+  <iframe id="fc" name="fc" src="http://localhost:8080/"></iframe>
+</div>
+<div class="lab" id="lc" style="left:30px"><span>КЛИЕНТ</span></div>
+<div class="lab" id="la" style="left:550px"><span>АДМИНИСТРАТОР</span></div>
+<div class="shell" id="pc"><iframe id="fc2" name="fc2" src="http://localhost:8080/#/orders/N5"></iframe></div>
+<div class="shell" id="pa"><iframe id="fa2" name="fa2" src="http://localhost:8080/#/orders/N5"></iframe></div>
+<div id="win"><div id="bar"><i></i><i></i><i></i><div id="url">🔒&nbsp; crm.ваш-бизнес.рф</div></div><iframe id="fd" name="fd" src="http://localhost:8080/#/orders"></iframe></div>
+<div id="chips"><div class="chip">Выкуп товаров</div><div class="chip">Доставка</div><div class="chip">Склад</div><div class="chip">Услуги</div><div class="chip">Подписки</div><div class="chip">Свой бизнес</div></div>
+<div id="outro"><div class="logo">B</div><div class="nm">Buyer CRM</div></div>
+<div id="ring"></div><div id="tap"></div><div id="fade"></div>
+<script>
+const clamp=(x,a=0,b=1)=>Math.min(b,Math.max(a,x));
+const ease=x=>1-Math.pow(1-clamp(x),3);
+const inout=x=>{x=clamp(x);return x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2};
+const $=id=>document.getElementById(id);
+function cap(el,tin,tout,t){const a=ease((t-tin)/.7),b=ease((t-tout)/.5);el.style.opacity=clamp(a-b);el.style.transform=`translateY(${(1-a)*34-b*20}px)`}
+function vis(el,o){el.style.opacity=o;el.style.visibility=o>0.001?'visible':'hidden'}
+window.setT=function(t,tap,ringBox){
+  cap($('c1'),.25,4.0,t);cap($('c2'),4.4,8.0,t);cap($('c3'),8.4,19.0,t);cap($('c4'),19.4,31.0,t);
+  cap($('c5'),31.4,36.0,t);cap($('c6'),36.4,48.0,t);cap($('c7'),48.4,54.0,t);cap($('c8'),54.4,58.2,t);
+  // big phone: in at start, out at 36.2
+  const bin=ease((t-.1)/.9),bout=inout((t-35.9)/.6);
+  const big=$('big');vis(big,clamp(bin*(1-bout)));big.style.transform=`translateY(${(1-bin)*140+bout*160}px)`;
+  // chat 1 → chat 2 → admin app → client app
+  const chatO=t<6.9?1:1-ease((t-6.9)/.25);$('chatbox').style.opacity=clamp(chatO)
+  $('chat1').style.opacity=t<4.2?1:0;$('chat2').style.opacity=t<4.2?0:1;
+  [1,2,3,4,5].forEach((n,i)=>{const o=ease((t-(.7+i*.6))/.35);const m=$('m'+n);m.style.opacity=o;m.style.transform=`translateY(${(1-o)*14}px)`});
+  const aO=clamp(ease((t-7.15)/.5))*(1-ease((t-19.0)/.4));vis($('fa'),aO);
+  $('fa').style.transform=`scale(${2.3077*(1+.02*(1-ease((t-7.15)/.6)))})`;
+  vis($('fc'),ease((t-19.0)/.4));
+  // split phones
+  const sIn=inout((t-36.5)/.7),sOut=inout((t-47.9)/.5);
+  const so=clamp(sIn*(1-sOut));
+  [$('pc'),$('pa')].forEach((p,i)=>{vis(p,so);p.style.transform=`translateY(${(1-sIn)*180+sOut*160}px)`});
+  $('lc').style.opacity=so;$('la').style.opacity=so;
+  // desktop window
+  const wIn=inout((t-48.3)/.8),wOut=inout((t-53.9)/.5);
+  const w=$('win');vis(w,clamp(wIn*(1-wOut)));w.style.transform=`translateY(${(1-wIn)*180+wOut*160}px)`;
+  // chips
+  [...document.querySelectorAll('.chip')].forEach((c,i)=>{const a=ease((t-(55.0+i*.28))/.4),b=ease((t-58.0)/.4);c.style.opacity=clamp(a-b);c.style.transform=`scale(${.85+.15*a})`});
+  // outro
+  const o=ease((t-58.9)/.8);$('outro').style.opacity=o;$('outro').style.transform=`translateY(${(1-o)*30}px)`;
+  $('fade').style.opacity=clamp((t-62.0)/.6);
+  // tap ripple (stage coordinates) and highlight ring
+  if(tap){const k=tap.k;$('tap').style.opacity=k<.15?k/.15:clamp(1-(k-.15)/.35);$('tap').style.left=tap.x+'px';$('tap').style.top=tap.y+'px';$('tap').style.transform=`scale(${.55+k*.9})`}else $('tap').style.opacity=0;
+  if(ringBox){const r=$('ring');r.style.opacity=ringBox.o;r.style.left=ringBox.x+'px';r.style.top=ringBox.y+'px';r.style.width=ringBox.w+'px';r.style.height=ringBox.h+'px'}else $('ring').style.opacity=0;
+};
+</script></body></html>

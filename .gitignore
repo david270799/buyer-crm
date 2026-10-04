@@ -40,4 +40,6 @@ ui-debug.log
 *.tsbuildinfo
 
 # brag video: intermediates
-brag-output/work/
+brag-output/work/frames/
+brag-output/work/audio.wav
+brag-output/work/*.log
