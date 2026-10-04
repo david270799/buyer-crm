@@ -38,3 +38,6 @@ ui-debug.log
 .idea/
 .vscode/
 *.tsbuildinfo
+
+# brag video: intermediates
+brag-output/work/
