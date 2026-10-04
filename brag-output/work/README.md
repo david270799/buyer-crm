@@ -1,4 +1,9 @@
-# Buyer CRM launch video v2 — how it was made (re-runnable)
+# Buyer CRM launch video — how it is made (re-runnable)
+
+Current version: **v3** (`../scenario-v3.md` → `../brag-v3.mp4`, 75 s, 2250 frames, poster = frame f1254, mux with `-af volume=-4.4dB` → about -16 LUFS).
+The notes below were written for v2 and still apply; v3 differences: 10 orders, shipment photo `assets/11.jpg`, `restart.sh` keeps a PID file, full render takes ~13 min.
+
+## v2 notes
 
 Scenario: `../brag-plan-v2.md`. Output: `../brag-v2.mp4` (1080x1920, 30 fps, 62.6 s, Russian, music + soft sounds).
 Order data = your 5 photos in `assets/` (On Cloud 5 Waterproof, adidas Sportswear Denim Track Top,
