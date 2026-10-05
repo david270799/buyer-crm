@@ -53,18 +53,16 @@ TAP_CREATE = 55.6
 DESK_PROFIT_HL = 58.6
 DESK_SHIPMENTS = 60.0
 DESK_DASH = 61.3
-ZOOM_FROM, ZOOM_TO = 61.6, 63.6
-COUNT_FROM, COUNT_TO = 61.8, 63.0
-DESK_FINANCE = 64.0
-DESK_MYPROFIT = 65.0
+ZOOM_FROM, ZOOM_TO = 61.6, 66.0      # stays on the dashboard profit until the scene ends
+COUNT_FROM, COUNT_TO = 61.8, 63.4
 
 # scene 9
 CHIPS = [66.7 + i * 0.42 for i in range(5)]
 # scene 10
 IMPACT = 71.3
 
-SCROLLS = [(16.2, 19.4), (25.9, 27.6), (53.6, 54.8), (64.3, 64.9)]
+SCROLLS = [(16.2, 19.4), (25.9, 27.6), (53.6, 54.8)]
 TAPS = [(TAP_OPEN, "open"), (SHIP_TAP, "ship"), *PILLS, (TAP_WAREHOUSE, "warehouse"), (TAP_TABS, "tabs"),
         (TAP_ADD_PHOTO, "photo"), (TAP_AI, "ai"), (TAP_CREATE, "create"),
-        (DESK_SHIPMENTS, "d-ship"), (DESK_DASH, "d-dash"), (DESK_FINANCE, "d-fin")]
+        (DESK_SHIPMENTS, "d-ship"), (DESK_DASH, "d-dash")]
 WHOOSH = [S6, S7, S8, S9]

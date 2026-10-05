@@ -64,7 +64,7 @@ with sync_playwright() as p:
     def union(n, js_list):
         return box(n, f"const es=[{js_list}].filter(Boolean);if(!es.length)return null;const rs=es.map(e=>e.getBoundingClientRect());const l=Math.min(...rs.map(r=>r.left)),t=Math.min(...rs.map(r=>r.top)),r=Math.max(...rs.map(r=>r.right)),b=Math.max(...rs.map(r=>r.bottom));return [l,t,r-l,b-t]")
     DT = lambda txt: f"[...document.querySelectorAll('dt')].find(x=>x.textContent.trim()==={json.dumps(txt)})"
-    CARD = lambda oid: "[...document.querySelectorAll('article.order-card')].find(x=>x.textContent.includes('Tech Fleece'))"   # N6
+    CARD = lambda oid: "[...document.querySelectorAll('article.order-card')].find(x=>x.textContent.includes('Tech Fleece'))"   # N51
     # smallest element inside the N6 card whose text matches
     def in_card(oid, cond): return f"(()=>{{const c={CARD(oid)};if(!c)return null;return [...c.querySelectorAll('*')].filter(x=>{cond}).sort((a,b)=>a.textContent.length-b.textContent.length)[0]||null}})()"
 
@@ -94,7 +94,7 @@ with sync_playwright() as p:
             if t >= pt and once("pill" + name): tap_box(pt, box("fc", el_rect(btn_js(name, True, "button"))))
             if t >= pt + .08 and once("pillc" + name): click_js("fc", btn_js(name, True, "button")); page.wait_for_timeout(500)
         if t >= 35.95 and once("n6"):
-            nav("fc", "#/orders/N6", 1000)
+            nav("fc", "#/orders/N51", 1000)
             st["y"]["c"] = max(0, top_of("fc", "[...document.querySelectorAll('.card')].find(x=>x.textContent.includes('Цена'))") - 12)
             st["y"]["a"] = max(0, top_of("fa2", "[...document.querySelectorAll('h3')].find(x=>x.textContent.includes('Для администратора'))") - 70)
         if t >= 38.6 and once("green"):
@@ -130,9 +130,6 @@ with sync_playwright() as p:
             if kb:
                 cx, cy = kb[0] + kb[2]/2, kb[1] + kb[3]/2
                 st["zoom"] = {"ox": cx - lp[0], "oy": cy - lp[1], "s": 1.9, "dy": 1000 - cy}
-        if t >= DESK_FINANCE and once("dfin"): tap_box(DESK_FINANCE, box("fd", rect_of('aside a[href="#/finance"]')))
-        if t >= DESK_FINANCE + .1 and once("dfinn"):
-            nav("fd", "#/finance", 1000); st["y"]["fin"] = max(0, top_of("fd", "[...document.querySelectorAll('h3')].find(x=>x.textContent.includes('Моя прибыль'))?.closest('.card')") - 60)
 
         # ---------- per-frame app state ----------
         if S3 <= t < S4: scroll("fc", eio((t - 16.2) / 3.2) * 560)
@@ -151,10 +148,9 @@ with sync_playwright() as p:
                     if y_ > 0: st["y"][key] = max(1, y_ - 150)
             k = eio((t - TAP_TABS - .2) / .45); scroll("fc", k * st["y"].get("lc", 0)); scroll("fa2", k * st["y"].get("la", 0))
         if 47.95 <= t < S8 + .3: scroll("fa2", eio((t - 53.6) / 1.2) * 1200 if t >= 53.6 else 0)
-        if DESK_DASH + .1 <= t < DESK_FINANCE + .1:
+        if DESK_DASH + .1 <= t < S9:
             k = eio((t - COUNT_FROM) / (COUNT_TO - COUNT_FROM))
             ev("fd", f"document.querySelectorAll('.kpi .value').forEach((v,i)=>{{if(i>1||!v.dataset.final)return;const f=+v.dataset.final.replace(/[^0-9]/g,'');v.textContent={json.dumps(t >= COUNT_TO)}?v.dataset.final:'₩'+Math.round(f*{k}).toLocaleString('en-US')}})")
-        if t >= DESK_FINANCE + .1 and t < S9 + .3: scroll("fd", eio((t - 64.3) / .6) * st["y"].get("fin", 0))
 
         zoom = None
         if st["zoom"] and ZOOM_FROM <= t < ZOOM_TO + .1:
@@ -208,16 +204,11 @@ with sync_playwright() as p:
                 bx = (bx[0], bx[1], bx[2], min(bx[3], bottom - bx[1]))
                 o = fade(t, DESK_PROFIT_HL, DESK_SHIPMENTS)
                 extra["rings"].append(ring(bx, o, True, 4)); extra["callouts"].append({"x": 540, "y": 560, "text": "Прибыль по каждому заказу", "o": o, "g": True, "ax": -50})
-        if 62.0 <= t < ZOOM_TO - .3:
+        if 62.0 <= t < ZOOM_TO - .5:
             bx = union("fd", "...[...document.querySelectorAll('.kpi')].slice(0,2)")
             if bx:
-                o = fade(t, 62.0, ZOOM_TO - .3)
+                o = fade(t, 62.0, ZOOM_TO - .5)
                 extra["rings"].append(ring(bx, o, True, 6)); extra["callouts"].append({"x": 540, "y": 1560, "text": "Без Excel и калькулятора", "o": o, "g": True, "ax": -50})
-        if DESK_MYPROFIT <= t < S9:
-            bx = box("fd", el_rect("[...document.querySelectorAll('h3')].find(x=>x.textContent.includes('Моя прибыль'))?.closest('.card')"))
-            if bx:
-                o = fade(t, DESK_MYPROFIT, S9)
-                extra["rings"].append(ring(bx, o, True, 6)); extra["callouts"].append({"x": 540, "y": 560, "text": "Доп. прибыль: клиент не видит", "o": o, "g": True, "ax": -50})
         if st["tap"] and 0 <= t - st["tap"][0] <= .5:
             extra["tap"] = {"k": (t - st["tap"][0]) / .5, "x": st["tap"][1], "y": st["tap"][2]}
         page.evaluate(f"setT({t},{json.dumps(extra)})")

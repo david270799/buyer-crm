@@ -1,6 +1,6 @@
 # Buyer CRM launch video — how it is made (re-runnable)
 
-Current version: **final** (`../scenario-final.md` → `../brag-final.mp4`, 78 s, 2340 frames, poster = frame f1185, mux with `-af volume=-4.6dB` → about -16 LUFS). Filmed on the current app (main merged): shipment photo carousel, real AI icon next to «Бренд» (prepared answer from `video_server.py`, no Gemini key), «Моя прибыль». Previous: v3 (`../brag-v3.mp4`, 75 s).
+Current version: **final** (`../scenario-final.md` → `../brag-final.mp4`, 78 s, 2340 frames, poster = frame f1185, mux with `-af volume=-4.6dB` → about -16 LUFS). Filmed on the current app (main merged): shipment photo carousel, real AI icon next to «Бренд» (prepared answer from `video_server.py`, no Gemini key), 45 delivered history orders (profit in the millions). Previous: v3 (`../brag-v3.mp4`, 75 s).
 The notes below were written for v2 and still apply; v3 differences: 10 orders, shipment photo `assets/11.jpg`, `restart.sh` keeps a PID file, full render takes ~13 min.
 
 ## v2 notes

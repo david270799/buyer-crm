@@ -165,7 +165,6 @@ put(sfx, bell([(mid(92), 1), (mid(92) * 2, .25)], 1.4, 2.6), DONE_AT + .12, .35)
 # desktop: profit column ping, zoom whoosh, «Моя прибыль» ping
 put(sfx, bell([(1760, 1), (2637, .6)], .9, 4), DESK_PROFIT_HL, .3)
 put(sfx, whoosh(.6, 200, 3000), ZOOM_FROM, .35); put(sfx, whoosh(.5, 200, 3000), ZOOM_TO - .5, .3)
-put(sfx, bell([(1760, 1), (2637, .6)], .9, 4), DESK_MYPROFIT, .32)
 # transitions, laptop, chips
 for w in WHOOSH: put(sfx, whoosh(.7, 250, 4500), w - .3, .32, rng.uniform(-.4, .4))
 put(sfx, whoosh(1.2, 120, 2500), S8 + .1, .45)
