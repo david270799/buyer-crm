@@ -45,12 +45,12 @@ K, C, HC, HO = kick(), clap(), hat(), hat(True)
 
 BPM = 112; beat = 60 / BPM; bar = 4 * beat
 PROG = [(57, [57, 60, 64]), (53, [53, 57, 60]), (48, [48, 52, 55]), (55, [55, 59, 62])]   # Am F C G
-BEAT_FROM, BEAT_TO = 7.2, 67.9
+BEAT_FROM, BEAT_TO = 7.2, 70.9
 kicks = []
 b = 0
 while BEAT_FROM + b * bar < BEAT_TO:
     t0 = BEAT_FROM + b * bar; root, ch = PROG[b % 4]
-    busy = 34 <= t0 < 48                       # comparison: denser groove
+    busy = 36 <= t0 < 48                       # comparison: denser groove
     for k in range(4):
         tb = t0 + k * beat
         if tb >= BEAT_TO: break
@@ -116,38 +116,56 @@ put(sfx, msg(2), BOT_MSG, .45)
 for ti, _ in TAPS: put(sfx, click(), ti, .55)
 put(sfx, whoosh(.6, 250, 5000), SHEET_FROM - .05, .55, -.2)
 for k in range(3): put(sfx, np.sin(2 * np.pi * 880 * tt(.08)) * np.exp(-tt(.08) * 40), LOAD_FROM + .15 + k * .3, .2)
-# pains: flashback in (rewind swoosh) + strike scratch
-for a, _ in FLASH_BACKS:
-    put(sfx, whoosh(.45, 600, 7000)[::-1], a - .2, .4)
-    s = tt(.18); put(sfx, band(noise(.18), 1500, 8000) * np.sin(np.pi * s / .18), a + .55, .35)
-    put(sfx, whoosh(.45, 300, 3000), a + 1.15, .35, .4)
-# cash register + coins
-put(sfx, bell([(2093, 1), (2794, .7), (3951, .4)], 1.4, 3.2), CASH, .45)
-put(sfx, band(noise(.06), 2000, 8000) * np.exp(-tt(.06) * 80), CASH - .06, .4)
-for k in range(7): put(sfx, np.sin(2 * np.pi * rng.uniform(3200, 5200) * tt(.18)) * np.exp(-tt(.18) * 30), CASH + .2 + k * .07 + rng.uniform(0, .03), .14, rng.uniform(-.6, .6))
+# pains (scenes 3-5): client messages, admin file, red-cross marker, chat swipes away
+for P in PAIN:
+    for k, (mt, _) in enumerate(P["msgs"]): put(sfx, msg(k % 3), mt, .42, (-1) ** k * .25)
+    if P["file"]:
+        t = tt(.3); put(sfx, np.sin(2 * np.pi * 110 * t) * np.exp(-t * 18) + .4 * band(noise(.3), 200, 1500) * np.exp(-t * 30), P["file"], .6)   # dull file "thud"
+        put(sfx, msg(-3), P["file"] + .02, .25)
+    for o in (0, .18):
+        s_ = tt(.2); put(sfx, band(noise(.2), 900, 7000) * np.sin(np.pi * s_ / .2) ** .5, P["cross"] + o, .45)          # marker strokes
+    put(sfx, whoosh(.45, 300, 4000), P["cross"] + OUT_AFTER - .05, .45, -.4)
+# cash register + coins (scene 3) and again when the profit counter lands (scene 8)
+def cash(at):
+    put(sfx, bell([(2093, 1), (2794, .7), (3951, .4)], 1.4, 3.2), at, .45)
+    put(sfx, band(noise(.06), 2000, 8000) * np.exp(-tt(.06) * 80), at - .06, .4)
+    for k in range(7): put(sfx, np.sin(2 * np.pi * rng.uniform(3200, 5200) * tt(.18)) * np.exp(-tt(.18) * 30), at + .2 + k * .07 + rng.uniform(0, .03), .14, rng.uniform(-.6, .6))
+cash(CASH); cash(COUNT_TO)
+# counter ticks while the profit numbers run up (rising pitch)
+n = 18
+for k in range(n):
+    at = COUNT_FROM + (COUNT_TO - COUNT_FROM) * k / n
+    put(sfx, np.sin(2 * np.pi * (900 + 900 * k / n) * tt(.05)) * np.exp(-tt(.05) * 70), at, .18, (-1) ** k * .2)
 # scroll rustle
-for a, z in SCROLLS:
-    d = z - a; t = tt(d); x = band(noise(d), 1200, 6000) * np.sin(np.pi * t / d) ** 1.5 * (0.6 + .4 * np.sin(2 * np.pi * 7 * t) ** 2)
-    put(sfx, x, a, .12, .1)
-# camera shutter + stamp
-for o in (0, .07): put(sfx, band(noise(.04), 1500, 9000) * np.exp(-tt(.04) * 120), SHUTTER + o, .5)
+for a_, z in SCROLLS:
+    d = z - a_; t = tt(d); x = band(noise(d), 1200, 6000) * np.sin(np.pi * t / d) ** 1.5 * (0.6 + .4 * np.sin(2 * np.pi * 7 * t) ** 2)
+    put(sfx, x, a_, .12, .1)
+# shipment photos: shutter on each, swipe between them, stamp on the track number
+for sh in (SHUTTER1, SHUTTER2):
+    for o in (0, .07): put(sfx, band(noise(.04), 1500, 9000) * np.exp(-tt(.04) * 120), sh + o, .5)
+put(sfx, whoosh(.35, 800, 6000), SWIPE, .35, .3)
 t = tt(.35); put(sfx, np.sin(2 * np.pi * 85 * t) * np.exp(-t * 14) + .5 * band(noise(.35), 200, 2500) * np.exp(-t * 30), STAMP, .7)
 # filter pills: juicy pops
 for i, (pt, _) in enumerate(PILLS): put(sfx, pop(), pt, .45, (-1) ** i * .25)
-# comparison: pings per highlight, magic on sync
+# comparison: pings per highlight, magic on sync, pings on the list
 for i, (ht, name) in enumerate(HL): put(sfx, ping() if name != "admin-profit" else bell([(1760, 1), (2637, .6)], .9, 4), ht, .32, -.35 if name == "client-price" else .35)
-for k, n in enumerate([72, 76, 79, 84, 88, 91]):
-    put(sfx, bell([(mid(n), 1), (mid(n) * 2, .3)], 1.0, 4), SYNC + k * .07, .16, -.5 + k * .2)
+for k, n_ in enumerate([72, 76, 79, 84, 88, 91]):
+    put(sfx, bell([(mid(n_), 1), (mid(n_) * 2, .3)], 1.0, 4), SYNC + k * .07, .16, -.5 + k * .2)
 put(sfx, whoosh(1.0, 2000, 10000), SYNC - .1, .25)
-# AI: scan sweep, typing, success
+put(sfx, ping(), HL_LIST, .28, -.35); put(sfx, bell([(1760, 1), (2637, .6)], .9, 4), HL_LIST + .3, .3, .35)
+# AI: scan sweep, quick key burst as fields fill, success
 d = SCAN_TO - SCAN_FROM; t = tt(d); f = 500 + 1300 * t / d
 put(sfx, np.sin(2 * np.pi * np.cumsum(f) / SR) * (0.5 + .5 * np.sin(2 * np.pi * 14 * t)) * np.sin(np.pi * t / d) * .5, SCAN_FROM, .35)
 put(sfx, band(noise(d), 3000, 12000) * np.sin(np.pi * t / d) * .3, SCAN_FROM, .25)
-tk = TYPE_FROM
-while tk < TYPE_TO:
-    put(sfx, keyclick(), tk, .35, rng.uniform(-.3, .3)); tk += .075 + rng.uniform(0, .04)
+tk = SCAN_TO + .05
+while tk < SCAN_TO + .45:
+    put(sfx, keyclick(), tk, .35, rng.uniform(-.3, .3)); tk += .045 + rng.uniform(0, .02)
 put(sfx, bell([(mid(88), 1), (mid(88) * 2, .25)], 1.2, 3), DONE_AT, .35)
 put(sfx, bell([(mid(92), 1), (mid(92) * 2, .25)], 1.4, 2.6), DONE_AT + .12, .35)
+# desktop: profit column ping, zoom whoosh, «Моя прибыль» ping
+put(sfx, bell([(1760, 1), (2637, .6)], .9, 4), DESK_PROFIT_HL, .3)
+put(sfx, whoosh(.6, 200, 3000), ZOOM_FROM, .35); put(sfx, whoosh(.5, 200, 3000), ZOOM_TO - .5, .3)
+put(sfx, bell([(1760, 1), (2637, .6)], .9, 4), DESK_MYPROFIT, .32)
 # transitions, laptop, chips
 for w in WHOOSH: put(sfx, whoosh(.7, 250, 4500), w - .3, .32, rng.uniform(-.4, .4))
 put(sfx, whoosh(1.2, 120, 2500), S8 + .1, .45)
@@ -155,7 +173,7 @@ for i, ct in enumerate(CHIPS): put(sfx, pop(), ct + .05, .5, -.4 + i * .2)
 # finale: impact + chord stab
 t = tt(3.5); put(sfx, np.sin(2 * np.pi * np.cumsum(32 + 60 * np.exp(-t * 5)) / SR) * np.exp(-t * 1.1), IMPACT, 1.0)
 put(sfx, band(noise(1.2), 60, 3000) * np.exp(-tt(1.2) * 4), IMPACT, .35)
-fin = sum(np.sin(2 * np.pi * mid(n) * tt(6)) * np.exp(-tt(6) * .55) for n in (45, 57, 64, 69, 72, 76)) * .09
+fin = sum(np.sin(2 * np.pi * mid(n_) * tt(6)) * np.exp(-tt(6) * .55) for n_ in (45, 57, 64, 69, 72, 76)) * .09
 put(sfx, fin, IMPACT, 1)
 
 # ---------------- mix ----------------

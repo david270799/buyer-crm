@@ -58,6 +58,11 @@ iframe{position:absolute;left:0;border:0;background:var(--warm)}
 #fbb b{display:block;font-size:13px;color:#3b6aa5;margin-bottom:6px}
 #fbt{font-size:24px;font-weight:700;color:#1c2430;position:relative;display:inline-block}
 #fbs{position:absolute;left:-4px;top:52%;height:5px;background:#ff5a5f;border-radius:3px;width:0}
+#pain{position:absolute;inset:0;z-index:36;background:#e6ebf1;opacity:0}
+#cross{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#cross path{fill:none;stroke:#ff3b47;stroke-width:26;stroke-linecap:round;stroke-dasharray:440;stroke-dashoffset:440;filter:drop-shadow(0 6px 14px rgba(255,59,71,.5))}
+.file{display:flex;gap:10px;align-items:center}.file i{width:40px;height:48px;border-radius:6px;background:#1f6e43;color:#fff;font-style:normal;font-size:11px;font-weight:800;display:grid;place-items:center}
+.file small{display:block;color:#7d8896;font-size:11px}
 /* chaos + glitch */
 #chaos{position:absolute;inset:0;pointer-events:none;z-index:60}
 .cb{position:absolute;padding:14px 20px;border-radius:24px;background:#fff;color:#1c2430;font-size:30px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.35);white-space:nowrap;opacity:0}
@@ -99,12 +104,16 @@ iframe{position:absolute;left:0;border:0;background:var(--warm)}
 <div id="bg"><div class="blob" id="b1" style="width:800px;height:800px;background:#2b4a7a"></div><div class="blob" id="b2" style="width:700px;height:700px;background:#3b2d6b"></div></div>
 
 <div class="cap" id="c2"><div class="h">Есть решение.</div><div class="sub">Ваша личная CRM в компактном приложении.</div></div>
-<div class="cap" id="c3"><div class="pre">Больше никаких:</div><div class="h"><span class="ln">«Какой у меня<i class="st"></i></span><br><span class="ln">баланс?»<i class="st"></i></span></div></div>
-<div class="cap" id="c4"><div class="pre">Никаких:</div><div class="h"><span class="ln">«Вы отправили?<i class="st"></i></span><br><span class="ln">Какой трек?»<i class="st"></i></span></div></div>
-<div class="cap" id="c5"><div class="pre">Никаких:</div><div class="h"><span class="ln">«Заказ уже<i class="st"></i></span><br><span class="ln">выкуплен?»<i class="st"></i></span></div></div>
+<div class="cap" id="c3a"><div class="h">Больше никакой каши<br>с бухгалтерией</div></div>
+<div class="cap" id="c3b"><div class="h">Всё прозрачно,<br>наглядно и понятно</div></div>
+<div class="cap" id="c4a"><div class="h">Бесконечные вопросы<br>по доставке?</div></div>
+<div class="cap" id="c4b"><div class="h">Полная детализация<br>отправок для клиента</div></div>
+<div class="cap" id="c5a"><div class="h">Больше никаких отчётов<br>по заказам вручную</div></div>
+<div class="cap" id="c5b"><div class="h">Каждый этап движения<br>товара под контролем</div></div>
 <div class="cap" id="c6"><div class="h">Клиент видит своё.<br>Вы видите всё.</div></div>
 <div class="cap" id="c7"><div class="h">Загрузили фото.<br>ИИ всё заполнил.</div></div>
-<div class="cap" id="c8"><div class="h">Полноценный сайт<br>для работы с ПК.</div></div>
+<div class="cap" id="c8a"><div class="h">Полноценный сайт<br>для работы с ПК.</div></div>
+<div class="cap" id="c8b"><div class="h">Прибыль<br>считается сама.</div></div>
 <div class="cap" id="c9"><div class="h">Настроим<br>под ваш бизнес.</div></div>
 
 <div class="lab" id="lc" style="left:20px"><span>КЛИЕНТ</span></div>
@@ -135,7 +144,7 @@ iframe{position:absolute;left:0;border:0;background:var(--warm)}
   </div>
   <div id="sheet"><div class="tghead"><span class="cl">Закрыть</span><span class="tt">Buyer CRM<small>мини-приложение</small></span><span class="dots">⋯</span></div>
    <div id="sbody"><div id="spin"></div><div id="spint">Загрузка…</div><iframe id="fc" name="fc" src="http://localhost:8080/" style="top:0;opacity:0"></iframe></div></div>
-  <div id="fb"><div id="fbb"><b>Клиент</b><span id="fbt"><span id="fbtx"></span><i id="fbs"></i></span></div></div>
+  <div id="pain"><div class="chead"><div class="av">А</div><div>Анна<small>клиент</small></div></div><div class="msgs" id="pmsgs"></div><svg id="cross" viewBox="0 0 390 844"><path id="x1" d="M70 250 L320 600"/><path id="x2" d="M320 250 L70 600"/></svg><div class="inbar"><div class="inp">Сообщение</div></div></div>
  </div>
 </div>
 
@@ -183,13 +192,13 @@ window.initChaos=function(times){const box=$('chaos');times.forEach((tm,i)=>{con
 // word stagger setup
 document.querySelectorAll('.cap .h, .cap .sub, .cap .pre').forEach(el=>{
   const walk=n=>{[...n.childNodes].forEach(c=>{if(c.nodeType===3&&c.textContent.trim()){const f=document.createDocumentFragment();c.textContent.split(/(\s+)/).forEach(p=>{if(!p)return;if(/^\s+$/.test(p))f.appendChild(document.createTextNode(p));else{const s=document.createElement('span');s.className='w';s.textContent=p;f.appendChild(s)}});n.replaceChild(f,c)}else if(c.nodeType===1&&c.tagName!=='I')walk(c)})};walk(el)});
-const CAPS=[['c2',7.25,11.75],['c3',12.15,18.7],['c4',19.15,25.7],['c5',26.15,33.7],['c6',34.25,47.7],['c7',48.25,56.75],['c8',57.25,62.7],['c9',63.2,67.7]];
+const CAPS=[['c2',7.25,11.75],['c3a',12.15,14.75],['c3b',15.05,19.7],['c4a',20.15,22.55],['c4b',22.85,27.7],['c5a',28.15,30.15],['c5b',30.45,35.7],['c6',36.25,47.7],['c7',48.25,56.75],['c8a',57.25,61.1],['c8b',61.35,65.7],['c9',66.2,70.7]];
 function caps(t){CAPS.forEach(([id,a,b])=>{const el=$(id);const out=ease((t-b)/.45);const on=t>=a-.05&&t<b+.5;el.style.opacity=on?1-out:0;el.style.transform=`translateY(${-out*30}px)`;
   if(!on)return;[...el.querySelectorAll('.w')].forEach((w,i)=>{const k=back((t-a-i*.06)/.45);w.style.opacity=clamp((t-a-i*.06)/.25);w.style.transform=`translateY(${(1-k)*40}px)`});
   [...el.querySelectorAll('.st')].forEach((s,i)=>{const k=eio((t-a-1.0-i*.22)/.35);s.style.width=(k*104)+'%'});
   [...el.querySelectorAll('.ln')].forEach((l,i)=>{l.style.opacity=1-.45*clamp((t-a-1.0-i*.22)/.35)})})}
 function ph(id,x,y,s,o,extra=''){const p=$(id);p.style.opacity=o;p.style.visibility=o>.001?'visible':'hidden';p.style.transform=`translate(${x}px,${y}px) scale(${s}) ${extra}`}
-const A=[213,470,1.55],L=[20,590,1.2],R=[554,590,1.2],S=[700,1120,.78];
+const A=[213,470,1.55],L=[20,590,1.2],R=[554,590,1.2],S=[800,1290,.62];
 const mix=(P,Q,k)=>[lerp(P[0],Q[0],k),lerp(P[1],Q[1],k),lerp(P[2],Q[2],k)];
 window.setT=function(t,x){x=x||{};
   // background drift
@@ -200,17 +209,18 @@ window.setT=function(t,x){x=x||{};
   let P=A.slice(),o1=ease(t/.6),extra='';
   if(t<.6)P[1]+= (1-ease(t/.6))*220;
   if(t>3.6&&t<6.9){const a=clamp((t-3.6)/2.7)*16;extra=`translate(${Math.sin(t*61)*a}px,${Math.cos(t*47)*a}px) rotate(${Math.sin(t*33)*a*.08}deg)`}
-  if(t>=34)P=mix(A,L,eio((t-34)/1.0));
+  if(t>=36)P=mix(A,L,eio((t-36)/1.0));
   if(t>=48){P=mix(L,[-600,590,1.2],eio((t-48)/.9));o1*=1-eio((t-48.2)/.7)}
   ph('p1',P[0],P[1],P[2],o1,extra);
   // phone 2 (admin)
   let Q=[1150,590,1.2],o2=0;
-  if(t>=34){Q=mix([1150,590,1.2],R,eio((t-34.1)/1.0));o2=1}
+  if(t>=36){Q=mix([1150,590,1.2],R,eio((t-36.1)/1.0));o2=1}
   if(t>=48)Q=mix(R,A,eio((t-48.1)/.9));
   if(t>=57)Q=mix(A,S,eio((t-57)/1.2));
-  if(t>=63){Q=mix(S,[760,1300,.6],eio((t-63)/.6));o2=1-eio((t-63)/.6)}
+  if(t>=66){Q=mix(S,[760,1300,.6],eio((t-66)/.6));o2=1-eio((t-66)/.6)}
+  if(x.zoom)o2*=1-x.zoom.k;
   ph('p2',Q[0],Q[1],Q[2],o2);
-  $('lc').style.opacity=clamp((t-34.8)/.4)*(1-clamp((t-47.8)/.3));$('la').style.opacity=$('lc').style.opacity;
+  $('lc').style.opacity=clamp((t-36.8)/.4)*(1-clamp((t-47.8)/.3));$('la').style.opacity=$('lc').style.opacity;
   // chats
   $('chat1').style.opacity=t<6.9?1:0;$('chat2').style.opacity=(t>=6.9&&t<10.6)?1:0;
   ['m1','m2','m3','m4'].forEach((id,i)=>{const k=back((t-[.5,1.1,1.7,2.5][i])/.35);const m=$(id);m.style.opacity=clamp((t-[.5,1.1,1.7,2.5][i])/.2);m.style.transform=`translateY(${(1-k)*16}px) scale(${.9+.1*k})`});
@@ -226,19 +236,21 @@ window.setT=function(t,x){x=x||{};
   const sk=eio((t-9.0)/.55);$('sheet').style.transform=`translateY(${(1-sk)*110}%)`;
   $('spin').style.transform=`rotate(${t*540}deg)`;const so=(t>=9.4&&t<10.6)?1:0;$('spin').style.opacity=so;$('spint').style.opacity=so;
   $('fc').style.opacity=clamp((t-10.4)/.35);
-  // flashbacks
-  const FB=[[12,'Какой у меня баланс?'],[19,'Вы отправили? Какой трек?'],[26,'Заказ уже выкуплен?']];let fo=0;
-  FB.forEach(([a,txt])=>{if(t>=a-.01&&t<a+1.6){$('fbtx').textContent=txt;const inn=ease((t-a)/.25),out=eio((t-a-1.15)/.35);fo=inn;$('fb').style.opacity=inn*(1-out);
-    $('fbb').style.transform=`translateX(${-out*420}px) scale(${.85+.15*back((t-a)/.35)}) rotate(${-out*8}deg)`;$('fbs').style.width=(eio((t-a-.55)/.3)*104)+'%'}});
-  if(!fo)$('fb').style.opacity=0;
+  // pain chats (scenes 3-5)
+  let po=0;(window.PAIN||[]).forEach(P=>{const end=P.cross+.5+.4;if(t<P.from-.01||t>=end+.05)return;
+    const box=$('pmsgs');const key=String(P.from);if(box.dataset.k!==key){box.dataset.k=key;box.innerHTML=P.msgs.map((m,i)=>'<div class="m pm" data-t="'+m[0]+'"><b>Анна</b>'+m[1]+'</div>').join('')+(P.file?'<div class="m r pm" data-t="'+P.file+'" style="max-width:78%"><b>Вы</b><div class="file"><i>XLSX</i><div>Отчет_Баланс.xlsx<small>48 КБ · таблица</small></div></div></div>':'')}
+    box.querySelectorAll('.pm').forEach(m=>{const k=back((t-+m.dataset.t)/.3);m.style.opacity=clamp((t-+m.dataset.t)/.15);m.style.transform=`translateY(${(1-k)*16}px) scale(${.9+.1*k})`});
+    const c1=eio((t-P.cross)/.2),c2=eio((t-P.cross-.18)/.22);$('x1').style.strokeDashoffset=440*(1-c1);$('x2').style.strokeDashoffset=440*(1-c2);
+    const out=eio((t-P.cross-.5)/.4);po=ease((t-P.from)/.2)*(1-out);$('pain').style.transform=`translateX(${-out*110}%) rotate(${-out*6}deg)`});
+  $('pain').style.opacity=po;
   // laptop
-  const li=eio((t-57.2)/1.2),lo=eio((t-63)/.6);$('laptop').style.opacity=t<57.2?0:li*(1-lo);$('laptop').style.transform=`translateY(${(1-li)*120+lo*80}px) scale(${(.86+.14*li)*(1-.1*lo)})`;
+  const li=eio((t-57.2)/1.2),lo=eio((t-66)/.6);$('laptop').style.opacity=t<57.2?0:li*(1-lo);const z=x.zoom||{k:0,ox:520,oy:300,s:1,dy:0};$('laptop').style.transformOrigin=`${z.ox}px ${z.oy}px`;$('laptop').style.transform=`translateY(${(1-li)*120+lo*80+z.k*z.dy}px) scale(${(.86+.14*li)*(1-.1*lo)*(1+(z.s-1)*z.k)})`;
   // chips
-  [...document.querySelectorAll('.chip')].forEach((c,i)=>{const a=63.7+i*.42;const k=back((t-a)/.5);const out=eio((t-67.6)/.4);c.style.opacity=clamp((t-a)/.15)*(1-out);
+  [...document.querySelectorAll('.chip')].forEach((c,i)=>{const a=66.7+i*.42;const k=back((t-a)/.5);const out=eio((t-70.6)/.4);c.style.opacity=clamp((t-a)/.15)*(1-out);
     c.style.transform=`translateY(${(1-k)*160}px) rotateX(${(1-k)*70+Math.sin(t*2+i)*6}deg) rotateY(${Math.cos(t*1.6+i)*8}deg) scale(${(.5+.5*k)*(1-.2*out)})`});
   // outro
-  const oo=back((t-68.3)/.7);$('outro').style.opacity=clamp((t-68.3)/.3);$('outro').style.transform=`scale(${.85+.15*oo})`;
-  $('fade').style.opacity=clamp((t-74.0)/1.0);
+  const oo=back((t-71.3)/.7);$('outro').style.opacity=clamp((t-71.3)/.3);$('outro').style.transform=`scale(${.85+.15*oo})`;
+  $('fade').style.opacity=clamp((t-77.0)/1.0);
   // overlays from python: tap, rings, callouts
   const tp=$('tap');if(x.tap){const k=x.tap.k;tp.style.opacity=k<.15?k/.15:clamp(1-(k-.15)/.35);tp.style.left=x.tap.x+'px';tp.style.top=x.tap.y+'px';tp.style.transform=`scale(${.55+k*.9})`}else tp.style.opacity=0;
   const sc=$('scan');if(x.scan){sc.style.cssText=`left:${x.scan.x}px;top:${x.scan.y}px;width:${x.scan.w}px;height:${x.scan.h}px;opacity:${x.scan.o}`;sc.firstChild.style.top=(x.scan.k*100)+'%'}else sc.style.opacity=0;
