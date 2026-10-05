@@ -5,6 +5,18 @@ from timeline import *
 
 OUT = pathlib.Path("frames"); OUT.mkdir(exist_ok=True)
 STAGE = pathlib.Path("stage.html").read_text()
+import os, re
+LANG = os.environ.get("VIDEO_LANG", "ru")
+TR = lambda s: s
+if LANG == "uz":   # Uzbek video: our texts in Uzbek, the app interface stays Russian
+    import texts_uz as U
+    for cid, inner in U.CAPS.items():
+        STAGE = re.sub(rf'(<div class="cap" id="{cid}">).*?(</div>\n)', lambda m: m.group(1) + inner + "</div>\n", STAGE, count=1)
+    for a_, b_ in U.STAGE:
+        assert a_ in STAGE, a_
+        STAGE = STAGE.replace(a_, b_)
+    PAIN = [dict(P, msgs=[(t_, U.PAIN[m_]) for t_, m_ in P["msgs"]]) for P in PAIN]
+    TR = lambda s: U.CALLOUTS.get(s, s)
 ASSETS = pathlib.Path("assets").resolve()
 only = [float(a) for a in sys.argv[1:]]
 ease = lambda x: 1 - (1 - min(1, max(0, x))) ** 3
@@ -180,18 +192,18 @@ with sync_playwright() as p:
                 o = fade(t, ht, 41.1); g = name == "admin-profit"
                 extra["rings"].append(ring(bx, o, g))
                 until = 40.0 if name == "client-price" else (HL[k_ + 1][0] if k_ + 1 < len(HL) else 41.1)
-                extra["callouts"].append({"x": 273 if name == "client-price" else 807, "y": 1668, "text": texts[name], "o": fade(t, ht, until), "g": g, "ax": -50})
+                extra["callouts"].append({"x": 273 if name == "client-price" else 807, "y": 1668, "text": TR(texts[name]), "o": fade(t, ht, until), "g": g, "ax": -50})
         if SYNC - .2 <= t < TAP_TABS:
             bx = box("fc", rect_of(".stepper"))
             if bx:
                 o = fade(t, SYNC - .2, TAP_TABS)
-                extra["rings"].append(ring(bx, o, True)); extra["callouts"].append({"x": 273, "y": 1668, "text": "Клиент видит сразу", "o": o, "g": True, "ax": -50})
+                extra["rings"].append(ring(bx, o, True)); extra["callouts"].append({"x": 273, "y": 1668, "text": TR("Клиент видит сразу"), "o": o, "g": True, "ax": -50})
         if HL_LIST <= t < 47.7:
             o = fade(t, HL_LIST, 47.7)
             bc = box("fc", el_rect(in_card("N6", "/^₩/.test(x.textContent.trim())")))
             ba = box("fa2", el_rect(in_card("N6", "x.textContent.toLowerCase().includes('закупка')")))
-            if bc: extra["rings"].append(ring(bc, o, pad=6)); extra["callouts"].append({"x": 273, "y": 1668, "text": "Клиент видит цену", "o": o, "ax": -50})
-            if ba: extra["rings"].append(ring(ba, clamp((t - HL_LIST - .3) / .25) * clamp((47.7 - t) / .3), True, 6)); extra["callouts"].append({"x": 807, "y": 1668, "text": "Закупка видна только вам", "o": clamp((t - HL_LIST - .3) / .25) * clamp((47.7 - t) / .3), "g": True, "ax": -50})
+            if bc: extra["rings"].append(ring(bc, o, pad=6)); extra["callouts"].append({"x": 273, "y": 1668, "text": TR("Клиент видит цену"), "o": o, "ax": -50})
+            if ba: extra["rings"].append(ring(ba, clamp((t - HL_LIST - .3) / .25) * clamp((47.7 - t) / .3), True, 6)); extra["callouts"].append({"x": 807, "y": 1668, "text": TR("Закупка видна только вам"), "o": clamp((t - HL_LIST - .3) / .25) * clamp((47.7 - t) / .3), "g": True, "ax": -50})
         # scene 7: scan over the uploaded photo
         if SCAN_FROM <= t < SCAN_TO + .3:
             bx = box("fa2", rect_of("img[alt='Фото']"))
@@ -203,12 +215,12 @@ with sync_playwright() as p:
                 L_, T_, s_ = frect("fd"); bottom = T_ + 751 * s_ - 6
                 bx = (bx[0], bx[1], bx[2], min(bx[3], bottom - bx[1]))
                 o = fade(t, DESK_PROFIT_HL, DESK_SHIPMENTS)
-                extra["rings"].append(ring(bx, o, True, 4)); extra["callouts"].append({"x": 540, "y": 560, "text": "Прибыль по каждому заказу", "o": o, "g": True, "ax": -50})
+                extra["rings"].append(ring(bx, o, True, 4)); extra["callouts"].append({"x": 540, "y": 560, "text": TR("Прибыль по каждому заказу"), "o": o, "g": True, "ax": -50})
         if 62.0 <= t < ZOOM_TO - .5:
             bx = union("fd", "...[...document.querySelectorAll('.kpi')].slice(0,2)")
             if bx:
                 o = fade(t, 62.0, ZOOM_TO - .5)
-                extra["rings"].append(ring(bx, o, True, 6)); extra["callouts"].append({"x": 540, "y": 1560, "text": "Без Excel и калькулятора", "o": o, "g": True, "ax": -50})
+                extra["rings"].append(ring(bx, o, True, 6)); extra["callouts"].append({"x": 540, "y": 1560, "text": TR("Без Excel и калькулятора"), "o": o, "g": True, "ax": -50})
         if st["tap"] and 0 <= t - st["tap"][0] <= .5:
             extra["tap"] = {"k": (t - st["tap"][0]) / .5, "x": st["tap"][1], "y": st["tap"][2]}
         page.evaluate(f"setT({t},{json.dumps(extra)})")
