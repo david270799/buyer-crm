@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -257,6 +258,54 @@ export function useDebounced<T>(value: T, delay = 300): T {
     return () => window.clearTimeout(id);
   }, [value, delay]);
   return debounced;
+}
+
+const LONG_PRESS_MS = 500;
+const MOVE_TOLERANCE_PX = 10;
+
+/**
+ * Tap vs. press-and-hold on the same element (like selecting in a phone's
+ * gallery). Moving the finger (scrolling) cancels the hold; the click that
+ * follows a hold is swallowed, so a hold never also opens the item.
+ */
+export function useLongPress(onLongPress: () => void, onTap: () => void) {
+  const timer = useRef<number | null>(null);
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const fired = useRef(false);
+  const cancel = () => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+    start.current = null;
+  };
+  return {
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      fired.current = false;
+      start.current = { x: e.clientX, y: e.clientY };
+      timer.current = window.setTimeout(() => {
+        fired.current = true;
+        timer.current = null;
+        haptic("select");
+        onLongPress();
+      }, LONG_PRESS_MS);
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      if (!start.current) return;
+      if (Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > MOVE_TOLERANCE_PX) cancel();
+    },
+    onPointerUp: cancel,
+    onPointerCancel: cancel,
+    onPointerLeave: cancel,
+    // Long-press on a phone would otherwise open the image / text menu.
+    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+    onClick: () => {
+      if (fired.current) {
+        fired.current = false;
+        return;
+      }
+      onTap();
+    },
+  };
 }
 
 export function useSelection() {

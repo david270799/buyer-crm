@@ -138,3 +138,17 @@ def test_local_storage_stays_inside_root(tmp_path):
     assert (tmp_path / "media" / "a" / "b.webp").read_bytes() == b"x"
     with pytest.raises(ValueError):
         storage.put("../escape.webp", b"x", "image/webp")
+
+
+def test_local_storage_reads_and_deletes_only_its_own_files(tmp_path):
+    storage = LocalBlobStorage(tmp_path / "media")
+    (tmp_path / "secret.txt").write_text("x")
+    url = storage.put("orders/a.webp", b"data", "image/webp")
+
+    assert storage.read_url(url) == b"data"
+    assert storage.read_url("/media/../secret.txt") is None
+    assert storage.read_url("https://example.com/a.webp") is None
+    assert storage.delete_url("/media/../secret.txt") is False
+    assert storage.delete_url(url) is True
+    assert storage.read_url(url) is None
+    assert (tmp_path / "secret.txt").exists()

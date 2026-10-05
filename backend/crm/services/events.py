@@ -47,6 +47,12 @@ class EventRecorder:
             except Exception:  # noqa: BLE001 - never break the business operation
                 logger.warning("Event listener failed", exc_info=True)
 
+    def touched(self, tx: Transaction) -> None:
+        """Wake listeners after this commit although no event is recorded
+        (e.g. orders were deleted together with their events)."""
+        if self._listeners:
+            tx.after_commit(self._notify_listeners)
+
     def _stamp(self, now: datetime) -> datetime:
         # Strictly increasing timestamps keep "before" pagination exact even
         # when one operation records several events at the same instant.

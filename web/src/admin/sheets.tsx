@@ -1,23 +1,31 @@
-import { Camera, Loader2 } from "lucide-react";
+import { Camera, CheckCheck, Loader2, Plus, Sparkles, Split, Undo2, X } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
+  recognizePhoto,
   uploadImage,
   useBulkStatus,
   useBulkUpdate,
+  useBulkDiscount,
   useBuy,
   useCancel,
   useCreateShipment,
+  useDeleteOrders,
+  useDeletePreview,
   useMoney,
+  useOrders,
   useOverview,
   useRebuy,
   useSettings,
   useUpdateOrder,
   useUpdateShipment,
+  useSplitShipment,
+  useDuplicateOrder,
 } from "../api/hooks";
-import type { BulkResult, Order, OrderStatus, Shipment } from "../api/types";
-import { Confirm, errorText, Field, MoneyInput, Sheet, Switch, useToast } from "../components/ui";
+import type { BulkResult, Order, OrderStatus, PhotoRecognition, Shipment } from "../api/types";
+import { Thumb } from "../components/orders";
+import { Checkbox, Confirm, errorText, Field, MoneyInput, Sheet, Switch, useToast } from "../components/ui";
 import { krw, STATUS_LABEL, todayKey } from "../lib/format";
 
 // --- helpers ------------------------------------------------------------------
@@ -61,6 +69,65 @@ export interface PhotoValue {
   thumbnail_url: string | null;
 }
 
+/** Fields Gemini is sure about, for filling a form; empty strings are left out. */
+export function recognizedFields(r: PhotoRecognition): { brand?: string; model?: string; size?: string } {
+  const fields: { brand?: string; model?: string; size?: string } = {};
+  if (r.brand) fields.brand = r.brand;
+  if (r.model) fields.model = r.model;
+  if (r.size) fields.size = r.size;
+  return fields;
+}
+
+function recognitionToast(r: PhotoRecognition): string {
+  if (r.not_a_product) return "Gemini: на фото не товар — впишите данные вручную";
+  if (!r.recognized) return "Gemini не уверен — впишите бренд и модель вручную";
+  const name = [r.brand, r.model].filter(Boolean).join(" ");
+  return `Gemini: ${name}${r.size ? ` · размер ${r.size}` : ""}`;
+}
+
+/** Small AI button next to the order name: Gemini reads the uploaded photo and
+ * fills brand, model and size in the form (nothing is saved by itself). */
+export function AiFillButton({
+  photoUrl,
+  onRecognized,
+}: {
+  photoUrl: string | null;
+  onRecognized: (r: PhotoRecognition) => void;
+}) {
+  const settings = useSettings();
+  const toast = useToast();
+  const [reading, setReading] = useState(false);
+  if (!settings.data?.recognition_enabled) return null;
+  const run = async () => {
+    if (!photoUrl) {
+      toast("Сначала добавьте фото", "error");
+      return;
+    }
+    setReading(true);
+    try {
+      const result = await recognizePhoto(photoUrl);
+      onRecognized(result);
+      toast(recognitionToast(result), result.recognized ? undefined : "error");
+    } catch (error) {
+      toast(errorText(error), "error");
+    } finally {
+      setReading(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      className="btn ai-fill"
+      onClick={run}
+      disabled={reading}
+      title="Заполнить по фото (Gemini)"
+      aria-label="Заполнить по фото (Gemini)"
+    >
+      {reading ? <Loader2 className="spin" size={14} /> : <Sparkles size={14} />}
+    </button>
+  );
+}
+
 export function PhotoInput({ value, onChange }: { value: PhotoValue; onChange: (v: PhotoValue) => void }) {
   const settings = useSettings();
   const toast = useToast();
@@ -101,9 +168,81 @@ export function PhotoInput({ value, onChange }: { value: PhotoValue; onChange: (
           />
         </label>
         <div className="tiny faint">
-          {enabled ? "Сожмём до WebP ~100 КБ, пропорции сохранятся" : "Хранилище фото не настроено"}
+          {enabled ? "Сожмём до WebP, пропорции сохранятся" : "Хранилище фото не настроено"}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Photos of a shipment, also for shipments saved with a single photo. */
+export function shipmentPhotos(shipment: Shipment): PhotoValue[] {
+  if (shipment.photos?.length) return shipment.photos;
+  return shipment.photo_url ? [{ photo_url: shipment.photo_url, thumbnail_url: shipment.thumbnail_url }] : [];
+}
+
+function photoList(photos: PhotoValue[]): { photo_url: string; thumbnail_url: string | null }[] {
+  return photos.filter((p) => p.photo_url).map((p) => ({ photo_url: p.photo_url!, thumbnail_url: p.thumbnail_url }));
+}
+
+const MAX_SHIPMENT_PHOTOS = 10;
+
+/** Several photos: small tiles with a remove button, and "+" to add more. */
+export function PhotosInput({ value, onChange }: { value: PhotoValue[]; onChange: (v: PhotoValue[]) => void }) {
+  const settings = useSettings();
+  const toast = useToast();
+  const [busy, setBusy] = useState(0);
+  const enabled = settings.data?.uploads_enabled ?? true;
+  const room = MAX_SHIPMENT_PHOTOS - value.length;
+  return (
+    <div className="photo-tiles">
+      {value.map((photo, index) => (
+        <div key={`${photo.photo_url}-${index}`} className="photo-tile">
+          <img src={photo.thumbnail_url ?? photo.photo_url ?? ""} alt={`Фото ${index + 1}`} />
+          <button
+            type="button"
+            className="remove"
+            aria-label="Убрать фото"
+            onClick={() => onChange(value.filter((_, i) => i !== index))}
+          >
+            <X size={12} />
+          </button>
+        </div>
+      ))}
+      {Array.from({ length: busy }, (_, i) => (
+        <div key={`busy-${i}`} className="photo-tile add">
+          <Loader2 className="spin" size={18} />
+        </div>
+      ))}
+      {room > busy && (
+        <label className={`photo-tile add ${enabled ? "" : "disabled"}`} aria-label="Добавить фото">
+          <Plus size={18} />
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            disabled={!enabled}
+            onChange={async (e) => {
+              const files = Array.from(e.target.files ?? []).slice(0, room - busy);
+              e.target.value = "";
+              if (!files.length) return;
+              setBusy((n) => n + files.length);
+              const added: PhotoValue[] = [];
+              for (const file of files) {
+                try {
+                  added.push(await uploadImage(file));
+                } catch (error) {
+                  toast(errorText(error), "error");
+                } finally {
+                  setBusy((n) => n - 1);
+                }
+              }
+              if (added.length) onChange([...value, ...added]);
+            }}
+          />
+        </label>
+      )}
     </div>
   );
 }
@@ -295,6 +434,71 @@ export function CancelConfirm({ order, onClose }: { order: Order; onClose: () =>
   );
 }
 
+/** Delete orders everywhere, after showing exactly what will happen (from the server). */
+export function DeleteConfirm({ ids, onClose, onDone }: { ids: string[]; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const preview = useDeletePreview(ids);
+  const remove = useDeleteOrders();
+  const orders = preview.data?.orders ?? [];
+  const refund = preview.data?.refund_krw ?? 0;
+  const single = ids.length === 1;
+  return (
+    <Confirm
+      title={single ? `Удалить ${ids[0]}?` : `Удалить заказы: ${ids.length} шт.?`}
+      confirmLabel={orders.length ? `Удалить${single ? "" : ` (${orders.length})`}` : "Удалить"}
+      danger
+      busy={remove.isPending || preview.isLoading || !orders.length}
+      onClose={onClose}
+      onConfirm={() =>
+        // mutateAsync, not mutate(..., callbacks): the refreshed order page
+        // unmounts this dialog on 404, and per-call callbacks would then be lost.
+        remove.mutateAsync(orders.map((o) => o.id)).then(
+          (r) => {
+            const lines = [`Удалено: ${r.deleted.join(", ")}`];
+            if (r.refunded_krw) lines.push(`Возврат ${krw(r.refunded_krw)}`);
+            for (const s of r.skipped) lines.push(`${s.order_id}: ${s.reason}`);
+            if (r.next_order_id) lines.push(`Следующий заказ: ${r.next_order_id}`);
+            toast(lines.join("\n"));
+            onDone();
+          },
+          (e) => toast(errorText(e), "error"),
+        )
+      }
+    >
+      {preview.isLoading ? (
+        <div className="muted small">Проверяю заказы…</div>
+      ) : preview.error ? (
+        <div className="banner negative small">{errorText(preview.error)}</div>
+      ) : (
+        <div className="stack" style={{ gap: 8 }}>
+          <div className="muted small">
+            Заказ исчезнет у клиента, из списков и истории, фото удалятся. Вернуть нельзя. В журнале действий
+            запись останется.
+          </div>
+          {!single && orders.length > 0 && (
+            <div className="small">{orders.map((o) => o.id).join(", ")}</div>
+          )}
+          {preview.data?.skipped.map((s) => (
+            <div key={s.order_id} className="small">
+              ⏭ {s.order_id}: {s.reason}
+            </div>
+          ))}
+          {preview.data?.not_found.length ? (
+            <div className="small">Не найдено: {preview.data.not_found.join(", ")}</div>
+          ) : null}
+          {refund > 0 ? (
+            <BalancePreview delta={refund} label="Вернётся на баланс" />
+          ) : orders.length ? (
+            <div className="small">Списаний нет — баланс не изменится.</div>
+          ) : (
+            <div className="small">Удалять нечего.</div>
+          )}
+        </div>
+      )}
+    </Confirm>
+  );
+}
+
 // --- bulk -------------------------------------------------------------------------------
 
 const BULK_STATUSES: { status: OrderStatus; hint: string }[] = [
@@ -456,7 +660,7 @@ interface ShipmentFormValue {
   shipping_cost_krw: number | null;
   shipment_date: string;
   comment: string;
-  photo: PhotoValue;
+  photos: PhotoValue[];
 }
 
 function ShipmentFields({ value, onChange }: { value: ShipmentFormValue; onChange: (v: ShipmentFormValue) => void }) {
@@ -478,9 +682,9 @@ function ShipmentFields({ value, onChange }: { value: ShipmentFormValue; onChang
       <Field label="Дата отправки">
         <input className="input" type="date" value={value.shipment_date} onChange={(e) => set("shipment_date", e.target.value)} />
       </Field>
-      <div className="field">
+      <div className="full field">
         <span>Фото отправки</span>
-        <PhotoInput value={value.photo} onChange={(photo) => set("photo", photo)} />
+        <PhotosInput value={value.photos} onChange={(photos) => set("photos", photos)} />
       </div>
       <div className="full">
         <Field label="Комментарий">
@@ -497,6 +701,212 @@ function parseWeight(text: string): number | null | "invalid" {
   return Number.isFinite(value) && value > 0 ? value : "invalid";
 }
 
+/** Same rule as the server: before shipping, with a price, not cancelled. */
+function discountable(o: Order): boolean {
+  return (o.status === "new" || o.status === "bought" || o.status === "warehouse") && !o.shipment_id && (o.client_price ?? 0) > 0;
+}
+
+/** "Скидка" for the selected orders: a percent off the client price. Paid orders get
+ * the difference back on the balance (a "Скидка N%" line the client sees). */
+export function DiscountSheet({ orders, onClose, onDone }: { orders: Order[]; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const mutation = useBulkDiscount();
+  const [text, setText] = useState("");
+  const [key] = useState(() => crypto.getRandomValues(new Uint32Array(3)).join("-"));
+  const percent = Number(text.replace(",", "."));
+  const valid = text.trim() !== "" && percent > 0 && percent < 100 && /^\d+([.,]\d{1,2})?$/.test(text.trim());
+  const eligible = orders.filter(discountable);
+  const others = orders.filter((o) => !discountable(o));
+  const rows = eligible.map((o) => {
+    const cut = valid ? Math.round(((o.client_price ?? 0) * percent) / 100) : 0;
+    return { order: o, cut, price: (o.client_price ?? 0) - cut, refund: Math.min(cut, o.charged_amount_krw ?? 0) };
+  });
+  const refund = rows.reduce((sum, r) => sum + r.refund, 0);
+  return (
+    <Sheet
+      title={`Скидка: ${orders.length} шт.`}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" onClick={onClose}>
+            Отмена
+          </button>
+          <button
+            className="btn primary"
+            disabled={!valid || !eligible.length || mutation.isPending}
+            onClick={() =>
+              mutation.mutate(
+                { order_ids: eligible.map((o) => o.id), percent, idempotency_key: key },
+                {
+                  onSuccess: (r) => {
+                    const lines = [`Скидка ${percent}%: ${r.updated.map((u) => u.order_id).join(", ") || "—"}`];
+                    if (r.refunded_krw) lines.push(`Вернулось на баланс: ${krw(r.refunded_krw)}`);
+                    for (const s of r.skipped) lines.push(`${s.order_id}: ${s.reason}`);
+                    toast(lines.join("\n"));
+                    onDone();
+                  },
+                  onError: (e) => toast(errorText(e), "error"),
+                },
+              )
+            }
+          >
+            {mutation.isPending ? "Применяем…" : "Применить скидку"}
+          </button>
+        </>
+      }
+    >
+      <div className="stack">
+        <Field label="Скидка, %" hint="Цена для клиента уменьшится на этот процент (без округления)">
+          <input
+            className="input num"
+            inputMode="decimal"
+            autoFocus
+            placeholder="10"
+            value={text}
+            onChange={(e) => setText(e.target.value.replace(/[^\d.,]/g, ""))}
+          />
+        </Field>
+        {valid && rows.length > 0 && (
+          <div className="list">
+            {rows.map((r) => (
+              <div key={r.order.id} className="list-item" style={{ cursor: "default" }}>
+                <div className="grow">
+                  <div className="title">
+                    {r.order.id} · {[r.order.brand, r.order.model].filter(Boolean).join(" ") || "Без названия"}
+                  </div>
+                  <div className="small muted num">
+                    {krw(r.order.client_price)} → <b>{krw(r.price)}</b>
+                  </div>
+                </div>
+                <div className="amount small">−{krw(r.cut)}</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {valid && refund > 0 && <BalancePreview delta={refund} label="Вернётся на баланс (уже оплаченные)" />}
+        {others.length > 0 && (
+          <div className="small muted">
+            Без скидки (отправлены, отменены или без цены): {others.map((o) => o.id).join(", ")}
+          </div>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+/** "Доставлена" on a shipment page: every order of the shipment → delivered. */
+export function ShipmentDeliveredButton({ orders }: { orders: Order[] }) {
+  const toast = useToast();
+  const setStatus = useBulkStatus();
+  const [confirming, setConfirming] = useState(false);
+  const pending = orders.filter((o) => o.status !== "delivered" && o.status !== "cancelled");
+  if (!orders.length) return null;
+  if (!pending.length) {
+    return (
+      <button className="btn small" disabled>
+        <CheckCheck size={14} /> Доставлена
+      </button>
+    );
+  }
+  return (
+    <>
+      <button className="btn small primary" onClick={() => setConfirming(true)}>
+        <CheckCheck size={14} /> Доставлена
+      </button>
+      {confirming && (
+        <Confirm
+          title="Отметить отправку доставленной?"
+          confirmLabel={`Доставлено: ${pending.length}`}
+          busy={setStatus.isPending}
+          onClose={() => setConfirming(false)}
+          onConfirm={() =>
+            setStatus.mutate(
+              { order_ids: pending.map((o) => o.id), status: "delivered" },
+              {
+                onSuccess: (r) => {
+                  toast(bulkSummary(r, "Доставлены"));
+                  setConfirming(false);
+                },
+                onError: (e) => toast(errorText(e), "error"),
+              },
+            )
+          }
+        >
+          <div className="small">
+            Все заказы этой отправки получат статус «Доставлен»: {pending.map((o) => o.id).join(", ")}.
+          </div>
+          <div className="small muted" style={{ marginTop: 8 }}>
+            Деньги не двигаются. Клиент увидит смену статуса, на фото в группе появится реакция.
+          </div>
+        </Confirm>
+      )}
+    </>
+  );
+}
+
+/** "+" on the shipments page: pick orders that can be sent, then the usual form. */
+export function NewShipmentFlow({ onClose }: { onClose: () => void }) {
+  const orders = useOrders({ sort: "newest", limit: 200 });
+  const [picked, setPicked] = useState<string[]>([]);
+  const [ready, setReady] = useState(false);
+  const candidates = (orders.data?.items ?? []).filter(
+    (o) => (o.status === "bought" || o.status === "warehouse") && !o.shipment_id,
+  );
+  const toggle = (id: string) => setPicked((list) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]));
+  if (ready) return <ShipmentSheet ids={picked} onClose={() => setReady(false)} onDone={onClose} />;
+  return (
+    <Sheet
+      title="Новая отправка: заказы"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" onClick={onClose}>
+            Отмена
+          </button>
+          <button className="btn primary" disabled={!picked.length} onClick={() => setReady(true)}>
+            Далее{picked.length ? ` (${picked.length})` : ""}
+          </button>
+        </>
+      }
+    >
+      {orders.isLoading ? (
+        <div className="muted small">Загрузка…</div>
+      ) : !candidates.length ? (
+        <div className="muted small">Нет заказов для отправки: нужны выкупленные или на складе, ещё не отправленные.</div>
+      ) : (
+        <div className="stack" style={{ gap: 8 }}>
+          <div className="row between small">
+            <span className="muted">Выкуплены или на складе</span>
+            <button
+              className="btn small ghost"
+              onClick={() => setPicked(picked.length === candidates.length ? [] : candidates.map((o) => o.id))}
+            >
+              {picked.length === candidates.length ? "Снять все" : "Выбрать все"}
+            </button>
+          </div>
+          <div className="list">
+            {candidates.map((o) => (
+              <div key={o.id} className="list-item" onClick={() => toggle(o.id)}>
+                <Checkbox checked={picked.includes(o.id)} onChange={() => toggle(o.id)} label={`Выбрать ${o.id}`} />
+                <Thumb src={o.thumbnail_url ?? o.photo_url} alt={o.id} />
+                <div className="grow">
+                  <div className="title">
+                    {o.id} · {[o.brand, o.model].filter(Boolean).join(" ") || "Без названия"}
+                  </div>
+                  <div className="small muted">
+                    {o.status_label ?? ""}
+                    {o.size ? ` · размер ${o.size}` : ""}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
 export function ShipmentSheet({ ids, onClose, onDone }: { ids: string[]; onClose: () => void; onDone: () => void }) {
   const toast = useToast();
   const navigate = useNavigate();
@@ -508,7 +918,7 @@ export function ShipmentSheet({ ids, onClose, onDone }: { ids: string[]; onClose
     shipping_cost_krw: null,
     shipment_date: todayKey(),
     comment: "",
-    photo: { photo_url: null, thumbnail_url: null },
+    photos: [],
   });
   const weight = parseWeight(form.weight_kg);
   return (
@@ -533,8 +943,7 @@ export function ShipmentSheet({ ids, onClose, onDone }: { ids: string[]; onClose
                   shipping_cost_krw: form.shipping_cost_krw,
                   shipment_date: form.shipment_date || null,
                   comment: form.comment.trim() || null,
-                  photo_url: form.photo.photo_url,
-                  thumbnail_url: form.photo.thumbnail_url,
+                  photos: photoList(form.photos),
                 },
                 {
                   onSuccess: (r) => {
@@ -576,14 +985,14 @@ export function ShipmentEditSheet({ shipment, onClose }: { shipment: Shipment; o
     shipping_cost_krw: shipment.shipping_cost_krw,
     shipment_date: toSeoulDay(shipment.shipment_date),
     comment: shipment.comment ?? "",
-    photo: { photo_url: shipment.photo_url, thumbnail_url: shipment.thumbnail_url },
+    photos: shipmentPhotos(shipment),
   });
   const weight = parseWeight(form.weight_kg);
   const charged = shipment.shipping_charged_krw ?? 0;
   const delta = -((form.shipping_cost_krw ?? 0) - charged);
   return (
     <Sheet
-      title={`Отправка #${shipment.shipment_number}`}
+      title="Изменить отправку"
       onClose={onClose}
       footer={
         <>
@@ -602,8 +1011,7 @@ export function ShipmentEditSheet({ shipment, onClose }: { shipment: Shipment; o
                   shipping_cost_krw: form.shipping_cost_krw,
                   shipment_date: form.shipment_date || null,
                   comment: form.comment.trim() || null,
-                  photo_url: form.photo.photo_url,
-                  thumbnail_url: form.photo.thumbnail_url,
+                  photos: photoList(form.photos),
                 },
                 {
                   onSuccess: (r) => {
@@ -632,6 +1040,46 @@ function toSeoulDay(value: string | null): string {
 }
 
 // --- order edit ------------------------------------------------------------------------
+
+/** Undo a mis-tap on the status: "На складе" → "Выкуплен", "Доставлен" → "Отправлен".
+ * No money moves: both statuses of each pair are already paid. */
+function StatusRollback({ order, onDone }: { order: Order; onDone: () => void }) {
+  const toast = useToast();
+  const setStatus = useBulkStatus();
+  const target: OrderStatus | null =
+    order.status === "warehouse" && (order.charged_amount_krw ?? 0) > 0
+      ? "bought"
+      : order.status === "delivered" && order.shipment_id
+        ? "cargo"
+        : null;
+  if (!target) return null;
+  return (
+    <div className="banner info row between" style={{ marginBottom: 14, gap: 10 }}>
+      <div className="small">
+        Статус: <b>{order.status_label}</b>
+      </div>
+      <button
+        type="button"
+        className="btn small"
+        disabled={setStatus.isPending}
+        onClick={() =>
+          setStatus.mutate(
+            { order_ids: [order.id], status: target },
+            {
+              onSuccess: (r) => {
+                toast(r.updated.length ? `Статус возвращён: «${STATUS_LABEL[target]}»` : bulkSummary(r), r.updated.length ? undefined : "error");
+                if (r.updated.length) onDone();
+              },
+              onError: (e) => toast(errorText(e), "error"),
+            },
+          )
+        }
+      >
+        <Undo2 size={14} /> Вернуть «{STATUS_LABEL[target]}»
+      </button>
+    </div>
+  );
+}
 
 export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () => void }) {
   const toast = useToast();
@@ -692,14 +1140,22 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
         </>
       }
     >
+      <StatusRollback order={order} onDone={onClose} />
       <div className="form-grid two">
         <div className="full field">
           <span>Фото</span>
           <PhotoInput value={form.photo} onChange={(photo) => set("photo", photo)} />
         </div>
-        <Field label="Бренд">
-          <input className="input" value={form.brand} onChange={(e) => set("brand", e.target.value)} />
-        </Field>
+        <div className="field">
+          <span className="field-head">
+            Бренд
+            <AiFillButton
+              photoUrl={form.photo.photo_url}
+              onRecognized={(r) => setForm((f) => ({ ...f, ...recognizedFields(r) }))}
+            />
+          </span>
+          <input className="input" aria-label="Бренд" value={form.brand} onChange={(e) => set("brand", e.target.value)} />
+        </div>
         <Field label="Модель">
           <input className="input" value={form.model} onChange={(e) => set("model", e.target.value)} />
         </Field>
@@ -803,5 +1259,128 @@ export function MoneySheet({ kind, onClose }: { kind: "deposit" | "adjust"; onCl
         </Field>
       </div>
     </Sheet>
+  );
+}
+
+/** The cargo sent part of a shipment separately: chosen orders → a new shipment. */
+export function ShipmentSplitButton({ shipment, orders }: { shipment: Shipment; orders: Order[] }) {
+  const [open, setOpen] = useState(false);
+  if (orders.length < 2) return null;
+  return (
+    <>
+      <button className="btn small" onClick={() => setOpen(true)}>
+        <Split size={14} /> Разделить
+      </button>
+      {open && <ShipmentSplitSheet shipment={shipment} orders={orders} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function ShipmentSplitSheet({ shipment, orders, onClose }: { shipment: Shipment; orders: Order[]; onClose: () => void }) {
+  const toast = useToast();
+  const navigate = useNavigate();
+  const split = useSplitShipment(shipment.id);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [tracking, setTracking] = useState("");
+  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const valid = picked.length > 0 && picked.length < orders.length;
+  return (
+    <Sheet
+      title="Разделить отправку"
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" onClick={onClose}>
+            Отмена
+          </button>
+          <button
+            className="btn primary"
+            disabled={!valid || split.isPending}
+            onClick={async () => {
+              // mutateAsync: the sheet may unmount when the shipment refreshes.
+              try {
+                const r = await split.mutateAsync({ order_ids: picked, tracking_code: tracking.trim() || null });
+                toast(`Создана отправка ${r.shipment.shipment_number}`);
+                onClose();
+                navigate(`/shipments/${r.shipment.id}`);
+              } catch (e) {
+                toast(errorText(e), "error");
+              }
+            }}
+          >
+            {split.isPending ? <Loader2 size={16} className="spin" /> : null} Разделить
+          </button>
+        </>
+      }
+    >
+      <div className="stack">
+        <div className="small muted">
+          Отметьте заказы, которые карго отправило отдельной частью. Они перейдут в новую отправку со своим
+          трек-номером и статусом. Деньги не двигаются: стоимость доставки новой части укажите потом через «Изменить».
+        </div>
+        <Field label="Трек-номер второй части">
+          <input className="input" value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="можно позже" />
+        </Field>
+        <div className="card list">
+          {orders.map((o) => (
+            <div key={o.id} className="list-item" onClick={() => toggle(o.id)}>
+              <Checkbox checked={picked.includes(o.id)} onChange={() => {}} label={o.id} />
+              <Thumb src={o.thumbnail_url ?? o.photo_url} alt={o.id} />
+              <div className="grow">
+                <div className="title">
+                  {o.id} · {[o.brand, o.model].filter(Boolean).join(" ") || "Без названия"}
+                </div>
+                {o.size && <div className="small muted">{o.size}</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+        {picked.length === orders.length && (
+          <div className="small negative">В этой отправке должен остаться хотя бы один заказ.</div>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
+/** «Копия»: the client wants the same item several times — new orders with the same photo. */
+export function DuplicateConfirm({ order, onClose }: { order: Order; onClose: () => void }) {
+  const toast = useToast();
+  const duplicate = useDuplicateOrder(order.id);
+  const [count, setCount] = useState(1);
+  return (
+    <Confirm
+      title={`Копия ${order.id}`}
+      confirmLabel={count === 1 ? "Создать копию" : `Создать копии: ${count}`}
+      busy={duplicate.isPending}
+      onClose={onClose}
+      onConfirm={() =>
+        duplicate.mutateAsync(count).then(
+          (r) => {
+            toast(`Создано: ${r.items.map((o) => o.id).join(", ")}`);
+            onClose();
+          },
+          (e) => toast(errorText(e), "error"),
+        )
+      }
+    >
+      <div className="stack" style={{ gap: 12 }}>
+        <div className="small muted">
+          Новый заказ с тем же фото, брендом, моделью и размером — без цен. Цену каждой копии укажите отдельно
+          («Выкуп»). Деньги не двигаются.
+        </div>
+        <div className="row" style={{ gap: 12, justifyContent: "center" }}>
+          <button className="btn" disabled={count <= 1} onClick={() => setCount((c) => c - 1)}>
+            −
+          </button>
+          <div className="num" style={{ fontSize: 22, fontWeight: 600, minWidth: 32, textAlign: "center" }}>
+            {count}
+          </div>
+          <button className="btn" disabled={count >= 10} onClick={() => setCount((c) => c + 1)}>
+            +
+          </button>
+        </div>
+      </div>
+    </Confirm>
   );
 }

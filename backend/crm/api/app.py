@@ -41,7 +41,7 @@ from crm.domain.errors import (
     ValidationError,
 )
 from crm.domain.events import Event
-from crm.domain.models import LedgerEntry, Order
+from crm.domain.models import LedgerEntry, Order, ProfitEntry
 from crm.domain.notifications import NotificationSettings
 from crm.domain.timeutil import BUSINESS_TZ
 from crm.domain.views import ledger_view, order_view, shipment_view
@@ -154,11 +154,35 @@ class BulkStatusIn(BaseModel):
     status: str
 
 
+class RecognizeIn(BaseModel):
+    photo_url: str
+    text: str | None = None
+
+
+class PinIn(BaseModel):
+    pin: str | None = Field(default=None, max_length=8)
+
+
+class BulkDiscountIn(BaseModel):
+    order_ids: OrderIds
+    percent: Decimal = Field(gt=0, lt=100)
+    idempotency_key: IdempotencyKey
+
+
+class BulkDeleteIn(BaseModel):
+    order_ids: OrderIds
+
+
 class BulkUpdateIn(BaseModel):
     order_ids: OrderIds
     client_comment: str | None = None
     internal_comment: str | None = None
     attention_required: bool | None = None
+
+
+class PhotoIn(BaseModel):
+    photo_url: str
+    thumbnail_url: str | None = None
 
 
 class ShipmentIn(BaseModel):
@@ -171,6 +195,16 @@ class ShipmentIn(BaseModel):
     comment: str | None = None
     photo_url: str | None = None
     thumbnail_url: str | None = None
+    photos: list[PhotoIn] | None = None
+
+
+class DuplicateIn(BaseModel):
+    count: int = Field(default=1, ge=1, le=10)
+
+
+class ShipmentSplitIn(BaseModel):
+    order_ids: list[str] = Field(min_length=1, max_length=100)
+    tracking_code: str | None = Field(default=None, max_length=100)
 
 
 class ShipmentPatchIn(BaseModel):
@@ -182,6 +216,7 @@ class ShipmentPatchIn(BaseModel):
     comment: str | None = None
     photo_url: str | None = None
     thumbnail_url: str | None = None
+    photos: list[PhotoIn] | None = None
 
 
 class MoneyIn(BaseModel):
@@ -417,13 +452,17 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
     @app.get("/api/shipments")
     def list_shipments(p: Any_, limit: Annotated[int, Query(ge=1, le=200)] = 50) -> dict[str, Any]:
         items = services.shipments.list_shipments(p.actor, limit=limit)
-        return {"items": [shipment_view(s, p.role) for s in items]}
+        delivered = services.shipments.delivered_ids(items)
+        return {
+            "items": [{**shipment_view(s, p.role), "delivered": s.id in delivered} for s in items]
+        }
 
     @app.get("/api/shipments/{reference}")
     def get_shipment(reference: str, p: Any_) -> dict[str, Any]:
         shipment, orders = services.shipments.get_shipment(p.actor, reference)
+        delivered = services.shipments.delivered_ids([shipment])
         return {
-            "shipment": shipment_view(shipment, p.role),
+            "shipment": {**shipment_view(shipment, p.role), "delivered": bool(delivered)},
             "orders": [order_json(o, p.role) for o in orders],
         }
 
@@ -519,6 +558,45 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             services.orders.bulk_update(p.actor, body.order_ids, BulkUpdate(**fields))
         )
 
+    @app.post("/api/orders/bulk/discount")
+    def bulk_discount(body: BulkDiscountIn, p: Admin) -> dict[str, Any]:
+        result = services.orders.discount(
+            p.actor, body.order_ids, body.percent, f"ma-{body.idempotency_key}"
+        )
+        return {
+            "updated": [
+                {"order_id": i, "old_price": old, "new_price": new}
+                for i, old, new in result.updated
+            ],
+            "unchanged": result.unchanged,
+            "not_found": result.not_found,
+            "skipped": [{"order_id": i, "reason": r} for i, r in result.skipped],
+            "refunded_krw": result.refunded_krw,
+            "change": change_json(result.change),
+        }
+
+    @app.post("/api/orders/bulk/delete/preview")
+    def bulk_delete_preview(body: BulkDeleteIn, p: Admin) -> dict[str, Any]:
+        preview = services.orders.preview_delete(p.actor, body.order_ids)
+        return {
+            "orders": [order_json(o, p.role) for o in preview.orders],
+            "refund_krw": preview.refund_krw,
+            "not_found": preview.not_found,
+            "skipped": [{"order_id": i, "reason": r} for i, r in preview.skipped],
+        }
+
+    @app.post("/api/orders/bulk/delete")
+    def bulk_delete(body: BulkDeleteIn, p: Admin) -> dict[str, Any]:
+        result = services.orders.delete_orders(p.actor, body.order_ids)
+        return {
+            "deleted": result.deleted,
+            "not_found": result.not_found,
+            "skipped": [{"order_id": i, "reason": r} for i, r in result.skipped],
+            "refunded_krw": result.refunded_krw,
+            "change": change_json(result.change),
+            "next_order_id": result.next_order_id,
+        }
+
     # --- admin: shipments -------------------------------------------------
 
     @app.post("/api/shipments")
@@ -531,6 +609,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             comment=body.comment,
             photo_url=body.photo_url,
             thumbnail_url=body.thumbnail_url,
+            photos=[p.model_dump() for p in body.photos] if body.photos is not None else None,
         )
         result = services.shipments.ship_orders(
             p.actor, body.order_ids, body.tracking_code or None, details
@@ -556,6 +635,18 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "change": change_json(result.shipping_change),
         }
 
+    @app.post("/api/orders/{order_id}/duplicate")
+    def duplicate_order(order_id: str, body: DuplicateIn, p: Admin) -> dict[str, Any]:
+        copies = services.orders.duplicate(p.actor, order_id, body.count)
+        return {"items": [order_json(o, p.role) for o in copies]}
+
+    @app.post("/api/shipments/{reference}/split")
+    def split_shipment(reference: str, body: ShipmentSplitIn, p: Admin) -> dict[str, Any]:
+        shipment = services.shipments.split_shipment(
+            p.actor, reference, body.order_ids, body.tracking_code or None
+        )
+        return {"shipment": shipment_view(shipment, p.role)}
+
     # --- admin: finance & settings ----------------------------------------
 
     @app.post("/api/finance/deposit")
@@ -571,6 +662,20 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             p.actor, body.amount_krw, body.comment or "", f"ma-{body.idempotency_key}"
         )
         return {"entry": ledger_view(result.entry, p.role), "already_done": result.already_done}
+
+    @app.get("/api/finance/profit")
+    def profit_history(p: Admin) -> dict[str, Any]:
+        entries = services.profit.history(p.actor) if services.profit else []
+        return {"items": [_profit_json(e) for e in entries]}
+
+    @app.post("/api/finance/profit")
+    def add_profit(body: MoneyIn, p: Admin) -> dict[str, Any]:
+        if services.profit is None:
+            raise ConfigurationError("Учёт прибыли не подключён.")
+        result = services.profit.add(
+            p.actor, body.amount_krw, body.comment, f"ma-{body.idempotency_key}"
+        )
+        return {"entry": _profit_json(result.entry), "already_done": result.already_done}
 
     def notifications_json(actor: Actor, current: NotificationSettings) -> dict[str, Any]:
         return {
@@ -591,10 +696,33 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "krw_per_usd": _rate(current.krw_per_usd),
             "updated_at": current.updated_at,
             "uploads_enabled": services.images is not None,
+            "recognition_enabled": bool(
+                services.photo_recognition and services.photo_recognition.enabled
+            ),
             "notifications": notifications_json(
                 p.actor, services.notifications.get_settings(p.actor)
             ),
         }
+
+    @app.get("/api/security")
+    def security_status(p: Admin) -> dict[str, Any]:
+        length = services.security.pin_length(p.actor) if services.security else 0
+        return {"pin_set": length > 0, "pin_length": length}
+
+    @app.put("/api/security/pin")
+    def security_set_pin(body: PinIn, p: Admin) -> dict[str, Any]:
+        if services.security is None:
+            raise ConfigurationError("PIN не поддерживается.")
+        return {"pin_set": services.security.set_pin(p.actor, body.pin)}
+
+    @app.post("/api/security/unlock")
+    def security_unlock(body: PinIn, p: Admin) -> dict[str, Any]:
+        if services.security is None:
+            return {"ok": True}
+        ok = services.security.check(p.actor, body.pin or "")
+        if not ok:
+            raise ValidationError("Неверный PIN.")
+        return {"ok": True}
 
     @app.put("/api/settings/notifications")
     def set_notifications(body: NotificationsIn, p: Admin) -> dict[str, Any]:
@@ -606,6 +734,22 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
     def set_rate(body: RateIn, p: Admin) -> dict[str, Any]:
         updated = services.finance.set_rate(p.actor, body.krw_per_usd)
         return {"krw_per_usd": _rate(updated.krw_per_usd), "updated_at": updated.updated_at}
+
+    @app.post("/api/recognize")
+    def recognize_photo(body: RecognizeIn, p: Admin) -> dict[str, Any]:
+        if services.photo_recognition is None:
+            raise ConfigurationError("Распознавание не подключено.")
+        result = services.photo_recognition.recognize(p.actor, body.photo_url, body.text)
+        return {
+            "recognized": result.recognized,
+            "brand": result.brand,
+            "model": result.model,
+            "size": result.size,
+            "category": result.category,
+            "confidence": result.confidence,
+            "not_a_product": result.not_a_product,
+            "engine": result.engine,
+        }
 
     @app.post("/api/images")
     def upload_image(p: Admin, file: Annotated[UploadFile, File()]) -> dict[str, Any]:
@@ -634,6 +778,15 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         app.mount("/", StaticFiles(directory=config.static_dir, html=True), name="web")
 
     return app
+
+
+def _profit_json(entry: ProfitEntry) -> dict[str, Any]:
+    return {
+        "id": entry.id,
+        "amount_krw": entry.amount_krw,
+        "comment": entry.comment,
+        "created_at": entry.created_at,
+    }
 
 
 def _bulk_json(result) -> dict[str, Any]:

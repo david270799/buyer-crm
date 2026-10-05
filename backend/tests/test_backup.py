@@ -104,3 +104,16 @@ async def test_failed_backup_is_reported(tmp_path):
     job = NightlyBackup(bot, tmp_path / "missing.sqlite3", tmp_path / "b", frozenset({1}))
     assert await job.run_once() is None
     assert "Не удалось" in bot.messages[0][1]
+
+
+async def test_backup_on_request_goes_only_to_the_asking_admin(tmp_path):
+    db, path = _db(tmp_path)
+    bot = FakeBot()
+    job = NightlyBackup(
+        bot, path, tmp_path / "backups", frozenset({1, 2}), send=False, now=lambda: NOW
+    )
+
+    archive = await job.run_once(to=2)
+
+    assert [(chat, str(p)) for chat, p, _ in bot.documents] == [(2, str(archive))]
+    db.close()

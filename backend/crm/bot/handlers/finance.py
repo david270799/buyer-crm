@@ -7,7 +7,7 @@ from aiogram.types import Message
 from crm.bot import formatting as fmt
 from crm.bot import parsing
 from crm.bot.access import HasRole
-from crm.bot.handlers.reply import answer
+from crm.bot.handlers.reply import answer, answer_privately
 from crm.domain.enums import Role
 from crm.services.common import Actor
 from crm.services.container import Services
@@ -52,6 +52,19 @@ async def adjust(
     await answer(message, fmt.ledger_result(result))
 
 
+async def profit(
+    message: Message, command: CommandObject, services: Services, actor: Actor
+) -> None:
+    amount, comment = parsing.parse_amount_with_comment(
+        command.args, parsing.PROFIT_USAGE, allow_negative=True
+    )
+    result = await asyncio.to_thread(
+        services.profit.add, actor, amount, comment, _idempotency_key(message)
+    )
+    # Admin-only numbers: never answered where the client can read them.
+    await answer_privately(message, fmt.profit_result(result))
+
+
 async def rate(message: Message, command: CommandObject, services: Services, actor: Actor) -> None:
     new_rate = parsing.parse_rate_command(command.args)
     if new_rate is None:
@@ -81,6 +94,7 @@ def build() -> Router:
     router.message.register(history, Command("history"), HasRole(Role.ADMIN, Role.CLIENT))
     router.message.register(deposit, Command("deposit"), HasRole(Role.ADMIN))
     router.message.register(adjust, Command("adjust"), HasRole(Role.ADMIN))
+    router.message.register(profit, Command("profit"), HasRole(Role.ADMIN))
     router.message.register(rate, Command("rate"), HasRole(Role.ADMIN))
     router.message.register(notify, Command("notify"), HasRole(Role.ADMIN))
     return router

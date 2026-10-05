@@ -12,9 +12,11 @@ Money rules (see docs/architecture.md, "Финансовые инвариант�
   entry, so a crash or a retry can never leave money half-moved.
 """
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from datetime import datetime
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from crm.domain.enums import (
@@ -26,12 +28,18 @@ from crm.domain.enums import (
     Role,
 )
 from crm.domain.errors import ConflictError, NotFoundError, ValidationError
-from crm.domain.events import EventType
+from crm.domain.events import Event, EventType
 from crm.domain.ids import make_order_id, normalize_order_id, order_number
 from crm.domain.models import Order, status_timestamp_field
 from crm.domain.money import MAX_AMOUNT_KRW, format_krw
 from crm.domain.timeutil import to_local
-from crm.repositories import OrderRepository
+from crm.repositories import (
+    EventRepository,
+    IntakeRepository,
+    OrderRepository,
+    ProfitRepository,
+    ShipmentRepository,
+)
 from crm.services.common import (
     UNSET,
     Actor,
@@ -50,8 +58,12 @@ from crm.services.ledger import (
 )
 from crm.services.sequences import SequenceAllocator
 from crm.storage import Database, DocumentExistsError, Transaction
+from crm.storage.blobs import BlobStorage
+
+logger = logging.getLogger(__name__)
 
 ORDER_COUNTER = "orders"
+_SENT = (OrderStatus.CARGO, OrderStatus.DELIVERED)
 
 _MAX_SHORT_TEXT = 200
 _MAX_LONG_TEXT = 2000
@@ -111,6 +123,47 @@ class RebuyResult:
 
 
 @dataclass
+class DeleteResult:
+    deleted: list[str] = field(default_factory=list)
+    not_found: list[str] = field(default_factory=list)
+    skipped: list[tuple[str, str]] = field(default_factory=list)
+    # Refunds of what was still charged for the deleted orders.
+    refunds: list[tuple[str, int]] = field(default_factory=list)
+    change: BalanceChange | None = None
+    # Number the next new order gets (None if no order was ever numbered).
+    next_order_id: str | None = None
+
+    @property
+    def refunded_krw(self) -> int:
+        return sum(amount for _, amount in self.refunds)
+
+
+@dataclass
+class DiscountResult:
+    # (order_id, old client price, new client price)
+    updated: list[tuple[str, int, int]] = field(default_factory=list)
+    unchanged: list[str] = field(default_factory=list)
+    not_found: list[str] = field(default_factory=list)
+    skipped: list[tuple[str, str]] = field(default_factory=list)
+    # Refunded to the balance for orders already paid.
+    refunded_krw: int = 0
+    change: BalanceChange | None = None
+
+
+@dataclass
+class DeletePreview:
+    """What `delete_orders` would do, for the confirmation question."""
+
+    orders: list[Order] = field(default_factory=list)
+    not_found: list[str] = field(default_factory=list)
+    skipped: list[tuple[str, str]] = field(default_factory=list)
+
+    @property
+    def refund_krw(self) -> int:
+        return sum(o.charged_amount_krw for o in self.orders)
+
+
+@dataclass
 class BulkResult:
     updated: list[str] = field(default_factory=list)
     unchanged: list[str] = field(default_factory=list)
@@ -146,6 +199,20 @@ def _clean_url(value: str | None, name: str) -> str | None:
     if not text.lower().startswith(("https://", "http://")):
         raise ValidationError(f"«{name}»: ссылка должна начинаться с https://")
     return text
+
+
+# Photos on the server's own disk are served from here (LocalBlobStorage).
+_MEDIA_PREFIX = "/media/"
+
+
+def _clean_photo_url(value: str | None, name: str) -> str | None:
+    """A photo is an http(s) URL or a file of our own media storage (`/media/...`)."""
+    text = _clean_text(value, name, _MAX_LONG_TEXT)
+    if text is None:
+        return None
+    if text.startswith(_MEDIA_PREFIX) and ".." not in text and "//" not in text:
+        return text
+    return _clean_url(text, name)
 
 
 @dataclass
@@ -214,8 +281,10 @@ def _clean_update_fields(values: dict[str, Any]) -> dict[str, Any]:
             cleaned[name] = _clean_text(value, name, _MAX_SHORT_TEXT)
         elif name in ("client_comment", "internal_comment"):
             cleaned[name] = _clean_text(value, "Комментарий", _MAX_LONG_TEXT)
-        elif name in ("source_url", "photo_url", "thumbnail_url"):
-            cleaned[name] = _clean_url(value, "Ссылка" if name == "source_url" else "Фото")
+        elif name == "source_url":
+            cleaned[name] = _clean_url(value, "Ссылка")
+        elif name in ("photo_url", "thumbnail_url"):
+            cleaned[name] = _clean_photo_url(value, "Фото")
         elif name == "attention_required":
             if not isinstance(value, bool):
                 raise ValidationError("attention_required должен быть true или false.")
@@ -259,6 +328,11 @@ class OrderService:
         sequences: SequenceAllocator,
         auditor: Auditor,
         events: EventRecorder,
+        *,
+        event_repo: EventRepository | None = None,
+        intake: IntakeRepository | None = None,
+        blobs: BlobStorage | None = None,
+        profit: ProfitRepository | None = None,
     ):
         self._db = db
         self._clock = clock
@@ -267,6 +341,11 @@ class OrderService:
         self._sequences = sequences
         self._auditor = auditor
         self._events = events
+        self._event_repo = event_repo or EventRepository()
+        self._intake = intake or IntakeRepository()
+        self._blobs = blobs
+        self._profit = profit
+        self._shipments = ShipmentRepository()
 
     # --- reads -------------------------------------------------------------
 
@@ -334,6 +413,11 @@ class OrderService:
                 if isinstance(o.timestamp("bought_at"), datetime)
                 and to_local(o.timestamp("bought_at")).strftime("%Y-%m") == month
             )
+            # The admin's extra profit entries (never shown to the client).
+            for entry in self._profit.list_all(self._db) if self._profit else []:
+                result.profit_total_krw += entry.amount_krw
+                if entry.created_at and to_local(entry.created_at).strftime("%Y-%m") == month:
+                    result.profit_month_krw += entry.amount_krw
         return result
 
     # --- edit (no money) ---------------------------------------------------
@@ -464,8 +548,8 @@ class OrderService:
             "model": _clean_text(new.model, "Модель", _MAX_SHORT_TEXT),
             "size": _clean_text(new.size, "Размер", _MAX_SHORT_TEXT),
             "source_url": _clean_url(new.source_url, "Ссылка"),
-            "photo_url": _clean_url(new.photo_url, "Фото"),
-            "thumbnail_url": _clean_url(new.thumbnail_url, "Миниатюра"),
+            "photo_url": _clean_photo_url(new.photo_url, "Фото"),
+            "thumbnail_url": _clean_photo_url(new.thumbnail_url, "Миниатюра"),
             "client_comment": _clean_text(new.client_comment, "Комментарий", _MAX_LONG_TEXT),
             "internal_comment": _clean_text(
                 new.internal_comment, "Внутренний комментарий", _MAX_LONG_TEXT
@@ -527,6 +611,27 @@ class OrderService:
             return created
 
         return self._sequences.run(ORDER_COUNTER, self._max_order_number, self._clock.now, fn)
+
+    def duplicate(self, actor: Actor, order_id: str, count: int = 1) -> list[Order]:
+        """«Копия»: the client wants the same item several times. Each copy is a new
+        order `new` with the same photo, brand, model, size and comments, but no
+        prices and no link to the Telegram message (the photo's reaction follows
+        the original). Prices are set on each copy separately."""
+        require_admin(actor)
+        if not 1 <= count <= 10:
+            raise ValidationError("Количество копий — от 1 до 10.")
+        source = self.get_order(actor, order_id)
+        template = NewOrder(
+            brand=source.brand,
+            model=source.model,
+            size=source.size,
+            source_url=source.source_url,
+            client_comment=source.client_comment,
+            internal_comment=f"Копия {source.id}",
+            photo_url=source.photo_url,
+            thumbnail_url=source.thumbnail_url,
+        )
+        return [self.create_order(actor, template) for _ in range(count)]
 
     def _max_order_number(self) -> int:
         numbers = (order_number(doc_id) for doc_id in self._db.list_ids(self._orders.collection))
@@ -749,7 +854,10 @@ class OrderService:
         self, actor: Actor, order_ids: Sequence[str], new_status: OrderStatus
     ) -> BulkResult:
         require_admin(actor)
-        if new_status in _STATUS_HAS_OWN_COMMAND:
+        # "Выкуплен" is set by /buy (it charges); the one exception is taking a
+        # mistaken "На складе" back — the order is already paid, no money moves.
+        rollback = new_status is OrderStatus.BOUGHT
+        if new_status in _STATUS_HAS_OWN_COMMAND and not rollback:
             raise ValidationError(_STATUS_HAS_OWN_COMMAND[new_status])
         ids = list(dict.fromkeys(normalize_order_id(i) for i in order_ids))
         require_bulk_size(ids)
@@ -771,6 +879,10 @@ class OrderService:
                     result.skipped.append((order_id, "отменён"))
                 elif order.status is new_status:
                     result.unchanged.append(order_id)
+                elif rollback and not (order.status is OrderStatus.WAREHOUSE and order.is_charged):
+                    result.skipped.append(
+                        (order_id, "«Выкуплен» можно вернуть только из «На складе»")
+                    )
                 elif new_status is OrderStatus.CARGO and not order.shipment_id:
                     result.skipped.append((order_id, "нет отправки — используйте /cargo"))
                 elif new_status is OrderStatus.WAREHOUSE and order.shipment_id:
@@ -780,16 +892,10 @@ class OrderService:
 
             now = self._clock.now()
             for order in to_update:
-                self._orders.update(
-                    tx,
-                    order.id,
-                    {
-                        "status": new_status.value,
-                        ts_field: now,
-                        "updated_at": now,
-                        "updated_by": actor.id,
-                    },
-                )
+                fields = {"status": new_status.value, "updated_at": now, "updated_by": actor.id}
+                if not rollback:  # keep the real purchase date (profit by month)
+                    fields[ts_field] = now
+                self._orders.update(tx, order.id, fields)
                 self._auditor.record(
                     tx,
                     actor,
@@ -802,8 +908,10 @@ class OrderService:
                 )
                 result.updated.append(order.id)
             if result.updated:
-                event_type, title = _STATUS_EVENTS.get(
-                    new_status, (EventType.ORDER_STATUS, "Статус обновлён")
+                event_type, title = (
+                    (EventType.ORDER_STATUS, "Статус возвращён: «Выкуплен»")
+                    if rollback
+                    else _STATUS_EVENTS.get(new_status, (EventType.ORDER_STATUS, "Статус обновлён"))
                 )
                 self._events.record(
                     tx,
@@ -964,6 +1072,312 @@ class OrderService:
             raise ConflictError(
                 f"Перезаказ по заказу {order_id} уже проведён. Обновите данные и повторите."
             ) from None
+
+    # --- discount ----------------------------------------------------------
+
+    def discount(
+        self,
+        actor: Actor,
+        order_ids: Sequence[str],
+        percent: Decimal,
+        idempotency_key: str | None = None,
+    ) -> DiscountResult:
+        """Lower the client price of each order by `percent` (to the won, no rounding
+        to hundreds). For an order already paid the discount comes back to the
+        balance — one ledger entry per order, so a later cancel or delete still
+        nets to zero. Only before shipping (the owner's decision); cancelled
+        orders and orders without a price are skipped. A repeated request with
+        the same key changes nothing."""
+        require_admin(actor)
+        percent = Decimal(str(percent))
+        if not (Decimal(0) < percent < Decimal(100)):
+            raise ValidationError("Скидка должна быть больше 0% и меньше 100%.")
+        if percent != percent.quantize(Decimal("0.01")):
+            raise ValidationError("Скидка — не больше двух знаков после запятой.")
+        ids = list(dict.fromkeys(normalize_order_id(i) for i in order_ids))
+        require_bulk_size(ids)
+        key = idempotency_key or self._db.new_id()
+        label = f"{percent.normalize():f}%"
+
+        def fn(tx: Transaction) -> DiscountResult:
+            result = DiscountResult()
+            raw = tx.get_many(self._orders.collection, ids)
+            targets: list[tuple[Order, dict[str, Any], int]] = []
+            for order_id in ids:
+                data = raw.get(order_id)
+                if data is None:
+                    result.not_found.append(order_id)
+                    continue
+                order = Order.from_doc(order_id, data)
+                if any(d.get("key") == key for d in data.get("discounts") or []):
+                    result.unchanged.append(order_id)
+                elif order.status in (OrderStatus.CANCELLED, None):
+                    result.skipped.append((order_id, "отменён"))
+                elif (
+                    order.status in (OrderStatus.CARGO, OrderStatus.DELIVERED) or order.shipment_id
+                ):
+                    result.skipped.append((order_id, "уже отправлен — скидка только до отправки"))
+                elif not order.client_price:
+                    result.skipped.append((order_id, "нет цены для клиента"))
+                else:
+                    cut = int(
+                        (Decimal(order.client_price) * percent / 100).quantize(
+                            Decimal(1), rounding=ROUND_HALF_UP
+                        )
+                    )
+                    if cut <= 0:
+                        result.skipped.append((order_id, "скидка меньше 1 ₩"))
+                    else:
+                        targets.append((order, data, cut))
+            if not targets:
+                return result
+            client = (
+                self._ledger.load_client(tx)
+                if any(o.charged_amount_krw > 0 for o, _, _ in targets)
+                else None
+            )
+            now = self._clock.now()
+            for order, data, cut in targets:
+                old_price = order.client_price or 0
+                new_price = old_price - cut
+                fields: dict[str, Any] = {
+                    "client_price": new_price,
+                    "discounts": [
+                        *(data.get("discounts") or []),
+                        {
+                            "key": key,
+                            "percent": str(percent),
+                            "old": old_price,
+                            "new": new_price,
+                            "at": now,
+                            "by": actor.id,
+                        },
+                    ],
+                    "updated_at": now,
+                    "updated_by": actor.id,
+                }
+                if order.purchase_price is not None:
+                    fields["profit"] = new_price - order.purchase_price
+                refund = min(cut, order.charged_amount_krw)
+                if refund > 0:
+                    fields["charged_amount_krw"] = order.charged_amount_krw - refund
+                self._orders.update(tx, order.id, fields)
+                if refund > 0 and client is not None:
+                    result.change = self._ledger.apply(
+                        tx,
+                        client,
+                        entry_id=f"order_discount_{order.id}_{key}",
+                        type=LedgerType.ORDER_DISCOUNT,
+                        amount_krw=refund,
+                        actor=actor,
+                        now=now,
+                        order_id=order.id,
+                        comment=f"Скидка {label}",
+                    )
+                    result.refunded_krw += refund
+                self._auditor.record(
+                    tx,
+                    actor,
+                    now,
+                    action="order.discount",
+                    entity_type="order",
+                    entity_id=order.id,
+                    before={
+                        "client_price": old_price,
+                        "charged_amount_krw": order.charged_amount_krw,
+                    },
+                    after={
+                        "client_price": new_price,
+                        "percent": str(percent),
+                        "refunded_krw": refund,
+                    },
+                )
+                result.updated.append((order.id, old_price, new_price))
+            updated_ids = [order_id for order_id, _, _ in result.updated]
+            self._events.record(
+                tx,
+                actor,
+                now,
+                EventType.ORDER_DISCOUNT,
+                f"Скидка {label}: {_ids(updated_ids)}",
+                body="\n".join(
+                    f"{order_id}: {format_krw(old)} → {format_krw(new)}"
+                    for order_id, old, new in result.updated
+                ),
+                order_ids=updated_ids,
+                amount_krw=result.refunded_krw or None,
+            )
+            return result
+
+        try:
+            return self._db.run_transaction(fn)
+        except DocumentExistsError:
+            raise ConflictError(
+                "Эта скидка уже проведена. Обновите данные и проверьте заказы."
+            ) from None
+
+    # --- delete ------------------------------------------------------------
+
+    def preview_delete(self, actor: Actor, order_ids: Sequence[str]) -> DeletePreview:
+        require_admin(actor)
+        ids = list(dict.fromkeys(normalize_order_id(i) for i in order_ids))
+        require_bulk_size(ids)
+        found = self._orders.get_many(self._db, ids)
+        preview = DeletePreview()
+        for order_id in ids:
+            order = found.get(order_id)
+            if order is None:
+                preview.not_found.append(order_id)
+            else:
+                preview.orders.append(order)
+        return preview
+
+    def delete_orders(self, actor: Actor, order_ids: Sequence[str]) -> DeleteResult:
+        """Remove orders everywhere: the order, its photos, its history events and
+        the link to the Telegram message. What was still charged is refunded to
+        the balance; ledger entries and audit logs stay (they are never deleted).
+
+        Sent orders can be deleted too (the owner's decision): the order leaves
+        its shipment's `order_ids`; the shipment and its delivery charge stay.
+        A deleted number is handed out again only from the end and only
+        if the order never had money history (see CounterRepository.get_floor).
+        """
+        require_admin(actor)
+        ids = list(dict.fromkeys(normalize_order_id(i) for i in order_ids))
+        require_bulk_size(ids)
+        photos: list[str] = []
+
+        def fn(tx: Transaction) -> DeleteResult:
+            photos.clear()
+            result = DeleteResult()
+            raw = tx.get_many(self._orders.collection, ids)
+            targets: list[tuple[Order, dict[str, Any]]] = []
+            for order_id in ids:
+                data = raw.get(order_id)
+                if data is None:
+                    result.not_found.append(order_id)
+                    continue
+                targets.append((Order.from_doc(order_id, data), data))
+            if not targets:
+                return result
+
+            deleted_ids = {order.id for order, _ in targets}
+            # Read phase: everything below is read before the first write.
+            had_money = {
+                order.id: self._ledger.has_entry(tx, order_charge_entry_id(order.id))
+                for order, _ in targets
+            }
+            client = (
+                self._ledger.load_client(tx)
+                if any(order.charged_amount_krw > 0 for order, _ in targets)
+                else None
+            )
+            events: dict[str, Event] = {}
+            intake_keys: list[str] = []
+            for order, _ in targets:
+                for event in self._event_repo.for_order(tx, order.id):
+                    events[event.id] = event
+                if order.source_chat_id is None or order.source_message_id is None:
+                    continue
+                key = self._intake.key(order.source_chat_id, order.source_message_id)
+                if self._intake.order_id(tx, key) == order.id:
+                    intake_keys.append(key)
+            shipments = {
+                sid: shipment
+                for sid in {order.shipment_id for order, _ in targets if order.shipment_id}
+                if (shipment := self._shipments.get(tx, sid)) is not None
+            }
+            all_orders = tx.query(self._orders.collection)
+            current_next, floor = self._sequences.read_for_release(tx, ORDER_COUNTER)
+
+            remaining = [(doc_id, d) for doc_id, d in all_orders if doc_id not in deleted_ids]
+            used_photos = {
+                d.get(name) for _, d in remaining for name in ("photo_url", "thumbnail_url")
+            }
+            for order, _ in targets:
+                photos.extend(
+                    url
+                    for url in (order.photo_url, order.thumbnail_url)
+                    if url and url not in used_photos
+                )
+            highest_remaining = max(
+                (n for n in (order_number(doc_id) for doc_id, _ in remaining) if n is not None),
+                default=0,
+            )
+            burned = [order_number(order_id) or 0 for order_id, spent in had_money.items() if spent]
+            new_floor = max([floor, *burned])
+
+            # Write phase.
+            now = self._clock.now()
+            for order, data in targets:
+                self._orders.delete(tx, order.id)
+                refund = order.charged_amount_krw
+                if refund > 0 and client is not None:
+                    result.change = self._ledger.apply(
+                        tx,
+                        client,
+                        entry_id=order_refund_entry_id(order.id),
+                        type=LedgerType.ORDER_REFUND,
+                        amount_krw=refund,
+                        actor=actor,
+                        now=now,
+                        order_id=order.id,
+                        comment=f"Заказ удалён: {order.title}" if order.title else "Заказ удалён",
+                    )
+                    result.refunds.append((order.id, refund))
+                self._auditor.record(
+                    tx,
+                    actor,
+                    now,
+                    action="order.delete",
+                    entity_type="order",
+                    entity_id=order.id,
+                    before=data,
+                    after={
+                        "refunded_krw": refund,
+                        "balance_after": result.change.balance_after
+                        if refund > 0 and result.change
+                        else None,
+                    },
+                )
+                result.deleted.append(order.id)
+            for event in events.values():
+                left = [i for i in event.order_ids if i not in deleted_ids]
+                if left:
+                    self._event_repo.set_order_ids(tx, event.id, left)
+                else:
+                    self._event_repo.delete(tx, event.id)
+            for key in intake_keys:
+                self._intake.delete(tx, key)
+            for sid, shipment in shipments.items():
+                left = [i for i in shipment.order_ids if i not in deleted_ids]
+                self._shipments.update(tx, sid, {"order_ids": left, "updated_at": now})
+            self._events.touched(tx)  # e.g. the photo's reaction in the group goes
+            new_next = self._sequences.release(
+                tx,
+                ORDER_COUNTER,
+                current_next=current_next,
+                floor=new_floor,
+                highest_remaining=highest_remaining,
+                now=now,
+            )
+            result.next_order_id = make_order_id(new_next) if new_next is not None else None
+            return result
+
+        try:
+            result = self._db.run_transaction(fn)
+        except DocumentExistsError:
+            raise ConflictError(
+                "Возврат по одному из заказов уже есть в истории транзакций. Удаление "
+                "остановлено, ничего не изменено — проверьте заказы вручную."
+            ) from None
+        if self._blobs is not None:
+            for url in photos:
+                try:
+                    self._blobs.delete_url(url)
+                except Exception:  # noqa: BLE001 - the order is gone; a stray file is harmless
+                    logger.warning("Could not delete photo %s", url, exc_info=True)
+        return result
 
     # --- helpers -----------------------------------------------------------
 

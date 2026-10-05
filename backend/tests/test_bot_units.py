@@ -170,3 +170,18 @@ def test_parse_rebuy():
     assert parsing.parse_rebuy("5 1 2 Нет в наличии") == ("N5", 1, 2, None, "Нет в наличии")
     with pytest.raises(ValidationError):
         parsing.parse_rebuy("5 1")
+
+
+def test_delete_ranges_and_compact_callback_data():
+    from crm.bot import parsing
+
+    ids = parsing.parse_order_list("1-3, N5 #10–12 2", parsing.DELETE_USAGE)
+    assert ids == ["N1", "N2", "N3", "N5", "N10", "N11", "N12"]
+    assert parsing.parse_order_list("5-3", parsing.DELETE_USAGE) == ["N3", "N4", "N5"]
+    compact = parsing.compact_order_ids(ids)
+    assert compact == "1-3.5.10-12"
+    assert parsing.expand_order_ids(compact) == ids
+    with pytest.raises(ValidationError):
+        parsing.parse_order_list("1-500", parsing.DELETE_USAGE)
+    with pytest.raises(ValidationError):
+        parsing.parse_order_list("", parsing.DELETE_USAGE)

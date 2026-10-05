@@ -26,7 +26,15 @@ from crm.domain.views import order_view
 from crm.services.client_service import ClientChange
 from crm.services.finance_service import BalanceView, LedgerResult
 from crm.services.ledger import BalanceChange
-from crm.services.order_service import BulkResult, BuyResult, CancelResult, RebuyResult
+from crm.services.order_service import (
+    BulkResult,
+    BuyResult,
+    CancelResult,
+    DeletePreview,
+    DeleteResult,
+    RebuyResult,
+)
+from crm.services.profit_service import ProfitResult
 from crm.services.shipment_service import ShipmentUpdateResult, ShipResult
 
 
@@ -182,6 +190,39 @@ def _bulk_tail(
     return lines
 
 
+def delete_preview(preview: DeletePreview) -> str:
+    if not preview.orders:
+        lines = ["Удалять нечего."]
+        lines += _bulk_tail(preview.not_found, preview.skipped, "", [])
+        return "\n".join(lines)
+    lines = [f"🗑 <b>Удалить {len(preview.orders)} заказ(ов)?</b> Это нельзя отменить."]
+    for order in preview.orders:
+        charged = (
+            f" · вернётся {format_krw(order.charged_amount_krw)}"
+            if order.charged_amount_krw
+            else ""
+        )
+        lines.append(f" • <b>{e(order.id)}</b> {e(order.title or '')}{charged}")
+    if preview.refund_krw:
+        lines.append(f"Возврат на баланс: {format_krw(preview.refund_krw, signed=True)}")
+    lines.append("Заказ пропадёт у клиента и из истории; в журнале действий запись останется.")
+    lines += _bulk_tail(preview.not_found, preview.skipped, "", [])
+    return "\n".join(lines)
+
+
+def delete_result(result: DeleteResult) -> str:
+    lines = []
+    if result.deleted:
+        lines.append(f"🗑 Удалено: {_ids(result.deleted)}")
+    if result.change:
+        lines.append(f"Возврат на баланс: {format_krw(result.refunded_krw, signed=True)}")
+        lines.append(_balance_line(result.change.balance_before, result.change.balance_after))
+    lines += _bulk_tail(result.not_found, result.skipped, "", [])
+    if result.deleted and result.next_order_id:
+        lines.append(f"Следующий новый заказ получит номер <b>{e(result.next_order_id)}</b>.")
+    return "\n".join(lines) or "Удалять нечего."
+
+
 def status_result(status: OrderStatus, result: BulkResult) -> str:
     lines = [f"{STATUS_ICONS[status]} Статус «{e(STATUS_LABELS_RU[status])}»"]
     if result.updated:
@@ -296,6 +337,17 @@ def rate_current(rate: Decimal | None) -> str:
     return f"Текущий курс: 1 $ = {_rate(rate)} ₩\nИзменить: /rate 1350"
 
 
+def profit_result(result: ProfitResult) -> str:
+    entry = result.entry
+    if result.already_done:
+        return "ℹ️ Эта запись прибыли уже сделана."
+    lines = [f"💰 Прибыль: {format_krw(entry.amount_krw, signed=True)}"]
+    if entry.comment:
+        lines.append(f"💬 {e(entry.comment)}")
+    lines.append("Видите только вы; баланс клиента не изменился.")
+    return "\n".join(lines)
+
+
 def ledger_result(result: LedgerResult) -> str:
     entry = result.entry
     label = LEDGER_LABELS_RU.get(entry.type, "Операция") if entry.type else "Операция"
@@ -341,6 +393,7 @@ EVENT_ICONS = {
     EventType.ORDER_WAREHOUSE: "📦",
     EventType.ORDER_DELIVERED: "✅",
     EventType.ORDER_STATUS: "•",
+    EventType.ORDER_DISCOUNT: "🎁",
     EventType.COMMENT: "💬",
     EventType.ATTENTION: "⚠️",
     EventType.SHIPMENT_SENT: "🚚",
@@ -496,6 +549,7 @@ ADMIN_HELP = """<b>Команды администратора</b>
 /cancel 5 — отмена (возвращает списанное один раз; после отправки отмены нет)
 /rebuy 5 150000 185000 [ссылка] [причина] — перезаказ в другом магазине (разница по цене)
 /status warehouse 5 7 12 — статус нескольких заказов (warehouse, cargo, delivered)
+/delete 7 или /delete 1-5 — удалить ошибочные заказы отовсюду (с подтверждением; списанное вернётся)
 /cargo TRACK123 5 10 18 — отправка: создаёт shipment, ставит статус «Отправлен»
 /shipcost 1 95000 — стоимость доставки отправки #1 (списывается с баланса)
 /order 5 — карточка заказа
@@ -503,8 +557,10 @@ ADMIN_HELP = """<b>Команды администратора</b>
 /balance, /history — баланс и история
 /deposit 5000000 [комментарий] — пополнение
 /adjust -15000 причина — корректировка (комментарий увидит клиент)
+/profit 50000 [комментарий] — ваша доп. прибыль (клиент не видит, баланс не меняется)
 /rate 1350 — курс KRW за 1 USD
 /notify — уведомления в личку (выкл / мне / клиенту; важные / все)
+/pin — PIN-код для Mini App; /pin off — сбросить забытый
 /add — ответом на фото: принять его как заказ
 /setclient — ответом на сообщение клиента: указать, кто клиент
 Фото товара в личку боту (или пересланное) — новый заказ

@@ -48,6 +48,19 @@ def test_everything_survives_a_restart(tmp_path):
     reopened.close()
 
 
+def test_delete_survives_a_restart(tmp_path):
+    path = tmp_path / "crm.sqlite3"
+    db = SqliteDatabase(path)
+    db.run_transaction(lambda tx: tx.set("c", "a", {"v": 1}))
+    db.run_transaction(lambda tx: tx.set("c", "b", {"v": 2}))
+    db.run_transaction(lambda tx: tx.delete("c", "a"))
+    db.close()
+    reopened = SqliteDatabase(path)
+    assert reopened.get("c", "a") is None
+    assert reopened.get("c", "b") == {"v": 2}
+    reopened.close()
+
+
 def test_types_round_trip(tmp_path):
     path = tmp_path / "crm.sqlite3"
     moment = datetime(2026, 9, 27, 3, 4, 5, 123000, tzinfo=timezone.utc)

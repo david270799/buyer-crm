@@ -3,19 +3,20 @@ import type { ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { useShipment, useShipments } from "../api/hooks";
-import type { Shipment } from "../api/types";
+import type { Order, Shipment } from "../api/types";
 import { PageHead } from "../components/Layout";
-import { Photo, Thumb } from "../components/orders";
+import { Thumb } from "../components/orders";
+import { PhotoCarousel } from "../components/PhotoCarousel";
 import { StatusBadge } from "../components/status";
 import { Empty, ErrorState, Loading } from "../components/ui";
 import { date, items, krw, orderTitle } from "../lib/format";
 import { CopyText } from "./OrderDetailsPage";
 
-export function ShipmentsPage() {
+export function ShipmentsPage({ action }: { action?: ReactNode }) {
   const { data, error, isLoading, refetch } = useShipments();
   return (
     <>
-      <PageHead title="Отправки" sub={data ? `${data.items.length} всего` : undefined} />
+      <PageHead title="Отправки" sub={data ? `${data.items.length} всего` : undefined} action={action} />
       {isLoading ? (
         <Loading rows={4} />
       ) : error || !data ? (
@@ -27,20 +28,23 @@ export function ShipmentsPage() {
           {data.items.map((s) => (
             <Link key={s.id} to={`/shipments/${s.id}`} className="list-item">
               {s.thumbnail_url || s.photo_url ? (
-                <Thumb src={s.thumbnail_url ?? s.photo_url} alt={`Отправка ${s.shipment_number}`} />
+                <Thumb src={s.thumbnail_url ?? s.photo_url} alt={s.tracking_code ?? `${s.shipment_number}`} />
               ) : (
                 <div className="thumb icon">
                   <Package size={18} strokeWidth={1.8} />
                 </div>
               )}
               <div className="grow">
-                <div className="title">Отправка #{s.shipment_number ?? "—"}</div>
+                <div className="title num">{s.tracking_code ?? "Без трек-номера"}</div>
                 <div className="small muted">
-                  {date(s.shipment_date ?? s.created_at)} · {items(s.order_count)}
+                  {s.shipment_number ?? "—"} · {date(s.shipment_date ?? s.created_at)} · {items(s.order_count)}
                   {s.weight_kg ? ` · ${s.weight_kg} кг` : ""}
                 </div>
               </div>
-              {s.shipping_cost_krw ? <div className="amount small muted">{krw(s.shipping_cost_krw)}</div> : null}
+              <div className="stack" style={{ gap: 4, alignItems: "flex-end" }}>
+                <ShipmentStatus delivered={s.delivered} />
+                {s.shipping_cost_krw ? <div className="amount small muted">{krw(s.shipping_cost_krw)}</div> : null}
+              </div>
             </Link>
           ))}
         </div>
@@ -49,23 +53,37 @@ export function ShipmentsPage() {
   );
 }
 
-export function ShipmentDetailsPage({ onEdit }: { onEdit?: (shipment: Shipment) => ReactNode }) {
+export function ShipmentDetailsPage({
+  onEdit,
+}: {
+  /** Admin buttons in the page head; gets the shipment and its orders. */
+  onEdit?: (shipment: Shipment, orders: Order[]) => ReactNode;
+}) {
   const { id = "" } = useParams();
   const { data, error, isLoading, refetch } = useShipment(id);
   if (isLoading) return <Loading rows={3} height={120} />;
   if (error || !data) return <ErrorState error={error} onRetry={refetch} />;
   const { shipment, orders } = data;
+  const photos =
+    shipment.photos?.length || !shipment.photo_url
+      ? (shipment.photos ?? [])
+      : [{ photo_url: shipment.photo_url, thumbnail_url: shipment.thumbnail_url }];
   return (
     <>
       <PageHead
-        title={`Отправка #${shipment.shipment_number ?? "—"}`}
-        sub={shipment.id}
-        action={onEdit?.(shipment) ?? null}
+        title={shipment.tracking_code ?? "Без трек-номера"}
+        sub={
+          <span className="row" style={{ gap: 8 }}>
+            <span>{shipment.shipment_number ?? "—"}</span>
+            <ShipmentStatus delivered={shipment.delivered} />
+          </span>
+        }
+        action={onEdit?.(shipment, orders) ?? null}
       />
       <div className="details">
         <div className="stack">
-          {shipment.photo_url ? (
-            <Photo src={shipment.photo_url} alt="Фото отправки" className="large contain" />
+          {photos.length ? (
+            <PhotoCarousel photos={photos} alt="Фото отправки" />
           ) : (
             <div className="card pad muted small row">
               <Package size={18} /> Фото отправки пока нет
@@ -123,6 +141,15 @@ export function ShipmentDetailsPage({ onEdit }: { onEdit?: (shipment: Shipment) 
         </div>
       </div>
     </>
+  );
+}
+
+/** «В пути» (blue) until every order is delivered, then «Доставлена» (green). */
+export function ShipmentStatus({ delivered }: { delivered?: boolean }) {
+  return delivered ? (
+    <span className="badge s-delivered">Доставлена</span>
+  ) : (
+    <span className="badge s-cargo">В пути</span>
   );
 }
 

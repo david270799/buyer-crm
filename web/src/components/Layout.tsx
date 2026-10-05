@@ -31,7 +31,12 @@ function useTelegramBack() {
 export function Shell({ nav, title, children }: { nav: NavItem[]; title: string; children: ReactNode }) {
   const { pathname } = useLocation();
   useTelegramBack();
-  useEffect(() => window.scrollTo(0, 0), [pathname]);
+  // Braces matter: an effect may return only a cleanup function. Telegram's
+  // webview can make window.scrollTo return a value, and React would then
+  // call it as a cleanup on the next navigation ("n is not a function").
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
   return (
     <div className="shell">
       <aside className="sidebar">

@@ -16,7 +16,9 @@ import { OrderDetailsPage } from "../shared/OrderDetailsPage";
 import { EditButton, ShipmentDetailsPage, ShipmentsPage } from "../shared/ShipmentsPages";
 import { OrderAdminPanel } from "./OrderAdminPanel";
 import { AdminOrdersPage } from "./OrdersPage";
-import { MoneySheet, PhotoInput, type PhotoValue, ShipmentEditSheet, useBalance } from "./sheets";
+import { PinSettings } from "./pin";
+import { ProfitSection } from "./profit";
+import { AiFillButton, MoneySheet, NewShipmentFlow, ShipmentDeliveredButton, ShipmentSplitButton, PhotoInput, type PhotoValue, recognizedFields, ShipmentEditSheet, useBalance } from "./sheets";
 
 const NAV: NavItem[] = [
   { to: "/", label: "Сводка", icon: LayoutGrid },
@@ -134,9 +136,22 @@ function NewOrderPage() {
             <span>Фото</span>
             <PhotoInput value={photo} onChange={setPhoto} />
           </div>
-          <Field label="Бренд">
-            <input className="input" value={form.brand} onChange={(e) => set("brand", e.target.value)} placeholder="Nike" />
-          </Field>
+          <div className="field">
+            <span className="field-head">
+              Бренд
+              <AiFillButton
+                photoUrl={photo.photo_url}
+                onRecognized={(r) => setForm((f) => ({ ...f, ...recognizedFields(r) }))}
+              />
+            </span>
+            <input
+              className="input"
+              aria-label="Бренд"
+              value={form.brand}
+              onChange={(e) => set("brand", e.target.value)}
+              placeholder="Nike"
+            />
+          </div>
           <Field label="Модель">
             <input className="input" value={form.model} onChange={(e) => set("model", e.target.value)} placeholder="Air Max 95" />
           </Field>
@@ -184,12 +199,29 @@ function NewOrderPage() {
   );
 }
 
+function AdminShipmentsPage() {
+  const [creating, setCreating] = useState(false);
+  return (
+    <>
+      <ShipmentsPage
+        action={
+          <button className="btn primary small" onClick={() => setCreating(true)} aria-label="Новая отправка">
+            <Plus size={16} /> Новая
+          </button>
+        }
+      />
+      {creating && <NewShipmentFlow onClose={() => setCreating(false)} />}
+    </>
+  );
+}
+
 function FinancePage() {
   const [sheet, setSheet] = useState<"deposit" | "adjust" | null>(null);
   return (
     <>
       <BalancePage
         title="Финансы"
+        extra={<ProfitSection />}
         actions={
           <div className="row" style={{ gap: 6 }}>
             <button className="btn primary small" onClick={() => setSheet("deposit")}>
@@ -305,6 +337,7 @@ function SettingsPage({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
     <>
       <PageHead title="Настройки" />
       <div className="stack">
+        <PinSettings />
         <div className="card pad stack">
           <h3>Курс KRW / USD</h3>
           <div className="small muted">
@@ -356,7 +389,15 @@ function AdminShipmentDetails() {
   const [editing, setEditing] = useState<Shipment | null>(null);
   return (
     <>
-      <ShipmentDetailsPage onEdit={(shipment) => <EditButton onClick={() => setEditing(shipment)} />} />
+      <ShipmentDetailsPage
+        onEdit={(shipment, orders) => (
+          <div className="row" style={{ gap: 6 }}>
+            <ShipmentSplitButton shipment={shipment} orders={orders} />
+            <ShipmentDeliveredButton orders={orders} />
+            <EditButton onClick={() => setEditing(shipment)} />
+          </div>
+        )}
+      />
       {editing && <ShipmentEditSheet shipment={editing} onClose={() => setEditing(null)} />}
     </>
   );
@@ -370,7 +411,7 @@ export function AdminApp({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
         <Route path="/orders" element={<AdminOrdersPage />} />
         <Route path="/orders/new" element={<NewOrderPage />} />
         <Route path="/orders/:id" element={<OrderDetailsPage adminPanel={(order) => <OrderAdminPanel order={order} />} />} />
-        <Route path="/shipments" element={<ShipmentsPage />} />
+        <Route path="/shipments" element={<AdminShipmentsPage />} />
         <Route path="/shipments/:id" element={<AdminShipmentDetails />} />
         <Route path="/finance" element={<FinancePage />} />
         <Route path="/balance" element={<Navigate to="/finance" replace />} />

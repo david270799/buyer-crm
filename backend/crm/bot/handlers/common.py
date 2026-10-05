@@ -7,6 +7,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, W
 
 from crm.bot import formatting as fmt
 from crm.bot.access import HasRole
+from crm.bot.backups import NightlyBackup
 from crm.bot.handlers.reply import answer, answer_privately
 from crm.config import Settings
 from crm.domain.enums import Role
@@ -79,10 +80,101 @@ async def setclient(
     await answer_privately(message, fmt.client_set(change))
 
 
+def _groups_text(chats: dict[int, str]) -> str:
+    if not chats:
+        return "Ограничений нет: бот работает в любой группе, куда его добавил админ."
+    lines = ["Бот работает только в группах:"]
+    lines += [f" • {fmt.e(title)} (<code>{chat_id}</code>)" for chat_id, title in chats.items()]
+    return "\n".join(lines)
+
+
+async def setgroup(
+    message: Message, command: CommandObject, services: Services, actor: Actor
+) -> None:
+    """/setgroup in a group: the bot works there (and only in the listed groups).
+    In the private chat: shows the list. The command is removed from the group."""
+    arg = (command.args or "").strip()
+    if message.chat.type == ChatType.PRIVATE and arg.lstrip("-").isdigit():
+        chat_id = int(arg)
+        title = None
+        try:
+            title = (await message.bot.get_chat(chat_id)).title
+        except Exception:  # the bot may not be in the group yet: the ID is enough
+            pass
+        chats = await asyncio.to_thread(services.groups.add, actor, chat_id, title)
+        await answer(
+            message,
+            f"✅ Группа «{fmt.e(title or chat_id)}» добавлена.\n" + _groups_text(chats),
+        )
+        return
+    if message.chat.type == ChatType.PRIVATE:
+        chats = await asyncio.to_thread(services.groups.listing, actor)
+        await answer(
+            message,
+            _groups_text(chats)
+            + "\n\nДобавить группу: /setgroup ID (например, /setgroup -1003713143896). "
+            "Убрать: /unsetgroup в группе или /unsetgroup ID здесь.",
+        )
+        return
+    chats = await asyncio.to_thread(services.groups.add, actor, message.chat.id, message.chat.title)
+    await answer_privately(
+        message,
+        f"✅ Группа «{fmt.e(message.chat.title or message.chat.id)}» добавлена.\n"
+        + _groups_text(chats),
+    )
+
+
+async def unsetgroup(
+    message: Message, command: CommandObject, services: Services, actor: Actor
+) -> None:
+    arg = (command.args or "").strip()
+    if message.chat.type != ChatType.PRIVATE:
+        chat_id = message.chat.id
+    elif arg.lstrip("-").isdigit():
+        chat_id = int(arg)
+    else:
+        await answer(message, "Формат: /unsetgroup в группе или /unsetgroup ID в личке.")
+        return
+    chats = await asyncio.to_thread(services.groups.remove, actor, chat_id)
+    await answer_privately(
+        message, f"Группа <code>{chat_id}</code> убрана.\n" + _groups_text(chats)
+    )
+
+
+async def backup(message: Message, backup: NightlyBackup | None = None) -> None:
+    """/backup — send a fresh copy of the database to this admin right now."""
+    if backup is None:
+        await answer_privately(message, "Копия базы доступна только при хранении в SQLite.")
+        return
+    await answer_privately(message, "🗄 Делаю копию базы, пришлю файлом…")
+    await backup.run_once(to=message.from_user.id)
+
+
+async def pin(message: Message, command: CommandObject, services: Services, actor: Actor) -> None:
+    """/pin — is a Mini App PIN set; /pin off — remove a forgotten PIN.
+    A new PIN is set only in the Mini App (the digits never go through a chat)."""
+    arg = (command.args or "").strip().lower()
+    if arg in ("off", "выкл", "сброс"):
+        await asyncio.to_thread(services.security.set_pin, actor, None)
+        text = "🔓 PIN для Mini App сброшен. Задать новый: Mini App → Настройки → «PIN-код»."
+    else:
+        is_set = await asyncio.to_thread(services.security.pin_set, actor)
+        text = (
+            "🔒 PIN для Mini App включён. Забыли — /pin off сбросит его."
+            if is_set
+            else "PIN для Mini App не задан. Задать: Mini App → Настройки → «PIN-код»."
+        )
+    await answer_privately(message, text)
+
+
 def build() -> Router:
     router = Router(name="common")
     router.message.register(start, CommandStart())
     router.message.register(start, Command("help"))
     router.message.register(whoami, Command("whoami"), F.from_user)
     router.message.register(setclient, Command("setclient"), HasRole(Role.ADMIN))
+    router.message.register(pin, Command("pin"), HasRole(Role.ADMIN))
+    router.message.register(backup, Command("backup"), HasRole(Role.ADMIN))
+    router.message.register(setgroup, Command("setgroup"), HasRole(Role.ADMIN))
+    router.message.register(unsetgroup, Command("unsetgroup"), HasRole(Role.ADMIN))
     return router

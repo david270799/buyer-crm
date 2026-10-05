@@ -9,6 +9,7 @@ from crm.repositories import (
     IntakeRepository,
     LedgerRepository,
     OrderRepository,
+    ProfitRepository,
     SettingsRepository,
     ShipmentRepository,
 )
@@ -17,12 +18,17 @@ from crm.services.client_service import ClientService
 from crm.services.common import Auditor, Clock, SystemClock
 from crm.services.events import EventRecorder, EventService
 from crm.services.finance_service import FinanceService
+from crm.services.group_service import GroupService
 from crm.services.image_service import ImageService
 from crm.services.intake_service import IntakeService
 from crm.services.ledger import BalanceLedger
 from crm.services.notifications import NotificationService
 from crm.services.order_service import OrderService
+from crm.services.photo_recognition import PhotoRecognitionService
+from crm.services.profit_service import ProfitService
+from crm.services.reactions import ReactionService
 from crm.services.recognition import Recognizer
+from crm.services.security_service import SecurityService
 from crm.services.sequences import SequenceAllocator
 from crm.services.shipment_service import ShipmentService
 from crm.storage import Database
@@ -43,6 +49,11 @@ class Services:
     images: ImageService | None = None
     # None without GEMINI_API_KEY: orders are still accepted, fields stay empty.
     recognizer: Recognizer | None = None
+    photo_recognition: PhotoRecognitionService | None = None
+    reactions: ReactionService | None = None
+    profit: ProfitService | None = None
+    security: SecurityService | None = None
+    groups: GroupService | None = None
 
 
 def build_services(
@@ -51,6 +62,7 @@ def build_services(
     clock: Clock | None = None,
     blob_storage: BlobStorage | None = None,
     recognizer: Recognizer | None = None,
+    allowed_chat_ids: frozenset[int] = frozenset(),
 ) -> Services:
     clock = clock or SystemClock()
     orders_repo = OrderRepository()
@@ -58,6 +70,7 @@ def build_services(
     ledger_repo = LedgerRepository()
     shipments_repo = ShipmentRepository()
     settings_repo = SettingsRepository()
+    profit_repo = ProfitRepository()
 
     auditor = Auditor(db, AuditRepository())
     ledger = BalanceLedger(clients_repo, ledger_repo)
@@ -67,7 +80,19 @@ def build_services(
     roles = RoleResolver(db, clients_repo, admin_ids)
 
     return Services(
-        orders=OrderService(db, clock, orders_repo, ledger, sequences, auditor, recorder),
+        orders=OrderService(
+            db,
+            clock,
+            orders_repo,
+            ledger,
+            sequences,
+            auditor,
+            recorder,
+            event_repo=events_repo,
+            intake=IntakeRepository(),
+            blobs=blob_storage,
+            profit=profit_repo,
+        ),
         shipments=ShipmentService(
             db, clock, orders_repo, shipments_repo, sequences, ledger, auditor, recorder
         ),
@@ -85,4 +110,9 @@ def build_services(
         ),
         images=ImageService(blob_storage, clock) if blob_storage is not None else None,
         recognizer=recognizer,
+        photo_recognition=PhotoRecognitionService(blob_storage, recognizer),
+        reactions=ReactionService(db, clock, orders_repo, recorder),
+        profit=ProfitService(db, clock, profit_repo, auditor),
+        security=SecurityService(db, clock, auditor),
+        groups=GroupService(db, clock, auditor, allowed_chat_ids),
     )

@@ -24,9 +24,16 @@ logger = logging.getLogger(__name__)
 
 
 class AccessMiddleware(BaseMiddleware):
-    def __init__(self, roles: RoleResolver, allowed_chat_ids: frozenset[int]):
+    def __init__(
+        self,
+        roles: RoleResolver,
+        allowed_chat_ids: frozenset[int],
+        allowed: Callable[[], frozenset[int]] | None = None,
+    ):
         self._roles = roles
         self._allowed_chat_ids = allowed_chat_ids
+        # Groups added with /setgroup (read on each update, the data is in memory).
+        self._allowed = allowed
 
     async def __call__(
         self,
@@ -36,11 +43,13 @@ class AccessMiddleware(BaseMiddleware):
     ) -> Any:
         user: User | None = data.get("event_from_user")
         chat: Chat | None = data.get("event_chat")
+        allowed = self._allowed() if self._allowed else self._allowed_chat_ids
         if (
             chat is not None
             and chat.type != ChatType.PRIVATE
-            and self._allowed_chat_ids
-            and chat.id not in self._allowed_chat_ids
+            and allowed
+            and chat.id not in allowed
+            and not _is_setgroup(event)
         ):
             logger.info("Ignoring update from non-allowed chat %s", chat.id)
             return None
@@ -50,6 +59,13 @@ class AccessMiddleware(BaseMiddleware):
         data["actor"] = Actor.telegram(user.id, role) if user and role else None
         data["audience"] = audience_for(role, chat)
         return await handler(event, data)
+
+
+def _is_setgroup(event: TelegramObject) -> bool:
+    """/setgroup must reach its handler in a group that is not allowed yet
+    (the handler itself accepts it only from an admin)."""
+    text = getattr(event, "text", None) or ""
+    return text.split("@", 1)[0].split(" ", 1)[0] == "/setgroup"
 
 
 def audience_for(role: Role | None, chat: Chat | None) -> Role:

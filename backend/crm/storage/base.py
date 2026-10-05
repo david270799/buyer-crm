@@ -71,6 +71,10 @@ class Transaction(Reader, Protocol):
 
     def update(self, collection: str, doc_id: str, data: Doc) -> None: ...
 
+    def delete(self, collection: str, doc_id: str) -> None:
+        """Remove a document; deleting a missing document is a no-op (as in Firestore)."""
+        ...
+
     def after_commit(self, callback: Callable[[], None]) -> None:
         """Run `callback` once this transaction has committed (never if it
         fails). Callbacks must be instant; their errors are logged, not raised."""

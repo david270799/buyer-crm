@@ -102,6 +102,7 @@ export const LEDGER_LABEL: Record<LedgerType, string> = {
   deposit: "Пополнение",
   adjustment: "Корректировка",
   shipping_charge: "Доставка",
+  order_discount: "Скидка",
 };
 
 export function plural(count: number, one: string, few: string, many: string): string {

@@ -5,6 +5,9 @@ import type {
   BalanceChange,
   CrmEvent,
   BulkResult,
+  DeletePreview,
+  DeleteResult,
+  PhotoRecognition,
   LedgerItem,
   Me,
   NotificationSettings,
@@ -86,6 +89,37 @@ export const useTransactions = () =>
     queryFn: () => get<{ items: LedgerItem[] }>("/api/transactions?limit=100"),
   });
 
+export interface ProfitItem {
+  id: string;
+  amount_krw: number;
+  comment: string | null;
+  created_at: string | null;
+}
+
+/** The admin's extra profit: never shown to the client, never touches the balance. */
+export const useProfit = () =>
+  useQuery({
+    queryKey: ["profit"] as const,
+    queryFn: () => get<{ items: ProfitItem[] }>("/api/finance/profit"),
+  });
+
+export const useAddProfit = () => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (body: { amount_krw: number; comment: string | null; idempotency_key: string }) =>
+      post<{ entry: ProfitItem; already_done: boolean }>("/api/finance/profit", body),
+    onSuccess: refresh,
+  });
+};
+
+/** Admin PIN for the Mini App (0 = none). */
+export const useSecurity = () =>
+  useQuery({
+    queryKey: ["security"] as const,
+    queryFn: () => get<{ pin_set: boolean; pin_length: number }>("/api/security"),
+    retry: false,
+  });
+
 export const useSettings = () =>
   useQuery({
     queryKey: keys.settings,
@@ -94,6 +128,7 @@ export const useSettings = () =>
         krw_per_usd: number | null;
         updated_at: string | null;
         uploads_enabled: boolean;
+        recognition_enabled?: boolean;
         notifications: NotificationSettings;
       }>("/api/settings"),
   });
@@ -224,6 +259,37 @@ export const useBulkUpdate = () => {
   });
 };
 
+export const useBulkDiscount = () => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (body: { order_ids: string[]; percent: number; idempotency_key: string }) =>
+      post<{
+        updated: { order_id: string; old_price: number; new_price: number }[];
+        unchanged: string[];
+        not_found: string[];
+        skipped: { order_id: string; reason: string }[];
+        refunded_krw: number;
+        change: BalanceChange | null;
+      }>("/api/orders/bulk/discount", body),
+    onSuccess: refresh,
+  });
+};
+
+export const useDeletePreview = (ids: string[]) =>
+  useQuery({
+    queryKey: ["delete-preview", ids] as const,
+    queryFn: () => post<DeletePreview>("/api/orders/bulk/delete/preview", { order_ids: ids }),
+    gcTime: 0,
+  });
+
+export const useDeleteOrders = () => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (ids: string[]) => post<DeleteResult>("/api/orders/bulk/delete", { order_ids: ids }),
+    onSuccess: refresh,
+  });
+};
+
 export interface ShipmentInput {
   tracking_code?: string | null;
   box_number?: string | null;
@@ -233,6 +299,7 @@ export interface ShipmentInput {
   comment?: string | null;
   photo_url?: string | null;
   thumbnail_url?: string | null;
+  photos?: { photo_url: string; thumbnail_url: string | null }[];
 }
 
 export const useCreateShipment = () => {
@@ -248,6 +315,23 @@ export const useUpdateShipment = (id: string) => {
   return useMutation({
     mutationFn: (body: ShipmentInput) =>
       patch<{ shipment: Shipment; change: BalanceChange | null }>(`/api/shipments/${id}`, body),
+    onSuccess: refresh,
+  });
+};
+
+export const useDuplicateOrder = (id: string) => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (count: number) => post<{ items: Order[] }>(`/api/orders/${id}/duplicate`, { count }),
+    onSuccess: refresh,
+  });
+};
+
+export const useSplitShipment = (id: string) => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (body: { order_ids: string[]; tracking_code?: string | null }) =>
+      post<{ shipment: Shipment }>(`/api/shipments/${id}/split`, body),
     onSuccess: refresh,
   });
 };
@@ -280,6 +364,11 @@ export const useSetNotifications = () => {
     onSuccess: () => client.invalidateQueries({ queryKey: keys.settings }),
   });
 };
+
+/** Gemini reads an uploaded photo; the answer only fills the form, nothing is saved. */
+export function recognizePhoto(photo_url: string): Promise<PhotoRecognition> {
+  return post<PhotoRecognition>("/api/recognize", { photo_url });
+}
 
 export async function uploadImage(file: File): Promise<{ photo_url: string; thumbnail_url: string }> {
   const form = new FormData();

@@ -28,7 +28,7 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.5-flash-lite"
 API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 MIN_CONFIDENCE = 0.6
 # A photo is treated as "not an order" only when Gemini is this sure.
@@ -228,6 +228,9 @@ class GeminiRecognizer:
         self._client = client or httpx.Client(timeout=timeout_seconds)
         self._retries = retries
         self._backoff = backoff_seconds
+        # Gemini 3.x: ask for the fastest thinking level; dropped for good if
+        # the model turns out not to accept it (400), see `_call`.
+        self._thinking = _is_gemini_3(model)
         self.engine = model
 
     def check(self) -> None:
@@ -258,26 +261,57 @@ class GeminiRecognizer:
                     ],
                 }
             ],
-            "generationConfig": {
-                "temperature": 0.1,
-                "responseMimeType": "application/json",
-                "responseSchema": RESPONSE_SCHEMA,
-            },
+            "generationConfig": self._generation_config(),
         }
+
+    def _generation_config(self) -> dict[str, Any]:
+        config: dict[str, Any] = {
+            "responseMimeType": "application/json",
+            "responseSchema": RESPONSE_SCHEMA,
+            # The answer is a small JSON object: a cap stops a runaway answer
+            # from taking tens of seconds.
+            "maxOutputTokens": 1024,
+        }
+        # Gemini 3.x: no custom temperature (not supported, makes answers slow
+        # or broken) and the minimal thinking level — extraction from a photo
+        # needs no long reasoning. Older models keep a low temperature.
+        if not _is_gemini_3(self._model):
+            config["temperature"] = 0.1
+        elif self._thinking:
+            config["thinkingConfig"] = {"thinkingLevel": "MINIMAL"}
+        return config
 
     def _call(self, body: dict[str, Any]) -> dict[str, Any]:
         url = API_URL.format(model=self._model)
         headers = {"x-goog-api-key": self._api_key}
         for attempt in range(self._retries + 1):
             last = attempt == self._retries
+            started = time.monotonic()
             try:
                 response = self._client.post(url, json=body, headers=headers)
             except httpx.HTTPError as exc:
+                logger.warning(
+                    "Gemini attempt %d: %s after %.1fs",
+                    attempt + 1,
+                    type(exc).__name__,
+                    time.monotonic() - started,
+                )
                 if last:
                     raise RecognitionError(f"нет связи с Gemini ({type(exc).__name__})") from None
             else:
                 if response.status_code == 200:
                     return response.json()
+                logger.warning(
+                    "Gemini attempt %d: HTTP %s after %.1fs",
+                    attempt + 1,
+                    response.status_code,
+                    time.monotonic() - started,
+                )
+                if response.status_code == 400 and self._thinking and "thinking" in response.text:
+                    # This model does not take a thinking level: never send it again.
+                    self._thinking = False
+                    body["generationConfig"].pop("thinkingConfig", None)
+                    continue
                 if response.status_code not in _RETRY_STATUSES or last:
                     raise RecognitionError(_http_error(response))
             time.sleep(self._backoff * (attempt + 1))
@@ -299,6 +333,11 @@ class GeminiRecognizer:
             time.monotonic() - started,
         )
         return result
+
+
+def _is_gemini_3(model: str) -> bool:
+    match = re.match(r"(?:models/)?gemini-(\d+)", model)
+    return bool(match) and int(match.group(1)) >= 3
 
 
 def _http_error(response: httpx.Response) -> str:

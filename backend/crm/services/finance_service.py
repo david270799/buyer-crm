@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal
 
-from crm.domain.enums import LedgerType
+from crm.domain.enums import LedgerType, Role
 from crm.domain.errors import ConflictError, ValidationError
 from crm.domain.events import EventType
 from crm.domain.models import GeneralSettings, LedgerEntry
@@ -13,7 +13,12 @@ from crm.domain.money import (
     format_krw,
     krw_to_usd,
 )
-from crm.repositories import ClientRepository, LedgerRepository, SettingsRepository
+from crm.repositories import (
+    ClientRepository,
+    LedgerRepository,
+    OrderRepository,
+    SettingsRepository,
+)
 from crm.services.common import Actor, Auditor, Clock, require_admin
 from crm.services.events import EventRecorder
 from crm.services.ledger import BalanceChange, BalanceLedger
@@ -83,7 +88,29 @@ class FinanceService:
         return self._db.run_transaction(fn)
 
     def history(self, actor: Actor, limit: int = 20) -> list[LedgerEntry]:
-        return self._ledger_repo.list_recent(self._db, limit=max(1, min(limit, 100)))
+        limit = max(1, min(limit, 100))
+        if actor.role is Role.ADMIN:
+            return self._ledger_repo.list_recent(self._db, limit=limit)
+        # The client does not see the entries of deleted orders: a deleted
+        # order's charges are always refunded in full (they sum to zero), so the
+        # balance line stays consistent without them. Nothing is removed from
+        # `transactions`; the admin still sees everything.
+        hidden = self._deleted_order_ids()
+        entries = self._ledger_repo.list_recent(self._db, limit=limit + 200)
+        return [e for e in entries if e.order_id not in hidden][:limit]
+
+    def _deleted_order_ids(self) -> set[str]:
+        totals: dict[str, int] = {}
+        for doc_id, data in self._db.scan(self._ledger_repo.collection):
+            entry = LedgerEntry.from_doc(doc_id, data)
+            if entry.order_id:
+                totals[entry.order_id] = totals.get(entry.order_id, 0) + entry.amount_krw
+        existing = self._db.get_many(OrderRepository.collection, list(totals))
+        return {
+            order_id
+            for order_id, total in totals.items()
+            if total == 0 and existing.get(order_id) is None
+        }
 
     def get_settings(self, actor: Actor) -> GeneralSettings:
         return self._settings.get_general(self._db)

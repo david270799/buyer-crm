@@ -298,3 +298,24 @@ def test_shipment_reference_by_number(db, services, admin, client_actor):
     assert services.shipments.resolve_id("1") == "SHP-2026-001"
     with pytest.raises(NotFoundError):
         services.shipments.resolve_id("99")
+
+
+def test_shipment_keeps_several_photos(db, services, admin):
+    from crm.services.shipment_service import ShipmentDetails, ShipmentUpdate
+
+    seed_order(db, "N1", status="warehouse", client_price=10, charged_amount_krw=10)
+    photos = [
+        {"photo_url": "/media/s/a.webp", "thumbnail_url": "/media/s/a_t.webp"},
+        {"photo_url": "/media/s/b.webp", "thumbnail_url": None},
+    ]
+    result = services.shipments.ship_orders(admin, ["N1"], "TRK1", ShipmentDetails(photos=photos))
+    shipment = result.shipment
+    assert [p["photo_url"] for p in shipment.photos] == ["/media/s/a.webp", "/media/s/b.webp"]
+    assert shipment.photo_url == "/media/s/a.webp"  # the first one, for lists and the bot
+
+    updated = services.shipments.update_shipment(
+        admin, shipment.id, ShipmentUpdate(photos=photos[1:])
+    ).shipment
+    assert updated.photo_url == "/media/s/b.webp" and len(updated.photos) == 1
+    cleared = services.shipments.update_shipment(admin, shipment.id, ShipmentUpdate(photos=[]))
+    assert cleared.shipment.photos == [] and cleared.shipment.photo_url is None

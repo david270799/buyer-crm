@@ -182,6 +182,7 @@ h3 {
 
 .page-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -566,6 +567,18 @@ h3 {
   .order-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+}
+
+/* Press-and-hold selects: no text selection or image menu under the finger. */
+.no-callout {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.no-callout img {
+  -webkit-user-drag: none;
+  pointer-events: none;
 }
 
 .order-card {
@@ -1071,6 +1084,22 @@ table.orders .r {
   font-weight: 500;
 }
 
+.field > .field-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Negative margins: the button must not make this label taller than its neighbours. */
+.btn.ai-fill {
+  width: 28px;
+  min-height: 24px;
+  height: 24px;
+  margin: -5px 0;
+  padding: 0;
+  border-radius: 8px;
+}
+
 .field .hint {
   color: var(--text-3);
   font-size: 12px;
@@ -1134,8 +1163,11 @@ table.orders .r {
 .checkbox {
   display: grid;
   place-items: center;
+  flex: none;
   width: 22px;
   height: 22px;
+  /* Browsers give buttons side padding: the tick would be pushed off-centre. */
+  padding: 0;
   border: 1.5px solid var(--border-strong);
   border-radius: 7px;
   background: var(--surface);
@@ -1229,7 +1261,22 @@ table.orders .r {
   overflow-x: auto;
 }
 
+.selection-actions {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.selection-actions::-webkit-scrollbar {
+  display: none;
+}
+
 .selection-bar .btn {
+  flex: none;
   background: color-mix(in srgb, var(--accent-contrast) 14%, transparent);
   color: var(--accent-contrast);
   min-height: 36px;
@@ -1244,7 +1291,6 @@ table.orders .r {
 
 @media (max-width: 959px) {
   .selection-bar {
-    justify-content: space-between;
     padding: 8px 8px 8px 14px;
     overflow: hidden;
   }
@@ -1312,10 +1358,17 @@ table.orders .r {
   margin-bottom: 14px;
 }
 
+/* Buttons stay visible at the bottom of a long sheet (e.g. picking many orders). */
 .sheet .actions {
+  position: sticky;
+  bottom: calc(-18px - var(--safe-bottom));
+  z-index: 1;
   display: flex;
   gap: 8px;
-  margin-top: 18px;
+  margin: 18px -16px calc(-18px - var(--safe-bottom));
+  padding: 12px 16px calc(18px + var(--safe-bottom));
+  background: var(--surface);
+  border-top: 1px solid var(--border);
 }
 
 .sheet .actions .btn {
@@ -1330,6 +1383,12 @@ table.orders .r {
   .sheet {
     border-radius: 22px;
     padding: 22px;
+  }
+
+  .sheet .actions {
+    bottom: -22px;
+    margin: 18px -22px -22px;
+    padding: 12px 22px 22px;
   }
 }
 
@@ -1425,6 +1484,136 @@ table.orders .r {
 .details {
   display: grid;
   gap: 16px;
+}
+
+/* Grid items may shrink below their content (a big photo must not widen the page). */
+.details > * {
+  min-width: 0;
+}
+
+/* Photos of a shipment: medium tiles scrolled sideways; a tap opens full screen. */
+.carousel {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+
+.carousel-slide {
+  flex: none;
+  width: 180px;
+  height: 180px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  scroll-snap-align: start;
+  cursor: zoom-in;
+}
+
+.carousel-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: #000;
+  animation: fade 0.15s ease;
+}
+
+.lightbox-strip {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.lightbox-slide {
+  flex: none;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  scroll-snap-align: center;
+}
+
+.lightbox-slide img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.lightbox-bar {
+  position: absolute;
+  top: calc(12px + var(--safe-top, 0px));
+  left: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #fff;
+  font-size: 14px;
+}
+
+/* Several photos in a form: small tiles + "+" tile. */
+.photo-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.photo-tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+
+.photo-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-tile.add {
+  border: 1.5px dashed var(--border-strong);
+  cursor: pointer;
+}
+
+.photo-tile.add.disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.photo-tile .remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  cursor: pointer;
 }
 
 @media (min-width: 960px) {
@@ -1610,4 +1799,96 @@ table.orders .r {
   color: var(--text-3);
   background: transparent;
   border: 1px dashed var(--border-strong);
+}
+
+/* PIN lock: round phone-style keys, no system keyboard. */
+.lock-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px 16px calc(24px + var(--safe-bottom));
+  background: var(--bg);
+  color: var(--text);
+}
+
+.pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.pin-dots {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.pin-dots span {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--text);
+  border-radius: 50%;
+  transition: background 0.1s ease;
+}
+
+.pin-dots span.on {
+  background: var(--text);
+}
+
+.pin-dots.shake {
+  animation: pin-shake 0.4s ease;
+}
+
+@keyframes pin-shake {
+  20%,
+  60% {
+    transform: translateX(-10px);
+  }
+  40%,
+  80% {
+    transform: translateX(10px);
+  }
+}
+
+.pin-error {
+  min-height: 18px;
+  color: var(--negative, #c0392b);
+  font-size: 13px;
+}
+
+.pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 76px);
+  gap: 16px 24px;
+  justify-content: center;
+}
+
+.pin-key {
+  width: 76px;
+  height: 76px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 30px;
+  font-weight: 400;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.08s ease;
+}
+
+.pin-key:active {
+  background: var(--border-strong);
+}
+
+.pin-key.erase {
+  background: transparent;
+  display: grid;
+  place-items: center;
 }

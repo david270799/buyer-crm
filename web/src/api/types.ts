@@ -59,6 +59,7 @@ export type EventType =
   | "order_warehouse"
   | "order_delivered"
   | "order_status"
+  | "order_discount"
   | "comment"
   | "attention"
   | "shipment_sent"
@@ -90,10 +91,14 @@ export interface Shipment {
   shipment_date: string | null;
   photo_url: string | null;
   thumbnail_url: string | null;
+  /** All photos; the first is also photo_url / thumbnail_url. */
+  photos?: { photo_url: string; thumbnail_url: string | null }[];
   order_ids: string[];
   order_count: number;
   comment: string | null;
   created_at: string | null;
+  /** Every order delivered → «Доставлена», otherwise «В пути». */
+  delivered?: boolean;
   // Admin only
   shipping_charged_krw?: number;
 }
@@ -104,7 +109,8 @@ export type LedgerType =
   | "order_rebuy"
   | "deposit"
   | "adjustment"
-  | "shipping_charge";
+  | "shipping_charge"
+  | "order_discount";
 
 export interface LedgerItem {
   id: string;
@@ -149,6 +155,32 @@ export interface BulkResult {
   unchanged: string[];
   not_found: string[];
   skipped: { order_id: string; reason: string }[];
+}
+
+export interface PhotoRecognition {
+  recognized: boolean;
+  brand: string | null;
+  model: string | null;
+  size: string | null;
+  category: string | null;
+  confidence: number;
+  not_a_product: boolean;
+}
+
+export interface DeletePreview {
+  orders: Order[];
+  refund_krw: number;
+  not_found: string[];
+  skipped: { order_id: string; reason: string }[];
+}
+
+export interface DeleteResult {
+  deleted: string[];
+  not_found: string[];
+  skipped: { order_id: string; reason: string }[];
+  refunded_krw: number;
+  change: BalanceChange | null;
+  next_order_id: string | null;
 }
 
 export interface ShipResult {

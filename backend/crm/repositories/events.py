@@ -50,6 +50,12 @@ class EventRepository:
     def set_delivery(self, tx: Transaction, event_id: str, data: dict[str, Any]) -> None:
         tx.update(self.collection, event_id, data)
 
+    def delete(self, tx: Transaction, event_id: str) -> None:
+        tx.delete(self.collection, event_id)
+
+    def set_order_ids(self, tx: Transaction, event_id: str, order_ids: list[str]) -> None:
+        tx.update(self.collection, event_id, {"order_ids": order_ids})
+
     def for_order(self, reader: Reader, order_id: str, limit: int = 200) -> list[Event]:
         rows = reader.query(
             self.collection, [Filter("order_ids", "array_contains", order_id)], limit=limit

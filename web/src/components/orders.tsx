@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import type { Order } from "../api/types";
 import { krw, orderTitle, statusLabel } from "../lib/format";
 import { Dots } from "./status";
-import { Checkbox } from "./ui";
+import { Checkbox, useLongPress } from "./ui";
 
 export function Photo({
   src,
@@ -37,19 +37,30 @@ export function OrderCard({
   selectable,
   selected,
   onToggle,
+  selecting,
   showCost,
 }: {
   order: Order;
   selectable?: boolean;
   selected?: boolean;
   onToggle?: () => void;
+  /** Something is already selected: a tap anywhere on the card toggles it. */
+  selecting?: boolean;
   showCost?: boolean;
 }) {
   const navigate = useNavigate();
+  const open = () => navigate(`/orders/${order.id}`);
+  const canSelect = Boolean(selectable && onToggle);
+  const press = useLongPress(
+    () => {
+      if (canSelect && !selected) onToggle?.();
+    },
+    () => (canSelect && selecting ? onToggle?.() : open()),
+  );
   return (
     <article
-      className={`order-card ${selected ? "selected" : ""}`}
-      onClick={() => navigate(`/orders/${order.id}`)}
+      className={`order-card ${selected ? "selected" : ""} ${canSelect ? "no-callout" : ""}`}
+      {...(canSelect ? press : { onClick: open })}
     >
       {order.attention_required && (
         <span className="badge warn attention">
@@ -57,7 +68,7 @@ export function OrderCard({
         </span>
       )}
       {selectable && onToggle && (
-        <span className="check">
+        <span className="check" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
           <Checkbox checked={!!selected} onChange={onToggle} label={`Выбрать ${order.id}`} />
         </span>
       )}

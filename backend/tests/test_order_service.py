@@ -248,11 +248,41 @@ def test_set_status_reports_every_order(db, services, admin):
     assert audit_actions(db) == ["order.status"]
 
 
-@pytest.mark.parametrize("status", [OrderStatus.BOUGHT, OrderStatus.CANCELLED, OrderStatus.NEW])
+@pytest.mark.parametrize("status", [OrderStatus.CANCELLED, OrderStatus.NEW])
 def test_set_status_refuses_money_moving_statuses(db, services, admin, status):
     seed_order(db, "N1", status="bought", client_price=10)
     with pytest.raises(ValidationError):
         services.orders.set_status(admin, ["1"], status)
+
+
+def test_warehouse_goes_back_to_bought_without_money(db, services, admin):
+    for order_id in ("N1", "N2", "N3"):
+        seed_order(
+            db,
+            order_id,
+            status="warehouse",
+            client_price=120,
+            charged_amount_krw=120,
+            bought_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+        )
+    seed_order(
+        db,
+        "N4",
+        status="cargo",
+        client_price=120,
+        charged_amount_krw=120,
+        shipment_id="SHP-2026-001",
+    )
+    seed_order(db, "N5", status="warehouse")  # nothing charged: not a rollback, refuse
+
+    result = services.orders.set_status(admin, ["1", "2", "4", "5"], OrderStatus.BOUGHT)
+
+    assert result.updated == ["N1", "N2"]
+    assert [i for i, _ in result.skipped] == ["N4", "N5"]
+    order = db.get("orders", "N1")
+    assert order["status"] == "bought"
+    assert order["bought_at"] == datetime(2026, 9, 1, tzinfo=timezone.utc)  # date kept
+    assert balance(db) == START_BALANCE and ledger_entries(db) == {}
 
 
 def test_set_status_cargo_needs_a_shipment(db, services, admin):
@@ -308,6 +338,18 @@ def test_create_order_skips_ids_taken_while_counter_was_behind(db, services, adm
 
     assert services.orders.create_order(admin, NewOrder()).id == "N7"
     assert db.get("counters", "orders")["next_id"] == 8
+
+
+def test_create_order_accepts_photos_from_own_media_storage(db, services, admin):
+    # LocalBlobStorage (SQLite mode) returns same-origin paths, not https URLs.
+    order = services.orders.create_order(
+        admin,
+        NewOrder(photo_url="/media/orders/2026/a.webp", thumbnail_url="/media/orders/a_t.webp"),
+    )
+    assert db.get("orders", order.id)["photo_url"] == "/media/orders/2026/a.webp"
+    for bad in ("/media/../crm.sqlite3", "javascript:alert(1)", "/other/a.webp"):
+        with pytest.raises(ValidationError):
+            services.orders.create_order(admin, NewOrder(photo_url=bad))
 
 
 def test_create_order_in_empty_collection_starts_at_one(db, services, admin):
@@ -471,3 +513,25 @@ def test_bulk_update(db, services, admin):
         assert doc["attention_required"] is True and doc["client_comment"] == "Задержка"
     with pytest.raises(ValidationError):
         services.orders.bulk_update(admin, ["1"], BulkUpdate())
+
+
+def test_duplicate_copies_the_item_without_prices(db, services, admin, client_actor):
+    from crm.domain.errors import PermissionDeniedError
+    from crm.services.order_service import NewOrder
+
+    source = services.orders.create_order(
+        admin, NewOrder(brand="Nike", model="Dunk", size="42", photo_url="/media/a.webp")
+    )
+    services.orders.buy(admin, source.id, 100_000, 120_000)
+    before = balance(db)
+
+    copies = services.orders.duplicate(admin, source.id, 2)
+
+    assert [c.id for c in copies] == ["N2", "N3"]
+    for copy in copies:
+        assert copy.status.value == "new" and copy.client_price is None
+        assert (copy.brand, copy.model, copy.size) == ("Nike", "Dunk", "42")
+        assert copy.photo_url == "/media/a.webp" and copy.source_message_id is None
+    assert balance(db) == before
+    with pytest.raises(PermissionDeniedError):
+        services.orders.duplicate(client_actor, source.id)
