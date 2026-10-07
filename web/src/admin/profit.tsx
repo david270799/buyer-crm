@@ -1,7 +1,11 @@
-import { Lock, Plus } from "lucide-react";
+import { Lock, Plus, TrendingUp } from "lucide-react";
 import { useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 
-import { useAddProfit, useProfit } from "../api/hooks";
+import { type ProfitLine, useAddProfit, useProfit, useProfitLines } from "../api/hooks";
+import { PageHead } from "../components/Layout";
+import { Thumb } from "../components/orders";
+import { Empty, ErrorState, Loading } from "../components/ui";
 import { errorText, Field, MoneyInput, Sheet, useToast } from "../components/ui";
 import { date, krw } from "../lib/format";
 
@@ -110,5 +114,99 @@ function ProfitSheet({ onClose }: { onClose: () => void }) {
         </Field>
       </div>
     </Sheet>
+  );
+}
+
+/** «Прибыль» (from the dashboard tiles): what the profit is made of, like the
+ * balance history — each bought order's profit and the admin's extra profit. */
+export function ProfitPage() {
+  const [params, setParams] = useSearchParams();
+  const period = params.get("period") === "month" ? "month" : "all";
+  const { data, error, isLoading, refetch } = useProfitLines(period);
+  return (
+    <>
+      <PageHead title="Прибыль" />
+      <div className="chips" style={{ marginBottom: 12 }}>
+        <button className={`chip ${period === "month" ? "active" : ""}`} onClick={() => setParams({ period: "month" })}>
+          За месяц
+        </button>
+        <button className={`chip ${period === "all" ? "active" : ""}`} onClick={() => setParams({ period: "all" })}>
+          За всё время
+        </button>
+      </div>
+      {isLoading ? (
+        <Loading rows={4} height={64} />
+      ) : error || !data ? (
+        <ErrorState error={error} onRetry={refetch} />
+      ) : (
+        <>
+          <div className="card pad">
+            <div className="small muted">{period === "month" ? "Прибыль за месяц" : "Прибыль за всё время"}</div>
+            <div className="num" style={{ fontSize: 30, fontWeight: 700, color: "var(--positive)" }}>
+              {krw(data.total_krw, true)}
+            </div>
+            <div className="small muted">
+              Заказов: {data.items.filter((i) => i.order).length} · доп. прибыль:{" "}
+              {krw(data.items.filter((i) => !i.order).reduce((s, i) => s + i.amount_krw, 0))}
+            </div>
+          </div>
+          <ProfitSection />
+          <ProfitLines items={data.items} />
+        </>
+      )}
+    </>
+  );
+}
+
+function ProfitLines({ items }: { items: ProfitLine[] }) {
+  if (!items.length) return <Empty title="Прибыли за этот период нет" icon={<TrendingUp size={22} />} />;
+  const groups: { label: string; items: ProfitLine[] }[] = [];
+  for (const item of items) {
+    const label = item.at ? date(item.at) : "Без даты";
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.items.push(item);
+    else groups.push({ label, items: [item] });
+  }
+  return (
+    <div className="section">
+      {groups.map((group) => (
+        <div key={group.label}>
+          <div className="day-label">{group.label}</div>
+          <div className="card list">
+            {group.items.map((item, i) => {
+              const o = item.order;
+              const amount = (
+                <div className={`amount ${item.amount_krw > 0 ? "positive" : ""}`}>{krw(item.amount_krw, true)}</div>
+              );
+              return o ? (
+                <Link key={o.id} to={`/orders/${o.id}`} className="list-item">
+                  <Thumb src={o.thumbnail_url ?? o.photo_url} alt={o.id} />
+                  <div className="grow">
+                    <div className="title">
+                      {o.id} · {[o.brand, o.model].filter(Boolean).join(" ") || "Без названия"}
+                    </div>
+                    <div className="tiny faint num">
+                      закупка {krw(o.purchase_price)} → клиенту {krw(o.client_price)}
+                    </div>
+                  </div>
+                  {amount}
+                </Link>
+              ) : (
+                <div key={`extra-${i}`} className="list-item" style={{ cursor: "default" }}>
+                  <div className="thumb icon">
+                    <Lock size={16} />
+                  </div>
+                  <div className="grow">
+                    <div className="title">{item.comment || "Доп. прибыль"}</div>
+                    <div className="tiny faint">Моя прибыль · клиент не видит</div>
+                  </div>
+                  {amount}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

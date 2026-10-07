@@ -17,7 +17,7 @@ import { EditButton, ShipmentDetailsPage, ShipmentsPage } from "../shared/Shipme
 import { OrderAdminPanel } from "./OrderAdminPanel";
 import { AdminOrdersPage } from "./OrdersPage";
 import { PinSettings } from "./pin";
-import { ProfitSection } from "./profit";
+import { ProfitPage } from "./profit";
 import { AiFillButton, MoneySheet, NewShipmentFlow, ShipmentDeliveredButton, ShipmentSplitButton, PhotoInput, type PhotoValue, recognizedFields, ShipmentEditSheet, useBalance } from "./sheets";
 
 const NAV: NavItem[] = [
@@ -47,14 +47,14 @@ function Dashboard() {
       <div className="stack" style={{ gap: 12 }}>
         <BalanceCard balance={data.balance} to="/finance" label="Баланс клиента" />
         <div className="kpis">
-          <div className="card kpi">
-            <div className="small muted">Прибыль за месяц</div>
+          <Link to="/profit?period=month" className="card kpi">
+            <div className="small muted">Прибыль за месяц →</div>
             <div className="value">{krw(o.profit_month_krw ?? 0)}</div>
-          </div>
-          <div className="card kpi">
-            <div className="small muted">Прибыль всего</div>
+          </Link>
+          <Link to="/profit?period=all" className="card kpi">
+            <div className="small muted">Прибыль всего →</div>
             <div className="value">{krw(o.profit_total_krw ?? 0)}</div>
-          </div>
+          </Link>
           <div className="card kpi">
             <div className="small muted">Активные заказы</div>
             <div className="value">{o.active}</div>
@@ -70,8 +70,6 @@ function Dashboard() {
         <button className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setMoney(true)}>
           <Wallet size={16} /> Пополнить баланс
         </button>
-        {/* Not in «Финансы»: the owner screenshots that page for the client. */}
-        <ProfitSection />
       </div>
       <div className="section">
         <div className="section-head">
@@ -415,6 +413,7 @@ export function AdminApp({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
         <Route path="/shipments" element={<AdminShipmentsPage />} />
         <Route path="/shipments/:id" element={<AdminShipmentDetails />} />
         <Route path="/finance" element={<FinancePage />} />
+        <Route path="/profit" element={<ProfitPage />} />
         <Route path="/balance" element={<Navigate to="/finance" replace />} />
         <Route path="/settings" element={<SettingsPage onLeaveDemo={onLeaveDemo} />} />
         <Route path="/notifications" element={<NotificationsPage />} />

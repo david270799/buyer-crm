@@ -667,6 +667,22 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         )
         return {"entry": ledger_view(result.entry, p.role), "already_done": result.already_done}
 
+    @app.get("/api/finance/profit-lines")
+    def profit_lines(p: Admin, period: str = "all") -> dict[str, Any]:
+        lines = services.orders.profit_lines(p.actor, "month" if period == "month" else "all")
+        return {
+            "total_krw": sum(line.amount_krw for line in lines),
+            "items": [
+                {
+                    "amount_krw": line.amount_krw,
+                    "at": line.at,
+                    "comment": line.comment,
+                    "order": order_json(line.order, p.role) if line.order else None,
+                }
+                for line in lines
+            ],
+        }
+
     @app.get("/api/finance/profit")
     def profit_history(p: Admin) -> dict[str, Any]:
         entries = services.profit.history(p.actor) if services.profit else []

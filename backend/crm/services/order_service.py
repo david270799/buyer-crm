@@ -15,7 +15,7 @@ Money rules (see docs/architecture.md, "Финансовые инвариант�
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -98,6 +98,16 @@ class NewOrder:
     source_chat_id: int | None = None
     source_message_id: int | None = None
     attention_required: bool = False
+
+
+@dataclass(frozen=True)
+class ProfitLine:
+    """One line of the profit page: an order's profit or an extra profit entry."""
+
+    amount_krw: int
+    at: datetime | None
+    order: Order | None = None
+    comment: str | None = None
 
 
 @dataclass
@@ -419,6 +429,33 @@ class OrderService:
                 if entry.created_at and to_local(entry.created_at).strftime("%Y-%m") == month:
                     result.profit_month_krw += entry.amount_krw
         return result
+
+    def profit_lines(self, actor: Actor, period: str = "all") -> list[ProfitLine]:
+        """What the profit on the dashboard is made of (same rules as `overview`):
+        each bought order's profit by its purchase date, plus the admin's extra
+        profit entries. `period`: "month" (this month in Seoul) or "all". Newest first."""
+        require_admin(actor)
+        month = to_local(self._clock.now()).strftime("%Y-%m")
+
+        def in_period(when: datetime | None) -> bool:
+            if period != "month":
+                return True
+            return isinstance(when, datetime) and to_local(when).strftime("%Y-%m") == month
+
+        lines: list[ProfitLine] = []
+        for order in self._orders.list_all(self._db):
+            if order.status not in CHARGED_STATUSES or order.profit is None:
+                continue
+            when = order.timestamp("bought_at")
+            when = when if isinstance(when, datetime) else None
+            if in_period(when):
+                lines.append(ProfitLine(order.profit, when, order=order))
+        for entry in self._profit.list_all(self._db) if self._profit else []:
+            if in_period(entry.created_at):
+                lines.append(ProfitLine(entry.amount_krw, entry.created_at, comment=entry.comment))
+        oldest = datetime.min.replace(tzinfo=UTC)
+        lines.sort(key=lambda line: line.at or oldest, reverse=True)
+        return lines
 
     # --- edit (no money) ---------------------------------------------------
 

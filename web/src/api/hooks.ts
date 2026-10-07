@@ -104,6 +104,21 @@ export const useProfit = () =>
     queryFn: () => get<{ items: ProfitItem[] }>("/api/finance/profit"),
   });
 
+export interface ProfitLine {
+  amount_krw: number;
+  at: string | null;
+  comment: string | null;
+  order: Order | null;
+}
+
+/** What the dashboard profit is made of: orders' profit + extra profit entries. */
+export const useProfitLines = (period: "month" | "all") =>
+  useQuery({
+    queryKey: ["profit-lines", period] as const,
+    queryFn: () =>
+      get<{ total_krw: number; items: ProfitLine[] }>(`/api/finance/profit-lines?period=${period}`),
+  });
+
 export const useAddProfit = () => {
   const refresh = useInvalidateAll();
   return useMutation({
