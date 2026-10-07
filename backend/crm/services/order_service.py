@@ -15,7 +15,7 @@ Money rules (see docs/architecture.md, "Финансовые инвариант�
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -430,17 +430,31 @@ class OrderService:
                     result.profit_month_krw += entry.amount_krw
         return result
 
-    def profit_lines(self, actor: Actor, period: str = "all") -> list[ProfitLine]:
+    def profit_lines(
+        self,
+        actor: Actor,
+        period: str = "all",
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> list[ProfitLine]:
         """What the profit on the dashboard is made of (same rules as `overview`):
         each bought order's profit by its purchase date, plus the admin's extra
-        profit entries. `period`: "month" (this month in Seoul) or "all". Newest first."""
+        profit entries. `period`: "month" (this month in Seoul), "all", or "range"
+        (`date_from`..`date_to` inclusive, Seoul dates). Newest first."""
         require_admin(actor)
         month = to_local(self._clock.now()).strftime("%Y-%m")
 
         def in_period(when: datetime | None) -> bool:
-            if period != "month":
-                return True
-            return isinstance(when, datetime) and to_local(when).strftime("%Y-%m") == month
+            if period == "month":
+                return isinstance(when, datetime) and to_local(when).strftime("%Y-%m") == month
+            if period == "range":
+                if not isinstance(when, datetime):
+                    return False
+                day = to_local(when).date()
+                return (date_from is None or day >= date_from) and (
+                    date_to is None or day <= date_to
+                )
+            return True
 
         lines: list[ProfitLine] = []
         for order in self._orders.list_all(self._db):

@@ -7,7 +7,7 @@ import { PageHead } from "../components/Layout";
 import { Thumb } from "../components/orders";
 import { Empty, ErrorState, Loading } from "../components/ui";
 import { errorText, Field, MoneyInput, Sheet, useToast } from "../components/ui";
-import { date, krw } from "../lib/format";
+import { date, krw, shortDate } from "../lib/format";
 
 const SHOWN = 5;
 
@@ -121,8 +121,19 @@ function ProfitSheet({ onClose }: { onClose: () => void }) {
  * balance history — each bought order's profit and the admin's extra profit. */
 export function ProfitPage() {
   const [params, setParams] = useSearchParams();
-  const period = params.get("period") === "month" ? "month" : "all";
-  const { data, error, isLoading, refetch } = useProfitLines(period);
+  const raw = params.get("period");
+  const period = raw === "month" || raw === "range" ? raw : "all";
+  const from = params.get("from") ?? "";
+  const to = params.get("to") ?? "";
+  const { data, error, isLoading, refetch } = useProfitLines(period, from, to);
+  const setRange = (next: { from?: string; to?: string }) =>
+    setParams({ period: "range", from: next.from ?? from, to: next.to ?? to }, { replace: true });
+  const title =
+    period === "month"
+      ? "Прибыль за месяц"
+      : period === "range"
+        ? `Прибыль ${from ? `с ${shortDate(from)}` : ""} ${to ? `по ${shortDate(to)}` : ""}`.trim()
+        : "Прибыль за всё время";
   return (
     <>
       <PageHead title="Прибыль" />
@@ -133,7 +144,22 @@ export function ProfitPage() {
         <button className={`chip ${period === "all" ? "active" : ""}`} onClick={() => setParams({ period: "all" })}>
           За всё время
         </button>
+        <button className={`chip ${period === "range" ? "active" : ""}`} onClick={() => setRange({})}>
+          Свой период
+        </button>
       </div>
+      {period === "range" && (
+        <div className="row" style={{ gap: 8, marginBottom: 12 }}>
+          <label className="field grow">
+            <span>С</span>
+            <input className="input" type="date" value={from} max={to || undefined} onChange={(e) => setRange({ from: e.target.value })} />
+          </label>
+          <label className="field grow">
+            <span>По</span>
+            <input className="input" type="date" value={to} min={from || undefined} onChange={(e) => setRange({ to: e.target.value })} />
+          </label>
+        </div>
+      )}
       {isLoading ? (
         <Loading rows={4} height={64} />
       ) : error || !data ? (
@@ -141,7 +167,7 @@ export function ProfitPage() {
       ) : (
         <>
           <div className="card pad">
-            <div className="small muted">{period === "month" ? "Прибыль за месяц" : "Прибыль за всё время"}</div>
+            <div className="small muted">{title}</div>
             <div className="num" style={{ fontSize: 30, fontWeight: 700, color: "var(--positive)" }}>
               {krw(data.total_krw, true)}
             </div>

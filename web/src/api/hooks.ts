@@ -112,11 +112,15 @@ export interface ProfitLine {
 }
 
 /** What the dashboard profit is made of: orders' profit + extra profit entries. */
-export const useProfitLines = (period: "month" | "all") =>
+export const useProfitLines = (period: "month" | "all" | "range", from = "", to = "") =>
   useQuery({
-    queryKey: ["profit-lines", period] as const,
-    queryFn: () =>
-      get<{ total_krw: number; items: ProfitLine[] }>(`/api/finance/profit-lines?period=${period}`),
+    queryKey: ["profit-lines", period, from, to] as const,
+    queryFn: () => {
+      const q = new URLSearchParams({ period });
+      if (period === "range" && from) q.set("from", from);
+      if (period === "range" && to) q.set("to", to);
+      return get<{ total_krw: number; items: ProfitLine[] }>(`/api/finance/profit-lines?${q}`);
+    },
   });
 
 export const useAddProfit = () => {
