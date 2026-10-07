@@ -70,6 +70,8 @@ function Dashboard() {
         <button className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setMoney(true)}>
           <Wallet size={16} /> Пополнить баланс
         </button>
+        {/* Not in «Финансы»: the owner screenshots that page for the client. */}
+        <ProfitSection />
       </div>
       <div className="section">
         <div className="section-head">
@@ -221,7 +223,6 @@ function FinancePage() {
     <>
       <BalancePage
         title="Финансы"
-        extra={<ProfitSection />}
         actions={
           <div className="row" style={{ gap: 6 }}>
             <button className="btn primary small" onClick={() => setSheet("deposit")}>
