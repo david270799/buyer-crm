@@ -65,10 +65,13 @@ export function Shell({ nav, title, children }: { nav: NavItem[]; title: string;
         </div>
       </aside>
       <main className="main">
-        <header className="topbar">
-          <span className="topbar-title">{title}</span>
-          <BellButton />
-        </header>
+        {/* Only on the home page (owner, 11.10): elsewhere it took room. */}
+        {pathname === "/" && (
+          <header className="topbar">
+            <span className="topbar-title">{title}</span>
+            <BellButton />
+          </header>
+        )}
         <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>
       </main>
       <nav
