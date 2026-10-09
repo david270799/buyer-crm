@@ -1553,6 +1553,19 @@ table.orders .r {
   object-fit: contain;
 }
 
+.lightbox-slide .zoomable {
+  transform-origin: center;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.lightbox-hint {
+  margin-left: 8px;
+  opacity: 0.6;
+  font-size: 12px;
+}
+
 .lightbox-bar {
   position: absolute;
   top: calc(12px + var(--safe-top, 0px));
@@ -1895,8 +1908,7 @@ table.orders .r {
 
 /* «Как видит клиент»: a strip on top so the admin never forgets the mode. */
 .preview-bar {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 40;
   display: flex;
   align-items: center;
@@ -1906,4 +1918,13 @@ table.orders .r {
   color: var(--info);
   font-weight: 600;
   font-size: 14px;
+}
+
+.photo-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
 }
