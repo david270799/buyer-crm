@@ -328,6 +328,10 @@ def test_shipment_create_and_cost_change(db, api):
 
     detail = api("GET", "/api/shipments/1").json()
     assert [o["id"] for o in detail["orders"]] == ["N5", "N7"]
+    # Shipping lines in the balance history carry the parcel's tracking code.
+    history = api("GET", "/api/transactions").json()["items"]
+    shipping = [i for i in history if i["type"] == "shipping_charge"]
+    assert shipping and all(i["shipment"]["tracking_code"] == "TRK-1" for i in shipping)
     order = api("GET", "/api/orders/N5").json()
     assert order["shipment"]["id"] == shipment["id"]
 

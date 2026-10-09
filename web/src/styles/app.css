@@ -2085,3 +2085,9 @@ table.orders .r {
 .order-row.st-cargo { box-shadow: inset 3px 0 0 var(--st-cargo); }
 .order-row.st-delivered { box-shadow: inset 3px 0 0 var(--st-delivered); }
 .order-row.st-cancelled { box-shadow: inset 3px 0 0 var(--st-cancelled); }
+
+/* Shipping lines in the balance history stand out (owner, 09.10). */
+.shipping-word {
+  color: var(--st-delivered);
+  font-weight: 600;
+}

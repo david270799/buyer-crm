@@ -122,6 +122,8 @@ export interface LedgerItem {
   shipment_id: string | null;
   comment: string | null;
   created_at: string | null;
+  /** Shipping lines: the parcel's tracking code and photo. */
+  shipment?: { id: string; number: number | null; tracking_code: string | null; thumbnail_url: string | null } | null;
   order: { id: string; title: string | null; thumbnail_url: string | null } | null;
 }
 

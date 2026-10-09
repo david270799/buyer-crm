@@ -1,4 +1,5 @@
 import { ArrowDownLeft, ChevronRight, Gift, RotateCcw, SlidersHorizontal, Truck } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import type { Balance, LedgerItem } from "../api/types";
@@ -34,6 +35,7 @@ export function BalanceCard({ balance, to, label = "Баланс" }: { balance: 
 
 function EntryIcon({ item }: { item: LedgerItem }) {
   if (item.order) return <Thumb src={item.order.thumbnail_url} alt={item.order.title ?? item.order.id} />;
+  if (item.shipment?.thumbnail_url) return <Thumb src={item.shipment.thumbnail_url} alt="Фото отправки" />;
   const Icon =
     item.type === "deposit"
       ? ArrowDownLeft
@@ -51,8 +53,16 @@ function EntryIcon({ item }: { item: LedgerItem }) {
   );
 }
 
-function entryTitle(item: LedgerItem): string {
-  if (item.type === "shipping_charge") return item.shipment_id ? `Доставка · ${item.shipment_id}` : "Доставка";
+function entryTitle(item: LedgerItem): ReactNode {
+  if (item.type === "shipping_charge") {
+    const code = item.shipment?.tracking_code ?? item.shipment_id;
+    return (
+      <>
+        <span className="shipping-word">Доставка</span>
+        {code ? <span className="num"> · {code}</span> : null}
+      </>
+    );
+  }
   if (item.order_id) {
     const title = item.order?.title;
     const prefix =

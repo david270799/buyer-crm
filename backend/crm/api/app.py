@@ -852,6 +852,19 @@ def _ledger_items(
     services: Services, p: Principal, entries: list[LedgerEntry]
 ) -> list[dict[str, Any]]:
     orders = services.orders.get_orders(p.actor, [e.order_id for e in entries if e.order_id])
+    # Shipping lines show the parcel: its tracking code and a photo.
+    shipments: dict[str, dict[str, Any]] = {}
+    for shipment_id in {e.shipment_id for e in entries if e.shipment_id}:
+        try:
+            found, _ = services.shipments.get_shipment(p.actor, shipment_id)
+        except NotFoundError:
+            continue
+        shipments[shipment_id] = {
+            "id": found.id,
+            "number": found.shipment_number,
+            "tracking_code": found.tracking_code,
+            "thumbnail_url": found.thumbnail_url or found.photo_url,
+        }
     items = []
     for entry in entries:
         view = ledger_view(entry, p.role)
@@ -861,5 +874,6 @@ def _ledger_items(
             if order
             else None
         )
+        view["shipment"] = shipments.get(entry.shipment_id) if entry.shipment_id else None
         items.append(view)
     return items
