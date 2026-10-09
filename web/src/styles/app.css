@@ -2008,3 +2008,80 @@ table.orders .r {
 .order-card.st-cargo { box-shadow: inset 3px 0 0 var(--st-cargo); }
 .order-card.st-delivered { box-shadow: inset 3px 0 0 var(--st-delivered); }
 .order-card.st-cancelled { box-shadow: inset 3px 0 0 var(--st-cancelled); }
+
+/* «Карточки / Список» in «Заказы». */
+.view-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  flex: none;
+}
+
+.view-toggle .btn {
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-3);
+}
+
+.view-toggle .btn.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+
+.order-rows {
+  padding: 0;
+  overflow: hidden;
+}
+
+.order-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.order-row:last-child {
+  border-bottom: 0;
+}
+
+.order-row.selected {
+  background: var(--accent-soft);
+}
+
+.order-row .check {
+  position: static;
+  flex: none;
+}
+
+.order-row .row-title {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.order-row .row-attention {
+  color: var(--warning);
+}
+
+.order-row .row-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex: none;
+}
+
+.order-row.st-new { box-shadow: inset 3px 0 0 var(--st-new); }
+.order-row.st-bought { box-shadow: inset 3px 0 0 var(--st-bought); }
+.order-row.st-warehouse { box-shadow: inset 3px 0 0 var(--st-warehouse); }
+.order-row.st-cargo { box-shadow: inset 3px 0 0 var(--st-cargo); }
+.order-row.st-delivered { box-shadow: inset 3px 0 0 var(--st-delivered); }
+.order-row.st-cancelled { box-shadow: inset 3px 0 0 var(--st-cancelled); }

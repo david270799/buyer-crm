@@ -1,4 +1,4 @@
-import { AlertTriangle, MessageSquare, Percent, Plus, Search, Tag, Trash2, Truck, X } from "lucide-react";
+import { AlertTriangle, LayoutGrid, List, MessageSquare, Percent, Plus, Search, Tag, Trash2, Truck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -91,6 +91,7 @@ function OrdersTable({ orders, selection }: { orders: Order[]; selection: Return
 
 export function AdminOrdersPage() {
   const filters = useOrderFilters();
+  const [view, setView] = useOrdersView();
   const q = useDebounced(filters.q);
   // Kept in the URL like the filters, so it survives opening an order and coming back.
   const sort = (filters.sort || "newest") as NonNullable<OrderFilters["sort"]>;
@@ -145,6 +146,14 @@ export function AdminOrdersPage() {
             <option value="price_asc">Дешевле</option>
             <option value="status">По статусу</option>
           </select>
+          <div className="view-toggle" role="group" aria-label="Вид">
+            <button className={`btn icon-only ${view === "cards" ? "active" : ""}`} onClick={() => setView("cards")} aria-label="Карточки" title="Карточки">
+              <LayoutGrid size={16} />
+            </button>
+            <button className={`btn icon-only ${view === "list" ? "active" : ""}`} onClick={() => setView("list")} aria-label="Список" title="Список">
+              <List size={16} />
+            </button>
+          </div>
         </div>
         <StatusChips value={filters.status} onChange={(s) => filters.update({ status: s || null })} />
         <button
@@ -165,16 +174,19 @@ export function AdminOrdersPage() {
           <Empty title="Ничего не найдено" />
         ) : (
           <>
-            <div className="only-desktop">
-              <OrdersTable orders={data.items} selection={selection} />
-            </div>
-            <div className="only-mobile order-grid">
+            {view === "list" && (
+              <div className="only-desktop">
+                <OrdersTable orders={data.items} selection={selection} />
+              </div>
+            )}
+            <div className={view === "list" ? "only-mobile order-rows card" : "order-grid"}>
               {data.items.map((order) => (
                 <OrderCard
                   key={order.id}
                   order={order}
                   selectable
                   showCost
+                  compact={view === "list"}
                   selected={selection.has(order.id)}
                   selecting={ids.length > 0}
                   onToggle={() => selection.toggle(order.id)}
@@ -238,4 +250,29 @@ export function AdminOrdersPage() {
       )}
     </>
   );
+}
+
+const VIEW_KEY = "crm-orders-view";
+
+/** «Карточки» or «Список», remembered on this phone. Default: cards on a
+ * phone, the table on a wide screen (as before). */
+function useOrdersView(): ["cards" | "list", (v: "cards" | "list") => void] {
+  const [view, setView] = useState<"cards" | "list">(() => {
+    try {
+      const saved = localStorage.getItem(VIEW_KEY);
+      if (saved === "cards" || saved === "list") return saved;
+    } catch {
+      /* storage unavailable */
+    }
+    return window.matchMedia?.("(min-width: 960px)").matches ? "list" : "cards";
+  });
+  const set = (v: "cards" | "list") => {
+    setView(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      /* storage unavailable */
+    }
+  };
+  return [view, set];
 }
