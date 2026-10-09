@@ -2091,3 +2091,196 @@ table.orders .r {
   color: var(--st-delivered);
   font-weight: 600;
 }
+
+/* ==========================================================================
+   Floating tab bar (owner, 10.10: like the new Telegram — a pill above the
+   screen; the active section has a soft capsule that slides between tabs).
+   ========================================================================== */
+
+:root {
+  --nav-gap: 12px; /* the bar floats this far above the bottom edge */
+}
+
+.main {
+  padding-bottom: calc(var(--nav-height) + var(--nav-gap) + var(--safe-bottom) + 28px);
+}
+
+.selection-bar {
+  bottom: calc(var(--nav-height) + var(--nav-gap) + var(--safe-bottom) + 10px);
+}
+
+.tabbar {
+  inset: auto 14px calc(var(--nav-gap) + var(--safe-bottom)) 14px;
+  height: var(--nav-height);
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.tabbar a {
+  position: relative;
+  z-index: 1;
+  border-radius: 999px;
+  transition: color 0.25s ease;
+}
+
+.tabbar a.active {
+  color: var(--tab-active, var(--accent));
+  font-weight: 600;
+}
+
+.tab-pill {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 5px;
+  width: calc((100% - 10px) / var(--tab-count));
+  border-radius: 999px;
+  background: var(--tab-pill, var(--accent-soft));
+  transform: translateX(calc(var(--tab-index) * 100%));
+  /* A little overshoot, like iOS. */
+  transition: transform 0.42s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.tabbar a.active svg {
+  animation: tab-pop 0.35s ease;
+}
+
+@keyframes tab-pop {
+  40% { transform: scale(1.18); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-pill { transition: none; }
+  .tabbar a.active svg { animation: none; }
+}
+
+/* «Оформление» picker in «Настройки». */
+.skin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.skin-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.skin-option.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.skin-swatch {
+  display: flex;
+  width: 100%;
+  height: 28px;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.skin-swatch i {
+  flex: 1;
+}
+
+/* ==========================================================================
+   Admin looks (data-skin on <html>), see lib/skin.ts. Both are light looks:
+   they set every colour themselves, also over Telegram's dark theme.
+   ========================================================================== */
+
+:root[data-skin="minimal"],
+:root[data-skin="sport"] {
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --shadow: none;
+  --font: "Helvetica Neue", Arial, sans-serif;
+  --positive: #2e6a4e; --positive-soft: #e3eee8;
+  --negative: #a13a2b; --negative-soft: #f5e5e1;
+  --warning: #93650f; --warning-soft: #f6eedb;
+  --info: #3a5874; --info-soft: #e3eaf1;
+  --st-new: #6b4fd8; --st-new-soft: #ece8fb;
+  --st-bought: #1f6fd1; --st-bought-soft: #e2edfb;
+  --st-warehouse: #b86e00; --st-warehouse-soft: #fbefd9;
+  --st-cargo: #0a8a96; --st-cargo-soft: #dcf2f4;
+  --st-delivered: #23824f; --st-delivered-soft: #dff1e6;
+  --st-cancelled: #c23b2a; --st-cancelled-soft: #f8e1dd;
+  color-scheme: light;
+}
+
+:root[data-skin] h1 {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+}
+
+:root[data-skin] .chip {
+  border-radius: 4px;
+}
+
+:root[data-skin] .tabbar {
+  border: 0;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  --tab-pill: rgba(255, 255, 255, 0.14);
+}
+
+:root[data-skin] .tabbar a {
+  color: #8a8a8a;
+}
+
+:root[data-skin] .tabbar a.active {
+  color: var(--tab-active);
+}
+
+/* Минимал: white and black. */
+:root[data-skin="minimal"] {
+  --bg: #ffffff; --surface: #ffffff; --surface-2: #f5f5f5; --surface-3: #eaeaea;
+  --border: #e6e6e6; --border-strong: #111111;
+  --text: #0a0a0a; --text-2: #5c5c5c; --text-3: #9a9a9a;
+  --accent: #0a0a0a; --accent-hover: #000000; --accent-contrast: #ffffff; --accent-soft: #f0f0f0;
+}
+
+:root[data-skin="minimal"] body { background: #ffffff; }
+:root[data-skin="minimal"] .card,
+:root[data-skin="minimal"] .order-card,
+:root[data-skin="minimal"] .kpi { border: 1px solid #111111; box-shadow: none; }
+:root[data-skin="minimal"] .balance-card { background: #0a0a0a; border: 0; }
+:root[data-skin="minimal"] .balance-card * { color: #ffffff !important; }
+:root[data-skin="minimal"] .tabbar { background: #0a0a0a; --tab-active: #ffffff; }
+:root[data-skin="minimal"] .chip { border: 1px solid #0a0a0a; }
+:root[data-skin="minimal"] .chip.active { background: #0a0a0a; color: #ffffff; }
+
+/* Спорт: grey, black and lime. */
+:root[data-skin="sport"] {
+  --bg: #ececec; --surface: #ffffff; --surface-2: #f4f4f4; --surface-3: #e4e4e4;
+  --border: #e2e2e2; --border-strong: #111111;
+  --text: #111111; --text-2: #5e5e5e; --text-3: #9b9b9b;
+  --accent: #111111; --accent-hover: #000000; --accent-contrast: #d7ff3a; --accent-soft: #f0f0f0;
+}
+
+:root[data-skin="sport"] body { background: #ececec; }
+:root[data-skin="sport"] .card,
+:root[data-skin="sport"] .order-card,
+:root[data-skin="sport"] .kpi { border: 0; }
+:root[data-skin="sport"] .balance-card { background: #d7ff3a; border: 0; }
+:root[data-skin="sport"] .balance-card * { color: #111111 !important; }
+:root[data-skin="sport"] .btn.primary { background: #111111; color: #d7ff3a; }
+:root[data-skin="sport"] .tabbar { background: #111111; --tab-active: #d7ff3a; --tab-pill: rgba(215, 255, 58, 0.16); }
+:root[data-skin="sport"] .chip { border: 0; background: #ffffff; }
+:root[data-skin="sport"] .chip.active { background: #111111; color: #d7ff3a; }

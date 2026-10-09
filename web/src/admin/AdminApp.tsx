@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 
 import { setClientPreview } from "../api/client";
+import { AppearanceSettings } from "../shared/AppearanceSettings";
 import { useCreateOrder, useOverview, useSetNotifications, useSetRate, useSettings } from "../api/hooks";
 import type { NotificationSettings, NotifyLevel, NotifyRecipient, Shipment } from "../api/types";
 import { type NavItem, PageHead, Shell } from "../components/Layout";
@@ -337,6 +338,7 @@ function SettingsPage({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
     <>
       <PageHead title="Настройки" />
       <div className="stack">
+        <AppearanceSettings />
         <div className="card pad stack">
           <h3>Как видит клиент</h3>
           <div className="small muted">

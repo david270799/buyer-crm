@@ -1,4 +1,4 @@
-import { AlertTriangle, Home, Package, Search, Truck, Wallet } from "lucide-react";
+import { AlertTriangle, Home, Package, Search, Settings, Truck, Wallet } from "lucide-react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 
 import { useOrders, useOverview } from "../api/hooks";
@@ -8,6 +8,7 @@ import { BalanceCard } from "../components/money";
 import { OrderCard } from "../components/orders";
 import { Empty, ErrorState, Loading, useDebounced } from "../components/ui";
 import { plural } from "../lib/format";
+import { AppearanceSettings } from "../shared/AppearanceSettings";
 import { BalancePage } from "../shared/BalancePage";
 import {
   SortSelect,
@@ -27,7 +28,17 @@ const NAV: NavItem[] = [
   { to: "/orders", label: "Заказы", icon: Package },
   { to: "/shipments", label: "Отправки", icon: Truck },
   { to: "/balance", label: "Баланс", icon: Wallet },
+  { to: "/settings", label: "Настройки", icon: Settings },
 ];
+
+function ClientSettings() {
+  return (
+    <>
+      <PageHead title="Настройки" />
+      <AppearanceSettings />
+    </>
+  );
+}
 
 function ClientHome() {
   const { data, error, isLoading, refetch } = useOverview();
@@ -121,6 +132,7 @@ export function ClientApp() {
       <Routes>
         <Route path="/" element={<ClientHome />} />
         <Route path="/orders" element={<ClientOrders />} />
+        <Route path="/settings" element={<ClientSettings />} />
         <Route path="/orders/:id" element={<OrderDetailsPage />} />
         <Route path="/shipments" element={<ShipmentsPage />} />
         <Route path="/shipments/:id" element={<ShipmentDetailsPage />} />

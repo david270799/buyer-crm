@@ -8,16 +8,25 @@ import { ApiError, hasCredentials, setClientPreview, setDemoRole } from "./api/c
 import { useConfig, useMe } from "./api/hooks";
 import { ClientApp } from "./client/ClientApp";
 import { takeDeepLink } from "./lib/deeplink";
+import { applySkin, savedSkin, savedThemeMode, THEME_EVENT } from "./lib/skin";
 import { colorScheme, setupTelegram, syncChrome } from "./telegram";
 
 function useTheme() {
-  const [scheme, setScheme] = useState(colorScheme());
+  const pick = () => {
+    const mode = savedThemeMode();
+    return mode === "auto" ? colorScheme() : mode;
+  };
+  const [scheme, setScheme] = useState(pick());
   useEffect(() => {
-    setupTelegram(setScheme);
+    setupTelegram(() => setScheme(pick()));
     const media = window.matchMedia?.("(prefers-color-scheme: dark)");
-    const onChange = () => setScheme(colorScheme());
+    const onChange = () => setScheme(pick());
     media?.addEventListener?.("change", onChange);
-    return () => media?.removeEventListener?.("change", onChange);
+    window.addEventListener(THEME_EVENT, onChange);
+    return () => {
+      media?.removeEventListener?.("change", onChange);
+      window.removeEventListener(THEME_EVENT, onChange);
+    };
   }, []);
   useEffect(() => {
     document.documentElement.dataset.theme = scheme;
@@ -79,6 +88,11 @@ export function App() {
   const [credentials, setCredentials] = useState(hasCredentials());
   const config = useConfig();
   const me = useMe(credentials);
+  // Each person's own look (stored on their phone); «Как видит клиент» shows the standard one.
+  const ownLook = Boolean(me.data) && !me.data?.preview;
+  useEffect(() => {
+    applySkin(ownLook ? savedSkin() : null);
+  }, [ownLook]);
 
   const pickDemo = (role: "admin" | "client") => {
     setDemoRole(role);

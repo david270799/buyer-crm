@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { type ReactNode, useEffect } from "react";
+import { type CSSProperties, type ReactNode, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { backButton } from "../telegram";
@@ -45,6 +45,7 @@ export function Shell({ nav, title, children }: { nav: NavItem[]; title: string;
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [pathname]);
+  const activeTab = nav.findIndex((item) => isActive(item, pathname));
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -70,7 +71,13 @@ export function Shell({ nav, title, children }: { nav: NavItem[]; title: string;
         </header>
         <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>
       </main>
-      <nav className="tabbar" aria-label="Навигация">
+      <nav
+        className="tabbar"
+        aria-label="Навигация"
+        style={{ "--tab-count": nav.length, "--tab-index": Math.max(0, activeTab) } as CSSProperties}
+      >
+        {/* The highlight capsule slides between sections (iPhone-like). */}
+        {activeTab >= 0 && <span className="tab-pill" aria-hidden="true" />}
         {nav.map((item) => (
           <NavLink key={item.to} to={pathname === item.to ? item.to : item.to + (lastSearch.get(item.to) ?? "")} className={isActive(item, pathname) ? "active" : ""}>
             <item.icon size={21} strokeWidth={1.8} />
