@@ -30,9 +30,6 @@ export function AppearanceSettings() {
           </button>
         ))}
       </div>
-      {skin !== "standard" && (
-        <div className="tiny faint">«Минимал» и «Спорт» всегда светлые; тёмная — у «Обычной».</div>
-      )}
       <div className="skin-grid">
         {SKINS.map((s) => (
           <button

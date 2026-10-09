@@ -2199,8 +2199,8 @@ table.orders .r {
 }
 
 /* ==========================================================================
-   Admin looks (data-skin on <html>), see lib/skin.ts. Both are light looks:
-   they set every colour themselves, also over Telegram's dark theme.
+   Looks (data-skin on <html>), see lib/skin.ts. Each has a light and a dark
+   variant (data-theme): the light rules come first, the dark ones override.
    ========================================================================== */
 
 :root[data-skin="minimal"],
@@ -2290,3 +2290,86 @@ table.orders .r {
 :root[data-skin] .tabbar a { color: #b5b5b5; }
 :root[data-skin] .tab-pill { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
 :root[data-skin="sport"] .tab-pill { box-shadow: 0 0 18px rgba(215, 255, 58, 0.45); }
+
+/* --- Dark variants of the looks ------------------------------------------ */
+
+:root[data-skin="minimal"][data-theme="dark"],
+:root[data-skin="sport"][data-theme="dark"] {
+  --positive: #83c3a0; --positive-soft: #1f2d26;
+  --negative: #ff6b5a; --negative-soft: #3a1714;
+  --warning: #dcb567; --warning-soft: #332a18;
+  --info: #9dbad6; --info-soft: #1e2833;
+  --st-new: #b6a4ff; --st-new-soft: #2b2545;
+  --st-bought: #8ab8ff; --st-bought-soft: #1c2b42;
+  --st-warehouse: #ffc266; --st-warehouse-soft: #3a2c14;
+  --st-cargo: #6fdbe5; --st-cargo-soft: #15343a;
+  --st-delivered: #7ee0a4; --st-delivered-soft: #183424;
+  --st-cancelled: #ff9686; --st-cancelled-soft: #3d1f1a;
+  color-scheme: dark;
+}
+
+/* Минимал, dark: black with white lines; white balance card and white bar. */
+:root[data-skin="minimal"][data-theme="dark"] {
+  --bg: #000000; --surface: #000000; --surface-2: #111111; --surface-3: #1c1c1c;
+  --border: #2a2a2a; --border-strong: #ffffff;
+  --text: #ffffff; --text-2: #a6a6a6; --text-3: #6b6b6b;
+  --accent: #ffffff; --accent-hover: #e6e6e6; --accent-contrast: #000000; --accent-soft: #1a1a1a;
+}
+:root[data-skin="minimal"][data-theme="dark"] body { background: #000000; }
+:root[data-skin="minimal"][data-theme="dark"] .card,
+:root[data-skin="minimal"][data-theme="dark"] .order-card,
+:root[data-skin="minimal"][data-theme="dark"] .kpi { border: 1px solid #ffffff; }
+:root[data-skin="minimal"][data-theme="dark"] .balance-card { background: #ffffff; }
+:root[data-skin="minimal"][data-theme="dark"] .balance-card * { color: #000000 !important; }
+:root[data-skin="minimal"][data-theme="dark"] .tabbar { background: #ffffff; --tab-pill: #000000; --tab-active: #ffffff; }
+:root[data-skin="minimal"][data-theme="dark"] .tabbar a { color: #6b6b6b; }
+:root[data-skin="minimal"][data-theme="dark"] .chip { border: 1px solid #ffffff; background: #000000; color: #ffffff; }
+:root[data-skin="minimal"][data-theme="dark"] .chip.active { background: #ffffff; color: #000000; }
+
+/* Спорт, dark: near-black, graphite cards, lime accents. */
+:root[data-skin="sport"][data-theme="dark"] {
+  --bg: #0b0b0b; --surface: #171717; --surface-2: #1f1f1f; --surface-3: #2a2a2a;
+  --border: #262626; --border-strong: #d7ff3a;
+  --text: #f2f2f2; --text-2: #a3a3a3; --text-3: #6e6e6e;
+  --accent: #d7ff3a; --accent-hover: #e4ff73; --accent-contrast: #111111; --accent-soft: #263006;
+}
+:root[data-skin="sport"][data-theme="dark"] body { background: #0b0b0b; }
+:root[data-skin="sport"][data-theme="dark"] .btn.primary { background: #d7ff3a; color: #111111; }
+:root[data-skin="sport"][data-theme="dark"] .tabbar { background: #000000; border: 1px solid #262626; }
+:root[data-skin="sport"][data-theme="dark"] .chip { background: #171717; color: #f2f2f2; }
+:root[data-skin="sport"][data-theme="dark"] .chip.active { background: #d7ff3a; color: #111111; }
+
+/* --- Debt (negative balance) must catch the eye in every look ----------- */
+
+:root[data-skin] .balance-card.debt .debt-badge {
+  background: #e5241b !important;
+  color: #ffffff !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  animation: debt-pulse 2s ease-in-out infinite;
+}
+
+@keyframes debt-pulse {
+  50% { box-shadow: 0 0 0 6px rgba(229, 36, 27, 0.18); }
+}
+
+/* Минимал: the card keeps its colours, the amount turns red, a red bar on the left. */
+:root[data-skin="minimal"] .balance-card.debt { box-shadow: inset 6px 0 0 #e5241b; }
+:root[data-skin="minimal"] .balance-card.debt .krw { color: #ff5a4f !important; }
+:root[data-skin="minimal"][data-theme="dark"] .balance-card.debt .krw { color: #d11a10 !important; }
+
+/* Спорт: the lime card turns red — impossible to miss. */
+:root[data-skin="sport"] .balance-card.debt { background: #e5241b; }
+:root[data-skin="sport"] .balance-card.debt * { color: #ffffff !important; }
+:root[data-skin="sport"] .balance-card.debt .debt-badge { background: #ffffff !important; color: #e5241b !important; }
+:root[data-skin="sport"] .balance-card.debt .usd { opacity: 0.92; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-skin] .balance-card.debt .debt-badge { animation: none; }
+}
+
+/* Обычная, dark: a light capsule with a dark icon (the dark-grey one was hard to see). */
+:root[data-theme="dark"]:not([data-skin]) .tabbar {
+  --tab-pill: #e9ecf2;
+  --tab-active: #15171b;
+}
