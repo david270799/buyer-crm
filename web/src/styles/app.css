@@ -2358,11 +2358,12 @@ table.orders .r {
 :root[data-skin="minimal"] .balance-card.debt .krw { color: #ff5a4f !important; }
 :root[data-skin="minimal"][data-theme="dark"] .balance-card.debt .krw { color: #d11a10 !important; }
 
-/* Спорт: the lime card turns red — impossible to miss. */
-:root[data-skin="sport"] .balance-card.debt { background: #e5241b; }
+/* Спорт: like Минимал — the lime card turns black, the amount red, a red bar on the left. */
+:root[data-skin="sport"] .balance-card.debt { background: #111111; box-shadow: inset 6px 0 0 #e5241b; }
 :root[data-skin="sport"] .balance-card.debt * { color: #ffffff !important; }
-:root[data-skin="sport"] .balance-card.debt .debt-badge { background: #ffffff !important; color: #e5241b !important; }
-:root[data-skin="sport"] .balance-card.debt .usd { opacity: 0.92; }
+:root[data-skin="sport"] .balance-card.debt .krw { color: #ff5a4f !important; }
+:root[data-skin="sport"] .balance-card.debt .usd { opacity: 0.8; }
+:root[data-skin="sport"][data-theme="dark"] .balance-card.debt { background: #000000; border: 1px solid #2a2a2a; }
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-skin] .balance-card.debt .debt-badge { animation: none; }
