@@ -2262,7 +2262,7 @@ table.orders .r {
 :root[data-skin="minimal"] .kpi { border: 1px solid #111111; box-shadow: none; }
 :root[data-skin="minimal"] .balance-card { background: #0a0a0a; border: 0; }
 :root[data-skin="minimal"] .balance-card * { color: #ffffff !important; }
-:root[data-skin="minimal"] .tabbar { background: #0a0a0a; --tab-active: #ffffff; }
+:root[data-skin="minimal"] .tabbar { background: #0a0a0a; --tab-active: #0a0a0a; --tab-pill: #ffffff; }
 :root[data-skin="minimal"] .chip { border: 1px solid #0a0a0a; }
 :root[data-skin="minimal"] .chip.active { background: #0a0a0a; color: #ffffff; }
 
@@ -2281,6 +2281,12 @@ table.orders .r {
 :root[data-skin="sport"] .balance-card { background: #d7ff3a; border: 0; }
 :root[data-skin="sport"] .balance-card * { color: #111111 !important; }
 :root[data-skin="sport"] .btn.primary { background: #111111; color: #d7ff3a; }
-:root[data-skin="sport"] .tabbar { background: #111111; --tab-active: #d7ff3a; --tab-pill: rgba(215, 255, 58, 0.16); }
+:root[data-skin="sport"] .tabbar { background: #111111; --tab-active: #111111; --tab-pill: #d7ff3a; }
 :root[data-skin="sport"] .chip { border: 0; background: #ffffff; }
 :root[data-skin="sport"] .chip.active { background: #111111; color: #d7ff3a; }
+
+/* Dark bars of the looks: a solid capsule (white / lime) with a dark icon, and
+ * the other icons light enough to read. */
+:root[data-skin] .tabbar a { color: #b5b5b5; }
+:root[data-skin] .tab-pill { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
+:root[data-skin="sport"] .tab-pill { box-shadow: 0 0 18px rgba(215, 255, 58, 0.45); }
