@@ -1,5 +1,5 @@
-import { LayoutGrid, List } from "lucide-react";
-import { useState } from "react";
+import { LayoutGrid, List, Search, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import type { OrderFilters, OrderStatus } from "../api/types";
@@ -113,6 +113,61 @@ export function ViewToggle({ value, onChange }: { value: OrdersView; onChange: (
       </button>
       <button className={`btn icon-only ${value === "list" ? "active" : ""}`} onClick={() => onChange("list")} aria-label="Список" title="Список">
         <List size={16} />
+      </button>
+    </div>
+  );
+}
+
+/** Search behind a magnifier button (owner, 10.10: the always-open field took
+ * too much room). Stays open while there is a query. */
+export function useSearchToggle(q: string): [boolean, (open: boolean) => void] {
+  const [open, setOpen] = useState(Boolean(q));
+  return [open || Boolean(q), setOpen];
+}
+
+export function SearchButton({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      className={`btn icon-only search-toggle ${open ? "active" : ""}`}
+      onClick={onToggle}
+      aria-label="Поиск"
+      title="Поиск"
+    >
+      <Search size={16} />
+    </button>
+  );
+}
+
+export function SearchField({
+  value,
+  onChange,
+  onClose,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onClose: () => void;
+  placeholder: string;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    input.current?.focus();
+  }, []);
+  return (
+    <div className="search search-open">
+      <Search size={16} />
+      <input ref={input} className="input" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+      <button
+        type="button"
+        className="btn icon-only small search-close"
+        onClick={() => {
+          onChange("");
+          onClose();
+        }}
+        aria-label="Закрыть поиск"
+      >
+        <X size={16} />
       </button>
     </div>
   );

@@ -2379,3 +2379,36 @@ table.orders .r {
 :root[data-skin][data-theme] .tabbar a.active {
   color: var(--tab-active);
 }
+
+/* Search behind a magnifier (Заказы). */
+.search-toggle.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.search-open {
+  animation: search-in 0.2s ease;
+}
+
+.search-open .input {
+  padding-right: 44px;
+}
+
+.search-open .search-close {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  background: transparent;
+  box-shadow: none;
+}
+
+.search-open .search-close svg {
+  position: static;
+  transform: none;
+  color: var(--text-2);
+}
+
+@keyframes search-in {
+  from { opacity: 0; transform: translateY(-4px); }
+}

@@ -1,4 +1,4 @@
-import { AlertTriangle, Home, Package, Search, Settings, Truck, Wallet } from "lucide-react";
+import { AlertTriangle, Home, Package, Settings, Truck, Wallet } from "lucide-react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 
 import { useOrders, useOverview } from "../api/hooks";
@@ -11,12 +11,15 @@ import { plural } from "../lib/format";
 import { AppearanceSettings } from "../shared/AppearanceSettings";
 import { BalancePage } from "../shared/BalancePage";
 import {
+  SearchButton,
+  SearchField,
   SortSelect,
   StatusChips,
   StatusTiles,
   useOrderFilters,
   useOrderSort,
   useOrdersView,
+  useSearchToggle,
   ViewToggle,
 } from "../shared/filters";
 import { NotificationsPage } from "../shared/NotificationsPage";
@@ -80,6 +83,7 @@ function ClientOrders() {
   const filters = useOrderFilters();
   const [sort, setSort] = useOrderSort(filters);
   const [view, setView] = useOrdersView();
+  const [searching, setSearching] = useSearchToggle(filters.q);
   const q = useDebounced(filters.q);
   const request: OrderFilters = { status: filters.status, q, attention: filters.attention || undefined, sort, limit: 200 };
   const { data, error, isLoading, refetch } = useOrders(request);
@@ -87,19 +91,19 @@ function ClientOrders() {
     <>
       <PageHead title="Заказы" sub={data ? `${data.total} ${plural(data.total, "заказ", "заказа", "заказов")}` : undefined} />
       <div className="stack">
-        <div className="search">
-          <Search size={16} />
-          <input
-            className="input"
-            placeholder="Поиск: бренд, модель, номер, трек"
-            value={filters.q}
-            onChange={(e) => filters.update({ q: e.target.value })}
-          />
-        </div>
-        <div className="row" style={{ gap: 8 }}>
+        <div className="filters">
           <SortSelect value={sort} onChange={setSort} />
           <ViewToggle value={view} onChange={setView} />
+          <SearchButton open={searching} onToggle={() => setSearching(!searching)} />
         </div>
+        {searching && (
+          <SearchField
+            value={filters.q}
+            onChange={(q) => filters.update({ q })}
+            onClose={() => setSearching(false)}
+            placeholder="Поиск: бренд, модель, номер, трек"
+          />
+        )}
         <StatusChips value={filters.status} onChange={(s) => filters.update({ status: s || null, attention: null })} />
         {filters.attention && (
           <button className="chip active" style={{ alignSelf: "flex-start" }} onClick={() => filters.update({ attention: null })}>

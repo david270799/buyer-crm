@@ -1,4 +1,4 @@
-import { AlertTriangle, MessageSquare, Percent, Plus, Search, Tag, Trash2, Truck, X } from "lucide-react";
+import { AlertTriangle, MessageSquare, Percent, Plus, Tag, Trash2, Truck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -10,11 +10,14 @@ import { StatusBadge } from "../components/status";
 import { Checkbox, Empty, ErrorState, Loading, useDebounced, useLongPress, useSelection } from "../components/ui";
 import { krw, plural, shortDate } from "../lib/format";
 import {
+  SearchButton,
+  SearchField,
   SortSelect,
   StatusChips,
   useOrderFilters,
   useOrderSort,
   useOrdersView,
+  useSearchToggle,
   ViewToggle,
 } from "../shared/filters";
 import { AttentionSheet, BulkStatusSheet, CommentSheet, DeleteConfirm, DiscountSheet, ShipmentSheet } from "./sheets";
@@ -101,6 +104,7 @@ export function AdminOrdersPage() {
   const [view, setView] = useOrdersView();
   const q = useDebounced(filters.q);
   const [sort, setSort] = useOrderSort(filters);
+  const [searching, setSearching] = useSearchToggle(filters.q);
   const [limit, setLimit] = useState(PAGE);
   const selection = useSelection();
   const [bulk, setBulk] = useState<Bulk>(null);
@@ -134,18 +138,18 @@ export function AdminOrdersPage() {
       />
       <div className="stack">
         <div className="filters">
-          <div className="search">
-            <Search size={16} />
-            <input
-              className="input"
-              placeholder="Поиск: номер, бренд, модель, трек, комментарий"
-              value={filters.q}
-              onChange={(e) => filters.update({ q: e.target.value })}
-            />
-          </div>
           <SortSelect value={sort} onChange={setSort} />
           <ViewToggle value={view} onChange={setView} />
+          <SearchButton open={searching} onToggle={() => setSearching(!searching)} />
         </div>
+        {searching && (
+          <SearchField
+            value={filters.q}
+            onChange={(q) => filters.update({ q })}
+            onClose={() => setSearching(false)}
+            placeholder="Поиск: номер, бренд, модель, трек, комментарий"
+          />
+        )}
         <StatusChips value={filters.status} onChange={(s) => filters.update({ status: s || null })} />
         <button
           className={`chip ${filters.attention ? "active" : ""}`}
