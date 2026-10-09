@@ -513,3 +513,20 @@ def test_notification_settings(db, api):
     bad = api("PUT", "/api/settings/notifications", json={"recipient": "everyone"})
     assert bad.status_code == 422 and "error" in bad.json()
     assert db.get("settings", "notifications")["recipient"] == "admins"
+
+
+def test_admin_preview_as_client_sees_only_client_fields(db, api):
+    seed_order(db, "N5", status="new", brand="Nike", source_url="https://shop-a.kr/1")
+    api("POST", "/api/orders/N5/buy", json={"purchase_price": 140_000, "client_price": 170_000})
+    view = {"X-View-As": "client"}
+
+    me = api("GET", "/api/me", headers=dict(view)).json()
+    assert me["role"] == "client" and me["preview"] is True
+    order = api("GET", "/api/orders/N5", headers=dict(view)).json()["order"]
+    assert "purchase_price" not in order and "source_url" not in order
+    # Read-only like the client.
+    response = api("PATCH", "/api/orders/N5", headers=dict(view), json={"brand": "X"})
+    assert response.status_code == 403
+    # The header never lifts a client up.
+    assert api("GET", "/api/me", who=CLIENT_TG, headers=dict(view)).json()["preview"] is False
+    assert api("GET", "/api/me").json()["role"] == "admin"

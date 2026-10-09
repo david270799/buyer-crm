@@ -207,6 +207,8 @@ export interface ShipResult {
 
 export interface Me {
   role: Role;
+  /** The admin looks at the client's view («Как видит клиент»). */
+  preview?: boolean;
   user: { id: number; first_name: string | null; username: string | null };
 }
 

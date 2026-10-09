@@ -1,10 +1,10 @@
-import { LogIn, ShieldAlert, UserRound } from "lucide-react";
+import { Eye, LogIn, ShieldAlert, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { PinGate } from "./admin/pin";
 import { AdminApp } from "./admin/AdminApp";
-import { ApiError, hasCredentials, setDemoRole } from "./api/client";
+import { ApiError, hasCredentials, setClientPreview, setDemoRole } from "./api/client";
 import { useConfig, useMe } from "./api/hooks";
 import { ClientApp } from "./client/ClientApp";
 import { takeDeepLink } from "./lib/deeplink";
@@ -116,6 +116,19 @@ export function App() {
           ) : undefined
         }
       />
+    );
+  }
+  if (me.data.preview) {
+    return (
+      <>
+        <div className="preview-bar">
+          <Eye size={16} /> <span className="grow">Вы смотрите как клиент</span>
+          <button className="btn small" onClick={() => setClientPreview(false)}>
+            Выйти
+          </button>
+        </div>
+        <ClientApp />
+      </>
     );
   }
   return me.data.role === "admin" ? (

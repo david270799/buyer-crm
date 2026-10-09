@@ -29,6 +29,27 @@ export function setDemoRole(role: string | null): void {
   }
 }
 
+const PREVIEW_KEY = "crm-view-as-client";
+
+/** «Как видит клиент»: kept until the Mini App is closed (sessionStorage). */
+export function clientPreview(): boolean {
+  try {
+    return sessionStorage.getItem(PREVIEW_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setClientPreview(on: boolean): void {
+  try {
+    if (on) sessionStorage.setItem(PREVIEW_KEY, "1");
+    else sessionStorage.removeItem(PREVIEW_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+  window.location.reload();
+}
+
 function authorization(): string | null {
   const data = initData();
   if (data) return `tma ${data}`;
@@ -44,6 +65,8 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   const auth = authorization();
   if (auth) headers.set("Authorization", auth);
+  // The server only lets an admin step down to the client's view.
+  if (clientPreview()) headers.set("X-View-As", "client");
   if (init.body && !(init.body instanceof FormData)) headers.set("Content-Type", "application/json");
 
   let response: Response;

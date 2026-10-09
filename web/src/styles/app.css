@@ -1892,3 +1892,18 @@ table.orders .r {
   display: grid;
   place-items: center;
 }
+
+/* «Как видит клиент»: a strip on top so the admin never forgets the mode. */
+.preview-bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--info-soft);
+  color: var(--info);
+  font-weight: 600;
+  font-size: 14px;
+}

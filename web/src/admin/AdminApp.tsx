@@ -1,7 +1,8 @@
-import { LayoutGrid, Package, Plus, Settings, Truck, Wallet } from "lucide-react";
+import { Eye, LayoutGrid, Package, Plus, Settings, Truck, Wallet } from "lucide-react";
 import { useState } from "react";
 import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 
+import { setClientPreview } from "../api/client";
 import { useCreateOrder, useOverview, useSetNotifications, useSetRate, useSettings } from "../api/hooks";
 import type { NotificationSettings, NotifyLevel, NotifyRecipient, Shipment } from "../api/types";
 import { type NavItem, PageHead, Shell } from "../components/Layout";
@@ -336,6 +337,16 @@ function SettingsPage({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
     <>
       <PageHead title="Настройки" />
       <div className="stack">
+        <div className="card pad stack">
+          <h3>Как видит клиент</h3>
+          <div className="small muted">
+            Откроется CRM глазами клиента: только то, что видит он, без цен закупки и вашей прибыли. Выйти —
+            кнопкой сверху или закрыв Mini App.
+          </div>
+          <button className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setClientPreview(true)}>
+            <Eye size={16} /> Посмотреть как клиент
+          </button>
+        </div>
         <PinSettings />
         <div className="card pad stack">
           <h3>Курс KRW / USD</h3>

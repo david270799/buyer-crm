@@ -83,6 +83,7 @@ class Principal:
     actor: Actor
     role: Role
     user: TelegramUser
+    preview: bool = False  # the admin looks at the client's view
 
 
 class ApiError(Exception):
@@ -295,7 +296,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             CORSMiddleware,
             allow_origins=list(config.web_origins),
             allow_methods=["GET", "POST", "PATCH", "PUT"],
-            allow_headers=["Authorization", "Content-Type"],
+            allow_headers=["Authorization", "Content-Type", "X-View-As"],
         )
 
     @app.middleware("http")
@@ -372,7 +373,12 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         role = services.roles.resolve(user.id)
         if role is None:
             raise ApiError(403, "forbidden", "У этого Telegram-аккаунта нет доступа к CRM.")
-        return Principal(actor=Actor.mini_app(user.id, role), role=role, user=user)
+        # «Как видит клиент»: the admin may only step *down* to the client's view
+        # (same rules as the client: read-only, client fields only).
+        preview = role is Role.ADMIN and request.headers.get("x-view-as", "").lower() == "client"
+        if preview:
+            role = Role.CLIENT
+        return Principal(actor=Actor.mini_app(user.id, role), role=role, user=user, preview=preview)
 
     def admin(p: Annotated[Principal, Depends(principal)]) -> Principal:
         if p.role is not Role.ADMIN:
@@ -392,6 +398,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
     def me(p: Any_) -> dict[str, Any]:
         return {
             "role": p.role.value,
+            "preview": p.preview,
             "user": {"id": p.user.id, "first_name": p.user.first_name, "username": p.user.username},
         }
 
