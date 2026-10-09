@@ -43,8 +43,44 @@ export function StatusChips({ value, onChange }: { value: OrderStatus | ""; onCh
   );
 }
 
+const FILTERS_KEY = "crm-order-filters";
+// Kept across restarts (owner, 11.10): status, sort and «внимание»; the search text is not.
+const KEPT = ["status", "sort", "attention"];
+let restored = false; // restore once per app start; later a bare /orders means «cleared»
+
+function readSaved(): URLSearchParams | null {
+  try {
+    const raw = localStorage.getItem(FILTERS_KEY);
+    return raw ? new URLSearchParams(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function useOrderFilters() {
   const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (!restored) {
+      restored = true;
+      const saved = readSaved();
+      if (saved && !KEPT.some((k) => params.has(k)) && [...saved.keys()].length) {
+        const merged = new URLSearchParams(params);
+        saved.forEach((value, key) => merged.set(key, value));
+        setParams(merged, { replace: true });
+        return;
+      }
+    }
+    const keep = new URLSearchParams();
+    for (const key of KEPT) {
+      const value = params.get(key);
+      if (value) keep.set(key, value);
+    }
+    try {
+      localStorage.setItem(FILTERS_KEY, keep.toString());
+    } catch {
+      /* storage unavailable */
+    }
+  }, [params, setParams]);
   const status = (params.get("status") ?? "") as OrderStatus | "";
   const attention = params.get("attention") === "1";
   const update = (next: Record<string, string | null>) => {
