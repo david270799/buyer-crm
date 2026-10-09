@@ -74,7 +74,7 @@ docs/
   deploy.md                  сервер, копии и восстановление, Firestore-вариант
   guide.pdf                  пошаговая инструкция для владельца (13 стр., со скриншотами)
   guide/                     исходник guide.pdf (guide.html, img/, render.mjs)
-  design/                    варианты цветовых схем A–F (скриншоты) и palettes.css
+  design/                    palettes.css (ранние цветовые схемы), skins/*.css — наброски тем (10.10)
   spec-original.md           исходное ТЗ владельца (часть решений с тех пор изменена — см. §9)
 backend/
   requirements.txt, requirements-dev.txt, pyproject.toml (ruff)
