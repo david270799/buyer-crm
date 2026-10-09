@@ -2,8 +2,8 @@ import { AlertTriangle, ImageOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import type { Order } from "../api/types";
-import { krw, orderTitle, statusLabel } from "../lib/format";
-import { Dots } from "./status";
+import { krw, orderTitle } from "../lib/format";
+import { Dots, StatusBadge } from "./status";
 import { Checkbox, useLongPress } from "./ui";
 
 export function Photo({
@@ -59,7 +59,7 @@ export function OrderCard({
   );
   return (
     <article
-      className={`order-card ${selected ? "selected" : ""} ${canSelect ? "no-callout" : ""}`}
+      className={`order-card st-${order.status ?? "new"} ${selected ? "selected" : ""} ${canSelect ? "no-callout" : ""}`}
       {...(canSelect ? press : { onClick: open })}
     >
       {order.attention_required && (
@@ -85,7 +85,7 @@ export function OrderCard({
         )}
         <div className="foot">
           <Dots status={order.status} />
-          <span>{statusLabel(order.status)}</span>
+          <StatusBadge status={order.status} />
         </div>
       </div>
     </article>

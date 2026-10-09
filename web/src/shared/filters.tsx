@@ -30,9 +30,10 @@ export function StatusChips({ value, onChange }: { value: OrderStatus | ""; onCh
           key={status || "all"}
           role="tab"
           aria-selected={value === status}
-          className={`chip ${value === status ? "active" : ""}`}
+          className={`chip ${status ? `c-${status}` : ""} ${value === status ? "active" : ""}`}
           onClick={() => onChange(status)}
         >
+          {status && <span className="status-dot" />}
           {status ? STATUS_PLURAL[status] : "Все"}
         </button>
       ))}
