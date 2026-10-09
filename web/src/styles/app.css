@@ -2322,7 +2322,7 @@ table.orders .r {
 :root[data-skin="minimal"][data-theme="dark"] .balance-card { background: #ffffff; }
 :root[data-skin="minimal"][data-theme="dark"] .balance-card * { color: #000000 !important; }
 :root[data-skin="minimal"][data-theme="dark"] .tabbar { background: #ffffff; --tab-pill: #000000; --tab-active: #ffffff; }
-:root[data-skin="minimal"][data-theme="dark"] .tabbar a { color: #6b6b6b; }
+:root[data-skin="minimal"][data-theme="dark"] .tabbar a { color: #4d4d4d; }
 :root[data-skin="minimal"][data-theme="dark"] .chip { border: 1px solid #ffffff; background: #000000; color: #ffffff; }
 :root[data-skin="minimal"][data-theme="dark"] .chip.active { background: #ffffff; color: #000000; }
 
@@ -2373,4 +2373,9 @@ table.orders .r {
 :root[data-theme="dark"]:not([data-skin]) .tabbar {
   --tab-pill: #e9ecf2;
   --tab-active: #15171b;
+}
+
+/* The active tab always takes the capsule's text colour, in every look and mode. */
+:root[data-skin][data-theme] .tabbar a.active {
+  color: var(--tab-active);
 }
