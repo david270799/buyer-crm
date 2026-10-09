@@ -1,15 +1,22 @@
-import { AlertTriangle, LayoutGrid, List, MessageSquare, Percent, Plus, Search, Tag, Trash2, Truck, X } from "lucide-react";
+import { AlertTriangle, MessageSquare, Percent, Plus, Search, Tag, Trash2, Truck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { useOrders } from "../api/hooks";
-import type { Order, OrderFilters } from "../api/types";
+import type { Order } from "../api/types";
 import { PageHead } from "../components/Layout";
 import { OrderCard, Thumb } from "../components/orders";
 import { StatusBadge } from "../components/status";
 import { Checkbox, Empty, ErrorState, Loading, useDebounced, useLongPress, useSelection } from "../components/ui";
 import { krw, plural, shortDate } from "../lib/format";
-import { StatusChips, useOrderFilters } from "../shared/filters";
+import {
+  SortSelect,
+  StatusChips,
+  useOrderFilters,
+  useOrderSort,
+  useOrdersView,
+  ViewToggle,
+} from "../shared/filters";
 import { AttentionSheet, BulkStatusSheet, CommentSheet, DeleteConfirm, DiscountSheet, ShipmentSheet } from "./sheets";
 
 type Bulk = "status" | "ship" | "comment" | "attention" | "discount" | "delete" | null;
@@ -93,10 +100,7 @@ export function AdminOrdersPage() {
   const filters = useOrderFilters();
   const [view, setView] = useOrdersView();
   const q = useDebounced(filters.q);
-  // Kept in the URL like the filters, so it survives opening an order and coming back.
-  const sort = (filters.sort || "newest") as NonNullable<OrderFilters["sort"]>;
-  const setSort = (value: NonNullable<OrderFilters["sort"]>) =>
-    filters.update({ sort: value === "newest" ? null : value });
+  const [sort, setSort] = useOrderSort(filters);
   const [limit, setLimit] = useState(PAGE);
   const selection = useSelection();
   const [bulk, setBulk] = useState<Bulk>(null);
@@ -139,21 +143,8 @@ export function AdminOrdersPage() {
               onChange={(e) => filters.update({ q: e.target.value })}
             />
           </div>
-          <select className="select" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Сортировка">
-            <option value="newest">Сначала новые</option>
-            <option value="oldest">Сначала старые</option>
-            <option value="price_desc">Дороже</option>
-            <option value="price_asc">Дешевле</option>
-            <option value="status">По статусу</option>
-          </select>
-          <div className="view-toggle" role="group" aria-label="Вид">
-            <button className={`btn icon-only ${view === "cards" ? "active" : ""}`} onClick={() => setView("cards")} aria-label="Карточки" title="Карточки">
-              <LayoutGrid size={16} />
-            </button>
-            <button className={`btn icon-only ${view === "list" ? "active" : ""}`} onClick={() => setView("list")} aria-label="Список" title="Список">
-              <List size={16} />
-            </button>
-          </div>
+          <SortSelect value={sort} onChange={setSort} />
+          <ViewToggle value={view} onChange={setView} />
         </div>
         <StatusChips value={filters.status} onChange={(s) => filters.update({ status: s || null })} />
         <button
@@ -250,29 +241,4 @@ export function AdminOrdersPage() {
       )}
     </>
   );
-}
-
-const VIEW_KEY = "crm-orders-view";
-
-/** «Карточки» or «Список», remembered on this phone. Default: cards on a
- * phone, the table on a wide screen (as before). */
-function useOrdersView(): ["cards" | "list", (v: "cards" | "list") => void] {
-  const [view, setView] = useState<"cards" | "list">(() => {
-    try {
-      const saved = localStorage.getItem(VIEW_KEY);
-      if (saved === "cards" || saved === "list") return saved;
-    } catch {
-      /* storage unavailable */
-    }
-    return window.matchMedia?.("(min-width: 960px)").matches ? "list" : "cards";
-  });
-  const set = (v: "cards" | "list") => {
-    setView(v);
-    try {
-      localStorage.setItem(VIEW_KEY, v);
-    } catch {
-      /* storage unavailable */
-    }
-  };
-  return [view, set];
 }

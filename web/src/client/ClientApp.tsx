@@ -9,7 +9,15 @@ import { OrderCard } from "../components/orders";
 import { Empty, ErrorState, Loading, useDebounced } from "../components/ui";
 import { plural } from "../lib/format";
 import { BalancePage } from "../shared/BalancePage";
-import { StatusChips, StatusTiles, useOrderFilters } from "../shared/filters";
+import {
+  SortSelect,
+  StatusChips,
+  StatusTiles,
+  useOrderFilters,
+  useOrderSort,
+  useOrdersView,
+  ViewToggle,
+} from "../shared/filters";
 import { NotificationsPage } from "../shared/NotificationsPage";
 import { OrderDetailsPage } from "../shared/OrderDetailsPage";
 import { ShipmentDetailsPage, ShipmentsPage } from "../shared/ShipmentsPages";
@@ -59,8 +67,10 @@ function ClientHome() {
 
 function ClientOrders() {
   const filters = useOrderFilters();
+  const [sort, setSort] = useOrderSort(filters);
+  const [view, setView] = useOrdersView();
   const q = useDebounced(filters.q);
-  const request: OrderFilters = { status: filters.status, q, attention: filters.attention || undefined, limit: 200 };
+  const request: OrderFilters = { status: filters.status, q, attention: filters.attention || undefined, sort, limit: 200 };
   const { data, error, isLoading, refetch } = useOrders(request);
   return (
     <>
@@ -74,6 +84,10 @@ function ClientOrders() {
             value={filters.q}
             onChange={(e) => filters.update({ q: e.target.value })}
           />
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          <SortSelect value={sort} onChange={setSort} />
+          <ViewToggle value={view} onChange={setView} />
         </div>
         <StatusChips value={filters.status} onChange={(s) => filters.update({ status: s || null, attention: null })} />
         {filters.attention && (
@@ -90,9 +104,9 @@ function ClientOrders() {
         ) : !data.items.length ? (
           <Empty title="Ничего не найдено" hint="Попробуйте изменить фильтр или поиск." />
         ) : (
-          <div className="order-grid">
+          <div className={view === "list" ? "order-rows card" : "order-grid"}>
             {data.items.map((order) => (
-              <OrderCard key={order.id} order={order} />
+              <OrderCard key={order.id} order={order} compact={view === "list"} />
             ))}
           </div>
         )}
