@@ -1,5 +1,5 @@
 import { AlertTriangle, Copy, MessageSquare, Package } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { useOrder } from "../api/hooks";
@@ -7,6 +7,7 @@ import type { Order, Shipment } from "../api/types";
 import { PageHead } from "../components/Layout";
 import { OrderHistory } from "../components/events";
 import { Photo } from "../components/orders";
+import { Lightbox } from "../components/PhotoCarousel";
 import { StatusBadge, Stepper } from "../components/status";
 import { ErrorState, Loading, useToast } from "../components/ui";
 import { date, dateTime, items, krw, orderTitle } from "../lib/format";
@@ -26,6 +27,22 @@ export function CopyText({ text }: { text: string }) {
     >
       {text} <Copy size={13} />
     </button>
+  );
+}
+
+/** The order photo; a tap opens it full screen (pinch to zoom). */
+function OrderPhoto({ order }: { order: Order }) {
+  const [open, setOpen] = useState(false);
+  const src = order.photo_url ?? order.thumbnail_url;
+  return (
+    <>
+      <button type="button" className="photo-button" onClick={() => src && setOpen(true)} aria-label="Открыть фото">
+        <Photo src={src} alt={orderTitle(order)} className="large contain" />
+      </button>
+      {open && src && (
+        <Lightbox photos={[{ photo_url: src, thumbnail_url: order.thumbnail_url }]} start={0} onClose={() => setOpen(false)} />
+      )}
+    </>
   );
 }
 
@@ -90,7 +107,7 @@ export function OrderDetailsPage({ adminPanel }: { adminPanel?: (order: Order) =
       />
       <div className="details">
         <div className="stack">
-          <Photo src={order.photo_url ?? order.thumbnail_url} alt={orderTitle(order)} className="large contain" />
+          <OrderPhoto order={order} />
         </div>
         <div className="stack">
           {order.attention_required && (
