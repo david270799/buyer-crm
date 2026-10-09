@@ -10,6 +10,7 @@ import { StatusBadge } from "../components/status";
 import { Checkbox, Empty, ErrorState, Loading, useDebounced, useLongPress, useSelection } from "../components/ui";
 import { krw, plural, shortDate } from "../lib/format";
 import {
+  AttentionButton,
   SearchButton,
   SearchField,
   SortSelect,
@@ -141,6 +142,10 @@ export function AdminOrdersPage() {
           <SortSelect value={sort} onChange={setSort} />
           <ViewToggle value={view} onChange={setView} />
           <SearchButton open={searching} onToggle={() => setSearching(!searching)} />
+          <AttentionButton
+            active={filters.attention}
+            onToggle={() => filters.update({ attention: filters.attention ? null : "1" })}
+          />
         </div>
         {searching && (
           <SearchField
@@ -151,13 +156,6 @@ export function AdminOrdersPage() {
           />
         )}
         <StatusChips value={filters.status} onChange={(s) => filters.update({ status: s || null })} />
-        <button
-          className={`chip ${filters.attention ? "active" : ""}`}
-          style={{ alignSelf: "flex-start" }}
-          onClick={() => filters.update({ attention: filters.attention ? null : "1" })}
-        >
-          <AlertTriangle size={12} style={{ verticalAlign: -1 }} /> Требуют внимания
-        </button>
       </div>
 
       <div className="section">

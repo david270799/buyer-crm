@@ -11,6 +11,7 @@ import { plural } from "../lib/format";
 import { AppearanceSettings } from "../shared/AppearanceSettings";
 import { BalancePage } from "../shared/BalancePage";
 import {
+  AttentionButton,
   SearchButton,
   SearchField,
   SortSelect,
@@ -95,6 +96,10 @@ function ClientOrders() {
           <SortSelect value={sort} onChange={setSort} />
           <ViewToggle value={view} onChange={setView} />
           <SearchButton open={searching} onToggle={() => setSearching(!searching)} />
+          <AttentionButton
+            active={filters.attention}
+            onToggle={() => filters.update({ attention: filters.attention ? null : "1" })}
+          />
         </div>
         {searching && (
           <SearchField
@@ -105,11 +110,6 @@ function ClientOrders() {
           />
         )}
         <StatusChips value={filters.status} onChange={(s) => filters.update({ status: s || null, attention: null })} />
-        {filters.attention && (
-          <button className="chip active" style={{ alignSelf: "flex-start" }} onClick={() => filters.update({ attention: null })}>
-            Требуют внимания ✕
-          </button>
-        )}
       </div>
       <div className="section">
         {isLoading ? (

@@ -1,4 +1,4 @@
-import { LayoutGrid, List, Search, X } from "lucide-react";
+import { AlertTriangle, LayoutGrid, List, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
@@ -170,5 +170,21 @@ export function SearchField({
         <X size={16} />
       </button>
     </div>
+  );
+}
+
+/** «Требуют внимания» as an icon next to the magnifier (owner, 10.10). */
+export function AttentionButton({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      className={`btn icon-only attention-toggle ${active ? "active" : ""}`}
+      onClick={onToggle}
+      aria-pressed={active}
+      aria-label="Требуют внимания"
+      title="Требуют внимания"
+    >
+      <AlertTriangle size={16} />
+    </button>
   );
 }
