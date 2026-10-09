@@ -432,7 +432,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         status: str | None = None,
         q: Annotated[str | None, Query(max_length=100)] = None,
         attention: bool | None = None,
-        sort: Literal["newest", "oldest", "price_desc", "price_asc"] = "newest",
+        sort: Literal["newest", "oldest", "price_desc", "price_asc", "status"] = "newest",
         offset: Annotated[int, Query(ge=0)] = 0,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
     ) -> dict[str, Any]:

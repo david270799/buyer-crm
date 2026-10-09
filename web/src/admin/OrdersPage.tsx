@@ -92,7 +92,10 @@ function OrdersTable({ orders, selection }: { orders: Order[]; selection: Return
 export function AdminOrdersPage() {
   const filters = useOrderFilters();
   const q = useDebounced(filters.q);
-  const [sort, setSort] = useState<NonNullable<OrderFilters["sort"]>>("newest");
+  // Kept in the URL like the filters, so it survives opening an order and coming back.
+  const sort = (filters.sort || "newest") as NonNullable<OrderFilters["sort"]>;
+  const setSort = (value: NonNullable<OrderFilters["sort"]>) =>
+    filters.update({ sort: value === "newest" ? null : value });
   const [limit, setLimit] = useState(PAGE);
   const selection = useSelection();
   const [bulk, setBulk] = useState<Bulk>(null);
@@ -140,6 +143,7 @@ export function AdminOrdersPage() {
             <option value="oldest">Сначала старые</option>
             <option value="price_desc">Дороже</option>
             <option value="price_asc">Дешевле</option>
+            <option value="status">По статусу</option>
           </select>
         </div>
         <StatusChips value={filters.status} onChange={(s) => filters.update({ status: s || null })} />

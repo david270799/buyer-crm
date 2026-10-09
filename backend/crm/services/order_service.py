@@ -253,7 +253,7 @@ class BulkUpdate:
     attention_required: bool = UNSET
 
 
-SORTS = ("newest", "oldest", "price_desc", "price_asc")
+SORTS = ("newest", "oldest", "price_desc", "price_asc", "status")
 
 
 @dataclass
@@ -322,7 +322,17 @@ def _matches(order: Order, needle: str, admin: bool) -> bool:
     return any(needle in value.lower() for value in haystack if value)
 
 
+# «По статусу»: new → bought → warehouse → cargo → delivered → cancelled (owner, 09.10).
+_STATUS_ORDER = {status: rank for rank, status in enumerate((*STATUS_FLOW, OrderStatus.CANCELLED))}
+
+
 def _sort_key(sort: str):
+    if sort == "status":
+        # Within one status the newest order first.
+        return lambda o: (
+            _STATUS_ORDER.get(o.status, len(_STATUS_ORDER)),
+            -(order_number(o.id) or 0),
+        )
     if sort in ("price_desc", "price_asc"):
         return lambda o: (o.client_price or 0, order_number(o.id) or 0)
     return lambda o: order_number(o.id) or 0

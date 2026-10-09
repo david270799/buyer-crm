@@ -221,7 +221,7 @@ export interface OrderFilters {
   status?: OrderStatus | "";
   q?: string;
   attention?: boolean;
-  sort?: "newest" | "oldest" | "price_desc" | "price_asc";
+  sort?: "newest" | "oldest" | "price_desc" | "price_asc" | "status";
   offset?: number;
   limit?: number;
 }

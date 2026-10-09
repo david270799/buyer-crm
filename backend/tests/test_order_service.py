@@ -535,3 +535,16 @@ def test_duplicate_copies_the_item_without_prices(db, services, admin, client_ac
     assert balance(db) == before
     with pytest.raises(PermissionDeniedError):
         services.orders.duplicate(client_actor, source.id)
+
+
+def test_list_sorted_by_status(db, services, admin):
+    from crm.services.order_service import OrderQuery
+
+    seed_order(db, "N1", status="delivered")
+    seed_order(db, "N2", status="new")
+    seed_order(db, "N3", status="cancelled")
+    seed_order(db, "N4", status="warehouse")
+    seed_order(db, "N5", status="new")
+    seed_order(db, "N6", status="bought")
+    page = services.orders.list_orders(admin, OrderQuery(sort="status"))
+    assert [o.id for o in page.items] == ["N5", "N2", "N6", "N4", "N1", "N3"]

@@ -53,5 +53,5 @@ export function useOrderFilters() {
     }
     setParams(merged, { replace: true });
   };
-  return { status, attention, q: params.get("q") ?? "", update };
+  return { status, attention, q: params.get("q") ?? "", sort: params.get("sort") ?? "", update };
 }
