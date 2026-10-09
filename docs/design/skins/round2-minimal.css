@@ -1,0 +1,52 @@
+/* shared: Minimal base for m1..m4 */
+html[data-skin^="m"] { --radius-sm: 4px; --radius: 6px; --radius-lg: 8px; --shadow: none; --font: "Helvetica Neue", Arial, sans-serif; }
+html[data-skin^="m"] h1 { font-size: 34px; font-weight: 800; letter-spacing: -0.04em; text-transform: uppercase; }
+html[data-skin^="m"] .chip { border-radius: 4px; }
+html[data-skin^="m"] .tabbar { left: 16px; right: 16px; bottom: 14px; height: 62px; border-radius: 999px; border: 0; }
+html[data-skin^="m"] .page, html[data-skin^="m"] main { padding-bottom: 100px; }
+
+/* m1 — white + black floating pill */
+html[data-skin="m1"] { --bg:#fff; --surface:#fff; --surface-2:#f5f5f5; --surface-3:#eaeaea; --border:#e6e6e6; --border-strong:#111;
+  --text:#0a0a0a; --text-2:#5c5c5c; --text-3:#9a9a9a; --accent:#0a0a0a; --accent-hover:#000; --accent-contrast:#fff; --accent-soft:#f0f0f0; color-scheme: light; }
+html[data-skin="m1"] body { background:#fff; }
+html[data-skin="m1"] .card, html[data-skin="m1"] .order-card, html[data-skin="m1"] .kpi { border:1px solid #111; }
+html[data-skin="m1"] .balance-card { background:#0a0a0a; border-radius:6px; }
+html[data-skin="m1"] .balance-card * { color:#fff !important; }
+html[data-skin="m1"] .tabbar { background:#0a0a0a; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+html[data-skin="m1"] .tabbar a { color:#8a8a8a; } html[data-skin="m1"] .tabbar a.active { color:#fff; }
+html[data-skin="m1"] .chip { border:1px solid #0a0a0a; } html[data-skin="m1"] .chip.active { background:#0a0a0a; color:#fff; }
+
+/* m2 — black minimal, white lines, white floating pill */
+html[data-skin="m2"] { --bg:#000; --surface:#000; --surface-2:#111; --surface-3:#1c1c1c; --border:#2a2a2a; --border-strong:#fff;
+  --text:#fff; --text-2:#a6a6a6; --text-3:#6b6b6b; --accent:#fff; --accent-hover:#eee; --accent-contrast:#000; --accent-soft:#1a1a1a; color-scheme: dark; }
+html[data-skin="m2"] body { background:#000; }
+html[data-skin="m2"] .card, html[data-skin="m2"] .order-card, html[data-skin="m2"] .kpi { border:1px solid #fff; }
+html[data-skin="m2"] .balance-card { background:#fff; border-radius:6px; }
+html[data-skin="m2"] .balance-card * { color:#000 !important; }
+html[data-skin="m2"] .tabbar { background:#fff; box-shadow: 0 10px 30px rgba(255,255,255,.12); }
+html[data-skin="m2"] .tabbar a { color:#777; } html[data-skin="m2"] .tabbar a.active { color:#000; }
+html[data-skin="m2"] .chip { border:1px solid #fff; background:#000; color:#fff; } html[data-skin="m2"] .chip.active { background:#fff; color:#000; }
+
+/* m3 — white + electric blue accent */
+html[data-skin="m3"] { --bg:#fff; --surface:#fff; --surface-2:#f4f6ff; --surface-3:#e6ebff; --border:#e3e7f5; --border-strong:#1d4ed8;
+  --text:#0b1020; --text-2:#55607a; --text-3:#98a1b8; --accent:#1d4ed8; --accent-hover:#1e40af; --accent-contrast:#fff; --accent-soft:#e8eeff; color-scheme: light; }
+html[data-skin="m3"] body { background:#fff; }
+html[data-skin="m3"] h1 { color:#0b1020; }
+html[data-skin="m3"] .card, html[data-skin="m3"] .order-card, html[data-skin="m3"] .kpi { border:1px solid #dfe5f7; }
+html[data-skin="m3"] .balance-card { background:#1d4ed8; border-radius:6px; }
+html[data-skin="m3"] .balance-card * { color:#fff !important; }
+html[data-skin="m3"] .tabbar { background:#0b1020; box-shadow: 0 12px 30px rgba(29,78,216,.3); }
+html[data-skin="m3"] .tabbar a { color:#7c87a6; } html[data-skin="m3"] .tabbar a.active { color:#7aa2ff; }
+html[data-skin="m3"] .chip { border:1px solid #c9d3f2; } html[data-skin="m3"] .chip.active { background:#1d4ed8; color:#fff; border-color:#1d4ed8; }
+
+/* m4 — light grey + lime accent (sport) */
+html[data-skin="m4"] { --bg:#ececec; --surface:#fff; --surface-2:#f4f4f4; --surface-3:#e4e4e4; --border:#e2e2e2; --border-strong:#111;
+  --text:#111; --text-2:#5e5e5e; --text-3:#9b9b9b; --accent:#111; --accent-hover:#000; --accent-contrast:#d7ff3a; --accent-soft:#f0f0f0; color-scheme: light; }
+html[data-skin="m4"] body { background:#ececec; }
+html[data-skin="m4"] .card, html[data-skin="m4"] .order-card, html[data-skin="m4"] .kpi { border:0; }
+html[data-skin="m4"] .balance-card { background:#d7ff3a; border-radius:6px; }
+html[data-skin="m4"] .balance-card * { color:#111 !important; }
+html[data-skin="m4"] .btn.primary { background:#111; color:#d7ff3a; }
+html[data-skin="m4"] .tabbar { background:#111; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+html[data-skin="m4"] .tabbar a { color:#8a8a8a; } html[data-skin="m4"] .tabbar a.active { color:#d7ff3a; }
+html[data-skin="m4"] .chip { border:0; background:#fff; } html[data-skin="m4"] .chip.active { background:#111; color:#d7ff3a; }
