@@ -15,7 +15,6 @@ export function AppearanceSettings() {
   return (
     <div className="card pad stack">
       <h3>Оформление</h3>
-      <div className="small muted">Сохраняется только на этом телефоне и ни на кого больше не влияет.</div>
       <div className="chips">
         {modes.map(([value, label]) => (
           <button
@@ -47,7 +46,6 @@ export function AppearanceSettings() {
               ))}
             </span>
             <b>{s.label}</b>
-            <span className="tiny faint">{s.hint}</span>
           </button>
         ))}
       </div>

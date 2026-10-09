@@ -341,10 +341,6 @@ function SettingsPage({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
         <AppearanceSettings />
         <div className="card pad stack">
           <h3>Как видит клиент</h3>
-          <div className="small muted">
-            Откроется CRM глазами клиента: только то, что видит он, без цен закупки и вашей прибыли. Выйти —
-            кнопкой сверху или закрыв Mini App.
-          </div>
           <button className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setClientPreview(true)}>
             <Eye size={16} /> Посмотреть как клиент
           </button>

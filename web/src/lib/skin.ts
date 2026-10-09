@@ -3,10 +3,10 @@
 
 export type Skin = "standard" | "minimal" | "sport";
 
-export const SKINS: { id: Skin; label: string; hint: string; swatch: string[] }[] = [
-  { id: "standard", label: "Обычная", hint: "как раньше", swatch: ["#f4f3ef", "#263140", "#ffffff"] },
-  { id: "minimal", label: "Минимал", hint: "белый и чёрный, крупные заголовки", swatch: ["#ffffff", "#0a0a0a", "#ffffff"] },
-  { id: "sport", label: "Спорт", hint: "серый, чёрный и салатовый", swatch: ["#ececec", "#111111", "#d7ff3a"] },
+export const SKINS: { id: Skin; label: string; swatch: string[] }[] = [
+  { id: "standard", label: "Обычная", swatch: ["#f4f3ef", "#263140", "#ffffff"] },
+  { id: "minimal", label: "Минимал", swatch: ["#ffffff", "#0a0a0a", "#ffffff"] },
+  { id: "sport", label: "Спорт", swatch: ["#ececec", "#111111", "#d7ff3a"] },
 ];
 
 const KEY = "crm-skin";
