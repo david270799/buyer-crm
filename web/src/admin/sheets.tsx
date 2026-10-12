@@ -664,9 +664,92 @@ interface ShipmentFormValue {
   shipment_date: string;
   comment: string;
   photos: PhotoValue[];
+  watch_count: number;
 }
 
-function ShipmentFields({ value, onChange }: { value: ShipmentFormValue; onChange: (v: ShipmentFormValue) => void }) {
+const WATCH_PRICE_USD = 10;
+
+/** Watches in the parcel: − n +, priced in $ at the rate (owner, 12.10). */
+function WatchesField({ count, onChange, rate, price }: { count: number; onChange: (n: number) => void; rate: number | null; price: number }) {
+  const usd = count * price;
+  return (
+    <div className="full field">
+      <span>
+        Часы ⌚ <span className="tiny faint">· доставка ${price} за штуку</span>
+      </span>
+      <div className="row" style={{ gap: 10, alignItems: "center" }}>
+        <button type="button" className="btn icon-only" disabled={count <= 0} onClick={() => onChange(count - 1)} aria-label="Меньше часов">
+          −
+        </button>
+        <b className="num" style={{ fontSize: 22, minWidth: 28, textAlign: "center" }}>
+          {count}
+        </b>
+        <button type="button" className="btn icon-only" disabled={count >= 50} onClick={() => onChange(count + 1)} aria-label="Больше часов">
+          +
+        </button>
+        <div className="grow" style={{ textAlign: "right" }}>
+          {count > 0 &&
+            (rate ? (
+              <>
+                <div className="num" style={{ fontWeight: 600 }}>
+                  ${usd} = {krw(Math.round(usd * rate))}
+                </div>
+                <div className="tiny faint num">по курсу 1 $ = {rate.toLocaleString("en-US")} ₩</div>
+              </>
+            ) : (
+              <div className="small" style={{ color: "var(--negative)" }}>
+                Задайте курс $ в «Настройках»
+              </div>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** What the balance will see: shipping and watches as two lines, then the total. */
+function ShipmentChargeSummary({ shipping, watches, watchCount }: { shipping: number; watches: number; watchCount: number }) {
+  const balance = useBalance();
+  if (!shipping && !watches) return null;
+  const total = shipping + watches;
+  const line = (label: string, delta: number) => (
+    <div className="row between">
+      <span>{label}</span>
+      <b className="num">{krw(delta, true)}</b>
+    </div>
+  );
+  return (
+    <div className="card pad stack" style={{ gap: 6, marginTop: 14 }}>
+      <div className="small muted">Баланс клиента:</div>
+      {shipping ? line(shipping < 0 ? "Доставка" : "Возврат за доставку", shipping) : null}
+      {watches ? line(watches < 0 ? `Доставка часов (${watchCount} шт.)` : "Возврат за часы", watches) : null}
+      <div className="divider" />
+      <div className="row between">
+        <b>Итого</b>
+        <b className="num" style={{ color: total < 0 ? "var(--negative)" : "var(--positive)" }}>
+          {krw(total, true)}
+        </b>
+      </div>
+      {balance !== null && (
+        <div className="small num muted">
+          Баланс: {krw(balance)} → <b>{krw(balance + total)}</b>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ShipmentFields({
+  value,
+  onChange,
+  rate,
+  watchPrice = WATCH_PRICE_USD,
+}: {
+  value: ShipmentFormValue;
+  onChange: (v: ShipmentFormValue) => void;
+  rate: number | null;
+  watchPrice?: number;
+}) {
   const set = <K extends keyof ShipmentFormValue>(key: K, v: ShipmentFormValue[K]) => onChange({ ...value, [key]: v });
   return (
     <div className="form-grid two">
@@ -682,6 +765,7 @@ function ShipmentFields({ value, onChange }: { value: ShipmentFormValue; onChang
       <Field label="Стоимость доставки" hint="Спишется с баланса клиента">
         <MoneyInput value={value.shipping_cost_krw} onChange={(v) => set("shipping_cost_krw", v)} />
       </Field>
+      <WatchesField count={value.watch_count} onChange={(n) => set("watch_count", n)} rate={rate} price={watchPrice} />
       <Field label="Дата отправки">
         <input className="input" type="date" value={value.shipment_date} onChange={(e) => set("shipment_date", e.target.value)} />
       </Field>
@@ -922,8 +1006,12 @@ export function ShipmentSheet({ ids, onClose, onDone }: { ids: string[]; onClose
     shipment_date: todayKey(),
     comment: "",
     photos: [],
+    watch_count: 0,
   });
   const weight = parseWeight(form.weight_kg);
+  const rate = useSettings().data?.krw_per_usd ?? null;
+  const watchCost = rate ? Math.round(form.watch_count * WATCH_PRICE_USD * rate) : 0;
+  const noRate = form.watch_count > 0 && !rate;
   return (
     <Sheet
       title="Новая отправка"
@@ -935,7 +1023,7 @@ export function ShipmentSheet({ ids, onClose, onDone }: { ids: string[]; onClose
           </button>
           <button
             className="btn primary"
-            disabled={create.isPending || weight === "invalid"}
+            disabled={create.isPending || weight === "invalid" || noRate}
             onClick={() =>
               create.mutate(
                 {
@@ -947,6 +1035,7 @@ export function ShipmentSheet({ ids, onClose, onDone }: { ids: string[]; onClose
                   shipment_date: form.shipment_date || null,
                   comment: form.comment.trim() || null,
                   photos: photoList(form.photos),
+                  watch_count: form.watch_count,
                 },
                 {
                   onSuccess: (r) => {
@@ -972,8 +1061,8 @@ export function ShipmentSheet({ ids, onClose, onDone }: { ids: string[]; onClose
       <div className="small muted" style={{ marginBottom: 12 }}>
         Заказы: {ids.join(", ")}. Их статус станет «Отправлен».
       </div>
-      <ShipmentFields value={form} onChange={setForm} />
-      {form.shipping_cost_krw ? <BalancePreview delta={-form.shipping_cost_krw} label="Спишется за доставку" /> : null}
+      <ShipmentFields value={form} onChange={setForm} rate={rate} />
+      <ShipmentChargeSummary shipping={-(form.shipping_cost_krw ?? 0)} watches={-watchCost} watchCount={form.watch_count} />
     </Sheet>
   );
 }
@@ -989,10 +1078,18 @@ export function ShipmentEditSheet({ shipment, onClose }: { shipment: Shipment; o
     shipment_date: toSeoulDay(shipment.shipment_date),
     comment: shipment.comment ?? "",
     photos: shipmentPhotos(shipment),
+    watch_count: shipment.watch_count ?? 0,
   });
   const weight = parseWeight(form.weight_kg);
   const charged = shipment.shipping_charged_krw ?? 0;
   const delta = -((form.shipping_cost_krw ?? 0) - charged);
+  // Watches keep the rate fixed when they were first charged.
+  const currentRate = useSettings().data?.krw_per_usd ?? null;
+  const rate = shipment.watch_krw_per_usd ?? currentRate;
+  const watchPrice = shipment.watch_price_usd ?? WATCH_PRICE_USD;
+  const watchCost = rate ? Math.round(form.watch_count * watchPrice * rate) : 0;
+  const watchDelta = form.watch_count === (shipment.watch_count ?? 0) ? 0 : -(watchCost - (shipment.watch_charged_krw ?? 0));
+  const noRate = form.watch_count > 0 && !rate;
   return (
     <Sheet
       title="Изменить отправку"
@@ -1004,7 +1101,7 @@ export function ShipmentEditSheet({ shipment, onClose }: { shipment: Shipment; o
           </button>
           <button
             className="btn primary"
-            disabled={update.isPending || weight === "invalid"}
+            disabled={update.isPending || weight === "invalid" || noRate}
             onClick={() =>
               update.mutate(
                 {
@@ -1015,10 +1112,12 @@ export function ShipmentEditSheet({ shipment, onClose }: { shipment: Shipment; o
                   shipment_date: form.shipment_date || null,
                   comment: form.comment.trim() || null,
                   photos: photoList(form.photos),
+                  watch_count: form.watch_count,
                 },
                 {
                   onSuccess: (r) => {
-                    toast(r.change ? `Сохранено. Баланс: ${krw(r.change.amount_krw, true)}` : "Сохранено");
+                    const moved = (r.change?.amount_krw ?? 0) + (r.watch_change?.amount_krw ?? 0);
+                    toast(r.change || r.watch_change ? `Сохранено. Баланс: ${krw(moved, true)}` : "Сохранено");
                     onClose();
                   },
                   onError: (e) => toast(errorText(e), "error"),
@@ -1031,8 +1130,8 @@ export function ShipmentEditSheet({ shipment, onClose }: { shipment: Shipment; o
         </>
       }
     >
-      <ShipmentFields value={form} onChange={setForm} />
-      <BalancePreview delta={delta} label={delta < 0 ? "Доплата за доставку" : "Возврат за доставку"} />
+      <ShipmentFields value={form} onChange={setForm} rate={rate} watchPrice={watchPrice} />
+      <ShipmentChargeSummary shipping={delta} watches={watchDelta} watchCount={form.watch_count} />
     </Sheet>
   );
 }

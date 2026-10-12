@@ -534,3 +534,20 @@ def test_admin_preview_as_client_sees_only_client_fields(db, api):
     # The header never lifts a client up.
     assert api("GET", "/api/me", who=CLIENT_TG, headers=dict(view)).json()["preview"] is False
     assert api("GET", "/api/me").json()["role"] == "admin"
+
+
+def test_shipment_with_watches_over_the_api(db, api):
+    for order_id in ("N5", "N7"):
+        seed_order(db, order_id, status="warehouse")
+    api("PUT", "/api/settings/rate", json={"krw_per_usd": 1350})
+    created = api(
+        "POST",
+        "/api/shipments",
+        json={"order_ids": ["5", "7"], "shipping_cost_krw": 50_000, "watch_count": 2},
+    ).json()
+    assert created["change"]["amount_krw"] == -50_000
+    assert created["watch_change"]["amount_krw"] == -27_000
+    assert created["shipment"]["watch_count"] == 2
+    patched = api("PATCH", "/api/shipments/1", json={"watch_count": 1}).json()
+    assert patched["watch_change"]["amount_krw"] == 13_500
+    assert balance(db) == START_BALANCE - 50_000 - 13_500

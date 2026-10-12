@@ -197,6 +197,7 @@ class ShipmentIn(BaseModel):
     photo_url: str | None = None
     thumbnail_url: str | None = None
     photos: list[PhotoIn] | None = None
+    watch_count: int | None = Field(default=None, ge=0, le=50)
 
 
 class LinkIn(BaseModel):
@@ -222,6 +223,7 @@ class ShipmentPatchIn(BaseModel):
     photo_url: str | None = None
     thumbnail_url: str | None = None
     photos: list[PhotoIn] | None = None
+    watch_count: int | None = Field(default=None, ge=0, le=50)
 
 
 class MoneyIn(BaseModel):
@@ -621,6 +623,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             photo_url=body.photo_url,
             thumbnail_url=body.thumbnail_url,
             photos=[p.model_dump() for p in body.photos] if body.photos is not None else None,
+            watch_count=body.watch_count,
         )
         result = services.shipments.ship_orders(
             p.actor, body.order_ids, body.tracking_code or None, details
@@ -633,6 +636,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "not_found": result.not_found,
             "skipped": [{"order_id": i, "reason": r} for i, r in result.skipped],
             "change": change_json(result.shipping_change),
+            "watch_change": change_json(result.watch_change),
         }
 
     @app.patch("/api/shipments/{reference}")
@@ -644,6 +648,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         return {
             "shipment": shipment_view(result.shipment, p.role),
             "change": change_json(result.shipping_change),
+            "watch_change": change_json(result.watch_change),
         }
 
     @app.post("/api/orders/{order_id}/duplicate")

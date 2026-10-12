@@ -102,6 +102,7 @@ export const LEDGER_LABEL: Record<LedgerType, string> = {
   deposit: "Пополнение",
   adjustment: "Корректировка",
   shipping_charge: "Доставка",
+  watch_charge: "Доставка часов",
   order_discount: "Скидка",
 };
 

@@ -96,7 +96,15 @@ def build_services(
             profit=profit_repo,
         ),
         shipments=ShipmentService(
-            db, clock, orders_repo, shipments_repo, sequences, ledger, auditor, recorder
+            db,
+            clock,
+            orders_repo,
+            shipments_repo,
+            sequences,
+            ledger,
+            auditor,
+            recorder,
+            settings=settings_repo,
         ),
         finance=FinanceService(
             db, clock, clients_repo, ledger_repo, settings_repo, ledger, auditor, recorder

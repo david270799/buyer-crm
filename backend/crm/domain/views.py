@@ -73,9 +73,15 @@ def shipment_view(shipment: Shipment, role: Role) -> dict[str, Any]:
         "order_count": len(shipment.order_ids),
         "comment": shipment.comment,
         "created_at": shipment.created_at,
+        "watch_count": shipment.watch_count,
     }
     if role is Role.ADMIN:
         view["shipping_charged_krw"] = shipment.shipping_charged_krw
+        view["watch_charged_krw"] = shipment.watch_charged_krw
+        view["watch_price_usd"] = shipment.watch_price_usd
+        view["watch_krw_per_usd"] = (
+            float(shipment.watch_krw_per_usd) if shipment.watch_krw_per_usd else None
+        )
         view["created_by"] = shipment.created_by
         view["updated_at"] = shipment.updated_at
     return view

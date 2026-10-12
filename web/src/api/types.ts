@@ -97,10 +97,16 @@ export interface Shipment {
   order_count: number;
   comment: string | null;
   created_at: string | null;
+  /** Watches in the parcel ($10 each, a separate balance line). */
+  watch_count?: number;
   /** Every order delivered → «Доставлена», otherwise «В пути». */
   delivered?: boolean;
   // Admin only
   shipping_charged_krw?: number;
+  watch_charged_krw?: number;
+  watch_price_usd?: number | null;
+  /** The rate fixed when the watches were first charged. */
+  watch_krw_per_usd?: number | null;
 }
 
 export type LedgerType =
@@ -110,6 +116,7 @@ export type LedgerType =
   | "deposit"
   | "adjustment"
   | "shipping_charge"
+  | "watch_charge"
   | "order_discount";
 
 export interface LedgerItem {
@@ -205,6 +212,7 @@ export interface ShipResult {
   not_found: string[];
   skipped: { order_id: string; reason: string }[];
   change: BalanceChange | null;
+  watch_change?: BalanceChange | null;
 }
 
 export interface Me {

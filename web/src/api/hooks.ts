@@ -320,6 +320,7 @@ export interface ShipmentInput {
   photo_url?: string | null;
   thumbnail_url?: string | null;
   photos?: { photo_url: string; thumbnail_url: string | null }[];
+  watch_count?: number;
 }
 
 export const useCreateShipment = () => {
@@ -334,7 +335,10 @@ export const useUpdateShipment = (id: string) => {
   const refresh = useInvalidateAll();
   return useMutation({
     mutationFn: (body: ShipmentInput) =>
-      patch<{ shipment: Shipment; change: BalanceChange | null }>(`/api/shipments/${id}`, body),
+      patch<{ shipment: Shipment; change: BalanceChange | null; watch_change: BalanceChange | null }>(
+        `/api/shipments/${id}`,
+        body,
+      ),
     onSuccess: refresh,
   });
 };

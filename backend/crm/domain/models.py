@@ -189,6 +189,13 @@ class Shipment:
     updated_at: datetime | None = None
     # All photos (the first one is also photo_url / thumbnail_url).
     photos: list[dict[str, str | None]] = field(default_factory=list)
+    # Watches ship at a fixed price in USD each (owner, 12.10), charged separately
+    # at the rate fixed when they were first charged; charged/seq like shipping.
+    watch_count: int = 0
+    watch_price_usd: int | None = None
+    watch_krw_per_usd: Decimal | None = None
+    watch_charged_krw: int = 0
+    watch_charge_seq: int = 0
 
     @classmethod
     def from_doc(cls, doc_id: str, data: Doc) -> "Shipment":
@@ -224,6 +231,11 @@ class Shipment:
             thumbnail_url=_str_or_none(data.get("thumbnail_url")),
             updated_at=_dt(data.get("updated_at")),
             photos=photos,
+            watch_count=_int_or_none(data.get("watch_count")) or 0,
+            watch_price_usd=_int_or_none(data.get("watch_price_usd")),
+            watch_krw_per_usd=_rate_or_none(data.get("watch_krw_per_usd")),
+            watch_charged_krw=to_int_amount(data.get("watch_charged_krw")) or 0,
+            watch_charge_seq=_int_or_none(data.get("watch_charge_seq")) or 0,
         )
 
 
@@ -284,6 +296,17 @@ class LedgerEntry:
         )
 
 
+def _rate_or_none(raw: Any) -> Decimal | None:
+    """A KRW-per-USD rate stored as a number (Firestore has no decimal type)."""
+    if not isinstance(raw, (int, float, str)) or isinstance(raw, bool):
+        return None
+    try:
+        rate = Decimal(str(raw))
+    except ArithmeticError:
+        return None
+    return rate if rate.is_finite() and rate > 0 else None
+
+
 @dataclass
 class GeneralSettings:
     krw_per_usd: Decimal | None
@@ -294,17 +317,8 @@ class GeneralSettings:
     def from_doc(cls, data: Doc | None) -> "GeneralSettings":
         if not data:
             return cls(krw_per_usd=None)
-        raw = data.get("krw_per_usd")
-        rate: Decimal | None = None
-        if isinstance(raw, (int, float, str)) and not isinstance(raw, bool):
-            try:
-                rate = Decimal(str(raw))
-            except ArithmeticError:
-                rate = None
-            if rate is not None and (not rate.is_finite() or rate <= 0):
-                rate = None
         return cls(
-            krw_per_usd=rate,
+            krw_per_usd=_rate_or_none(data.get("krw_per_usd")),
             updated_at=_dt(data.get("updated_at")),
             updated_by=_str_or_none(data.get("updated_by")),
         )

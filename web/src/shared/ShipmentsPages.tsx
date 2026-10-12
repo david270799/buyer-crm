@@ -103,10 +103,22 @@ export function ShipmentDetailsPage({
               <dd>{shipment.weight_kg ? `${shipment.weight_kg} кг` : "—"}</dd>
               <dt>Доставка</dt>
               <dd>{krw(shipment.shipping_cost_krw)}</dd>
+              {shipment.watch_count ? (
+                <>
+                  <dt>Часы ⌚</dt>
+                  <dd className="num">{shipment.watch_count} шт.</dd>
+                </>
+              ) : null}
               {shipment.shipping_charged_krw !== undefined && (
                 <>
                   <dt>Списано за доставку</dt>
                   <dd>{krw(shipment.shipping_charged_krw)}</dd>
+                  {shipment.watch_charged_krw ? (
+                    <>
+                      <dt>Списано за часы</dt>
+                      <dd>{krw(shipment.watch_charged_krw)}</dd>
+                    </>
+                  ) : null}
                 </>
               )}
             </dl>

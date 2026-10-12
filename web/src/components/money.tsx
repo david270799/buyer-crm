@@ -1,4 +1,4 @@
-import { ArrowDownLeft, ChevronRight, Gift, RotateCcw, SlidersHorizontal, Truck } from "lucide-react";
+import { ArrowDownLeft, ChevronRight, Gift, RotateCcw, SlidersHorizontal, Truck, Watch } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
@@ -35,12 +35,15 @@ export function BalanceCard({ balance, to, label = "Баланс" }: { balance: 
 
 function EntryIcon({ item }: { item: LedgerItem }) {
   if (item.order) return <Thumb src={item.order.thumbnail_url} alt={item.order.title ?? item.order.id} />;
-  if (item.shipment?.thumbnail_url) return <Thumb src={item.shipment.thumbnail_url} alt="Фото отправки" />;
+  if (item.type !== "watch_charge" && item.shipment?.thumbnail_url)
+    return <Thumb src={item.shipment.thumbnail_url} alt="Фото отправки" />;
   const Icon =
     item.type === "deposit"
       ? ArrowDownLeft
       : item.type === "shipping_charge"
         ? Truck
+        : item.type === "watch_charge"
+          ? Watch
         : item.type === "order_discount"
           ? Gift
         : item.type === "order_refund" || item.type === "order_rebuy"
@@ -54,11 +57,11 @@ function EntryIcon({ item }: { item: LedgerItem }) {
 }
 
 function entryTitle(item: LedgerItem): ReactNode {
-  if (item.type === "shipping_charge") {
+  if (item.type === "shipping_charge" || item.type === "watch_charge") {
     const code = item.shipment?.tracking_code ?? item.shipment_id;
     return (
       <>
-        <span className="shipping-word">Доставка</span>
+        <span className="shipping-word">{item.type === "watch_charge" ? "Доставка часов" : "Доставка"}</span>
         {code ? <span className="num"> · {code}</span> : null}
       </>
     );

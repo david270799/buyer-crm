@@ -85,6 +85,7 @@ class LedgerType(StrEnum):
     ADJUSTMENT = "adjustment"
     SHIPPING_CHARGE = "shipping_charge"
     ORDER_DISCOUNT = "order_discount"
+    WATCH_CHARGE = "watch_charge"
 
 
 LEDGER_LABELS_RU: dict[LedgerType, str] = {
@@ -94,5 +95,6 @@ LEDGER_LABELS_RU: dict[LedgerType, str] = {
     LedgerType.DEPOSIT: "Пополнение",
     LedgerType.ADJUSTMENT: "Корректировка",
     LedgerType.SHIPPING_CHARGE: "Доставка",
+    LedgerType.WATCH_CHARGE: "Доставка часов",
     LedgerType.ORDER_DISCOUNT: "Скидка",
 }
