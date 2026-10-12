@@ -2435,3 +2435,20 @@ table.orders .r {
 .filters > .view-toggle {
   flex: none;
 }
+
+/* A picked option (e.g. «Статус» sheet): clearly marked in every look. */
+.choice.selected {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+:root[data-skin] .choice.selected {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: none;
+}
+
+:root[data-skin] .choice.selected .muted {
+  color: inherit;
+  opacity: 0.75;
+}

@@ -546,14 +546,16 @@ export function BulkStatusSheet({ ids, onClose, onDone }: { ids: string[]; onClo
         {BULK_STATUSES.map((option) => (
           <button
             key={option.status}
-            className={`card pad row ${status === option.status ? "selected" : ""}`}
-            style={{ textAlign: "left", borderColor: status === option.status ? "var(--accent)" : undefined }}
+            className={`card pad row choice ${status === option.status ? "selected" : ""}`}
+            style={{ textAlign: "left" }}
+            aria-pressed={status === option.status}
             onClick={() => setStatus(option.status)}
           >
             <div className="grow">
               <div style={{ fontWeight: 600 }}>{STATUS_LABEL[option.status]}</div>
               <div className="small muted">{option.hint}</div>
             </div>
+            {status === option.status && <CheckCheck size={18} />}
           </button>
         ))}
         <div className="tiny faint">
