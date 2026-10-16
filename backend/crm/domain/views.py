@@ -28,6 +28,7 @@ CLIENT_ORDER_FIELDS = (
 
 ADMIN_ONLY_ORDER_FIELDS = (
     "source_url",  # where the item was bought: the buyer's own reference
+    "shop",
     "purchase_price",
     "profit",
     "charged_amount_krw",

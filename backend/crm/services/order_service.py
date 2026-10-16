@@ -38,6 +38,7 @@ from crm.repositories import (
     IntakeRepository,
     OrderRepository,
     ProfitRepository,
+    SettingsRepository,
     ShipmentRepository,
 )
 from crm.services.common import (
@@ -89,6 +90,7 @@ class NewOrder:
     model: str | None = None
     size: str | None = None
     source_url: str | None = None
+    shop: str | None = None
     purchase_price: int | None = None
     client_price: int | None = None
     client_comment: str | None = None
@@ -237,6 +239,7 @@ class OrderUpdate:
     model: str | None = UNSET
     size: str | None = UNSET
     source_url: str | None = UNSET
+    shop: str | None = UNSET
     photo_url: str | None = UNSET
     thumbnail_url: str | None = UNSET
     client_comment: str | None = UNSET
@@ -284,11 +287,36 @@ class OrdersOverview:
     recent: list[Order] = field(default_factory=list)
 
 
+MAX_SHOPS = 60
+DEFAULT_SHOPS = (
+    "Naver",
+    "Musinsa",
+    "29CM",
+    "Nike",
+    "Adidas",
+    "On",
+    "SSG.com",
+    "G-Market",
+    "Coupang",
+    "Lotte Home Shopping",
+    "Shinsegae Mall",
+    "Shinsegae Shopping",
+    "CJ OnStyle",
+    "KREAM",
+)
+
+
+def clean_shop(value: str | None) -> str | None:
+    return _clean_text(value, "Магазин", 60)
+
+
 def _clean_update_fields(values: dict[str, Any]) -> dict[str, Any]:
     cleaned: dict[str, Any] = {}
     for name, value in values.items():
         if name in ("brand", "model", "size"):
             cleaned[name] = _clean_text(value, name, _MAX_SHORT_TEXT)
+        elif name == "shop":
+            cleaned[name] = clean_shop(value)
         elif name in ("client_comment", "internal_comment"):
             cleaned[name] = _clean_text(value, "Комментарий", _MAX_LONG_TEXT)
         elif name == "source_url":
@@ -318,7 +346,7 @@ def _matches(order: Order, needle: str, admin: bool) -> bool:
         order.client_comment,
     ]
     if admin:
-        haystack.append(order.internal_comment)
+        haystack.extend((order.internal_comment, order.shop))
     return any(needle in value.lower() for value in haystack if value)
 
 
@@ -366,6 +394,7 @@ class OrderService:
         self._blobs = blobs
         self._profit = profit
         self._shipments = ShipmentRepository()
+        self._settings = SettingsRepository()
 
     # --- reads -------------------------------------------------------------
 
@@ -598,6 +627,41 @@ class OrderService:
                 order_ids=ids,
             )
 
+    # --- shops (the buy form's bubbles) -------------------------------------
+
+    def shop_names(self, actor: Actor) -> list[str]:
+        require_admin(actor)
+        saved = self._settings.get_shops(self._db)
+        return list(DEFAULT_SHOPS) if saved is None else saved
+
+    def set_shop_names(self, actor: Actor, names: Sequence[str]) -> list[str]:
+        require_admin(actor)
+        cleaned: list[str] = []
+        for name in names:
+            shop = clean_shop(name)
+            if shop and shop.lower() not in {c.lower() for c in cleaned}:
+                cleaned.append(shop)
+        if len(cleaned) > MAX_SHOPS:
+            raise ValidationError(f"Не больше {MAX_SHOPS} магазинов.")
+
+        def fn(tx: Transaction) -> list[str]:
+            before = self._settings.get_shops(tx)
+            now = self._clock.now()
+            self._settings.set_shops(tx, cleaned, now, actor.id)
+            self._auditor.record(
+                tx,
+                actor,
+                now,
+                action="settings.shops",
+                entity_type="settings",
+                entity_id="shops",
+                before={"names": before},
+                after={"names": cleaned},
+            )
+            return cleaned
+
+        return self._db.run_transaction(fn)
+
     # --- create ------------------------------------------------------------
 
     def create_order(self, actor: Actor, new: NewOrder) -> Order:
@@ -609,6 +673,7 @@ class OrderService:
             "model": _clean_text(new.model, "Модель", _MAX_SHORT_TEXT),
             "size": _clean_text(new.size, "Размер", _MAX_SHORT_TEXT),
             "source_url": _clean_url(new.source_url, "Ссылка"),
+            "shop": clean_shop(new.shop),
             "photo_url": _clean_photo_url(new.photo_url, "Фото"),
             "thumbnail_url": _clean_photo_url(new.thumbnail_url, "Миниатюра"),
             "client_comment": _clean_text(new.client_comment, "Комментарий", _MAX_LONG_TEXT),
@@ -700,9 +765,18 @@ class OrderService:
 
     # --- buy ---------------------------------------------------------------
 
-    def buy(self, actor: Actor, order_id: str, purchase_price: int, client_price: int) -> BuyResult:
+    def buy(
+        self,
+        actor: Actor,
+        order_id: str,
+        purchase_price: int,
+        client_price: int,
+        *,
+        shop: str | None = UNSET,
+    ) -> BuyResult:
         require_admin(actor)
         order_id = normalize_order_id(order_id)
+        shop = clean_shop(shop) if shop is not UNSET else UNSET
         _check_price(purchase_price, "Закупочная цена", allow_zero=True)
         _check_price(client_price, "Цена для клиента", allow_zero=False)
 
@@ -737,6 +811,7 @@ class OrderService:
             client = self._ledger.load_client(tx)
             now = self._clock.now()
             profit = client_price - purchase_price
+            bought_in = order.shop if shop is UNSET else shop
             self._orders.update(
                 tx,
                 order_id,
@@ -746,7 +821,12 @@ class OrderService:
                     "client_price": client_price,
                     "profit": profit,
                     "charged_amount_krw": client_price,
-                    "purchases": [_purchase(purchase_price, client_price, order.source_url, now)],
+                    "shop": bought_in,
+                    "purchases": [
+                        _purchase(
+                            purchase_price, client_price, order.source_url, now, shop=bought_in
+                        )
+                    ],
                     "bought_at": now,
                     "updated_at": now,
                     "updated_by": actor.id,
@@ -791,7 +871,10 @@ class OrderService:
                 client_price=client_price,
                 profit=profit,
                 charged_amount_krw=client_price,
-                purchases=[_purchase(purchase_price, client_price, order.source_url, now)],
+                shop=bought_in,
+                purchases=[
+                    _purchase(purchase_price, client_price, order.source_url, now, shop=bought_in)
+                ],
                 timestamps={**order.timestamps, "bought_at": now, "updated_at": now},
             )
             self._events.record(
@@ -1025,6 +1108,7 @@ class OrderService:
         *,
         source_url: str | None = UNSET,
         reason: str | None = None,
+        shop: str | None = UNSET,
     ) -> RebuyResult:
         """The shop cancelled a bought order and it was bought elsewhere.
 
@@ -1038,6 +1122,7 @@ class OrderService:
         _check_price(client_price, "Цена для клиента", allow_zero=False)
         link = _clean_url(source_url, "Ссылка") if source_url is not UNSET else UNSET
         reason = _clean_text(reason, "Причина", _MAX_LONG_TEXT)
+        shop = clean_shop(shop) if shop is not UNSET else UNSET
 
         def fn(tx: Transaction) -> RebuyResult:
             order = self._require_order(tx, order_id)
@@ -1053,10 +1138,12 @@ class OrderService:
                     f"По заказу {order_id} не записано списание — перезаказ невозможен."
                 )
             new_link = order.source_url if link is UNSET else link
+            new_shop = order.shop if shop is UNSET else shop
             if (
                 purchase_price == order.purchase_price
                 and client_price == order.client_price
                 and new_link == order.source_url
+                and new_shop == order.shop
             ):
                 return RebuyResult(order=order, already_done=True)
 
@@ -1070,10 +1157,13 @@ class OrderService:
                     order.client_price,
                     order.source_url,
                     order.timestamp("bought_at"),
+                    shop=order.shop,
                 )
             ]
             history = [*history[:-1], {**history[-1], "replaced_at": now}]
-            history.append(_purchase(purchase_price, client_price, new_link, now, reason))
+            history.append(
+                _purchase(purchase_price, client_price, new_link, now, reason, shop=new_shop)
+            )
             profit = client_price - purchase_price
             fields: dict[str, Any] = {
                 "status": OrderStatus.BOUGHT.value,
@@ -1089,6 +1179,8 @@ class OrderService:
             }
             if link is not UNSET:
                 fields["source_url"] = link
+            if shop is not UNSET:
+                fields["shop"] = shop
             self._orders.update(tx, order_id, fields)
 
             change = None
@@ -1149,6 +1241,7 @@ class OrderService:
                 profit=profit,
                 charged_amount_krw=client_price,
                 source_url=new_link,
+                shop=new_shop,
                 purchases=history,
                 rebuy_count=seq,
                 timestamps={**order.timestamps, "bought_at": now, "updated_at": now},
@@ -1502,11 +1595,13 @@ def _purchase(
     source_url: str | None,
     at: datetime | None,
     note: str | None = None,
+    shop: str | None = None,
 ) -> dict[str, Any]:
     return {
         "purchase_price": purchase_price,
         "client_price": client_price,
         "source_url": source_url,
+        "shop": shop,
         "bought_at": at,
         "note": note,
     }

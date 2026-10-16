@@ -87,6 +87,12 @@ export function OrderAdminPanel({ order }: { order: Order }) {
           <dd className={profit !== null && profit < 0 ? "negative" : ""}>{krw(profit)}</dd>
           <dt>Списано с баланса</dt>
           <dd>{krw(order.charged_amount_krw ?? 0)}</dd>
+          {order.shop && (
+            <>
+              <dt>Магазин</dt>
+              <dd>{order.shop}</dd>
+            </>
+          )}
           {order.source_url && (
             <>
               <dt>Ссылка</dt>
@@ -107,7 +113,7 @@ export function OrderAdminPanel({ order }: { order: Order }) {
                 <li key={i} className={p.replaced_at ? "replaced" : ""}>
                   <div className="row between">
                     <span className="grow" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {shopName(p.source_url)}
+                      {p.shop ?? shopName(p.source_url)}
                     </span>
                     <span className="num">{krw(p.purchase_price)}</span>
                   </div>

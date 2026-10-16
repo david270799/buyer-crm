@@ -70,6 +70,7 @@ class Order:
     photo_url: str | None = None
     thumbnail_url: str | None = None
     source_url: str | None = None
+    shop: str | None = None  # admin only: the shop it was bought in (16.10.2026)
     source_chat_id: int | None = None
     source_message_id: int | None = None
     client_comment: str | None = None
@@ -120,6 +121,7 @@ class Order:
             photo_url=_str_or_none(data.get("photo_url")),
             thumbnail_url=_str_or_none(data.get("thumbnail_url")),
             source_url=_str_or_none(data.get("source_url")),
+            shop=_str_or_none(data.get("shop")),
             source_chat_id=_int_or_none(data.get("source_chat_id")),
             source_message_id=_int_or_none(data.get("source_message_id")),
             client_comment=_str_or_none(data.get("client_comment")),

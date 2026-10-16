@@ -1,4 +1,5 @@
 import { Camera, CheckCheck, Loader2, Plus, Sparkles, Split, Undo2, X } from "lucide-react";
+import { ShopPicker } from "./ShopPicker";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -255,6 +256,7 @@ export function BuySheet({ order, onClose }: { order: Order; onClose: () => void
   const buy = useBuy(order.id);
   const [purchase, setPurchase] = useState<number | null>(order.purchase_price ?? null);
   const [price, setPrice] = useState<number | null>(order.client_price || null);
+  const [shop, setShop] = useState<string | null>(order.shop ?? null);
   const valid = purchase !== null && purchase >= 0 && price !== null && price > 0;
   const profit = valid ? price - purchase : null;
   return (
@@ -271,7 +273,7 @@ export function BuySheet({ order, onClose }: { order: Order; onClose: () => void
             disabled={!valid || buy.isPending}
             onClick={() =>
               buy.mutate(
-                { purchase_price: purchase!, client_price: price! },
+                { purchase_price: purchase!, client_price: price!, shop },
                 {
                   onSuccess: (r) => {
                     toast(r.already_done ? "Уже выкуплен с этими ценами — повторного списания нет" : `Выкуплен. Списано ${krw(price)}`);
@@ -294,6 +296,11 @@ export function BuySheet({ order, onClose }: { order: Order; onClose: () => void
         <Field label="Цена для клиента">
           <MoneyInput value={price} onChange={setPrice} />
         </Field>
+        <div className="full">
+          <Field label="Магазин" hint="Видите только вы" group>
+            <ShopPicker value={shop} onChange={setShop} />
+          </Field>
+        </div>
       </div>
       {profit !== null && (
         <div className={`small num ${profit < 0 ? "negative" : "muted"}`} style={{ marginTop: 10 }}>
@@ -312,6 +319,7 @@ export function RebuySheet({ order, onClose }: { order: Order; onClose: () => vo
   const [purchase, setPurchase] = useState<number | null>(null);
   const [price, setPrice] = useState<number | null>(order.client_price ?? null);
   const [link, setLink] = useState(order.source_url ?? "");
+  const [shop, setShop] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const charged = order.charged_amount_krw ?? 0;
   const valid = purchase !== null && purchase >= 0 && price !== null && price > 0;
@@ -335,6 +343,7 @@ export function RebuySheet({ order, onClose }: { order: Order; onClose: () => vo
                   purchase_price: purchase!,
                   client_price: price!,
                   source_url: link.trim() || null,
+                  ...(shop ? { shop } : {}),
                   reason: reason.trim() || null,
                 },
                 {
@@ -369,6 +378,11 @@ export function RebuySheet({ order, onClose }: { order: Order; onClose: () => vo
         <Field label="Цена для клиента">
           <MoneyInput value={price} onChange={setPrice} />
         </Field>
+        <div className="full">
+          <Field label="Новый магазин" hint="Видите только вы" group>
+            <ShopPicker value={shop} onChange={setShop} />
+          </Field>
+        </div>
         <div className="full">
           <Field label="Ссылка на новый магазин" hint="Видите только вы">
             <input className="input" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://" />
@@ -1231,6 +1245,7 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
     model: order.model ?? "",
     size: order.size ?? "",
     source_url: order.source_url ?? "",
+    shop: order.shop ?? null,
     client_comment: order.client_comment ?? "",
     internal_comment: order.internal_comment ?? "",
     attention_required: order.attention_required,
@@ -1259,6 +1274,7 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
                   model: text(form.model),
                   size: text(form.size),
                   source_url: text(form.source_url),
+                  shop: form.shop,
                   client_comment: text(form.client_comment),
                   internal_comment: text(form.internal_comment),
                   attention_required: form.attention_required,
@@ -1306,6 +1322,11 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
         <Field label="Ссылка" hint="Видите только вы">
           <input className="input" value={form.source_url} onChange={(e) => set("source_url", e.target.value)} placeholder="https://" />
         </Field>
+        <div className="full">
+          <Field label="Магазин" hint="Видите только вы" group>
+            <ShopPicker value={form.shop} onChange={(shop) => set("shop", shop)} />
+          </Field>
+        </div>
         <LinkFill
           url={form.source_url}
           onBrandModel={(brand, model) =>

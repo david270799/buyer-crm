@@ -195,6 +195,7 @@ export interface NewOrderInput {
   model?: string | null;
   size?: string | null;
   source_url?: string | null;
+  shop?: string | null;
   photo_url?: string | null;
   thumbnail_url?: string | null;
   purchase_price?: number | null;
@@ -225,7 +226,7 @@ export const useUpdateOrder = (id: string) => {
 export const useBuy = (id: string) => {
   const refresh = useInvalidateAll();
   return useMutation({
-    mutationFn: (body: { purchase_price: number; client_price: number }) =>
+    mutationFn: (body: { purchase_price: number; client_price: number; shop?: string | null }) =>
       post<{ order: Order; already_done: boolean; change: BalanceChange | null }>(
         `/api/orders/${id}/buy`,
         body,
@@ -237,7 +238,13 @@ export const useBuy = (id: string) => {
 export const useRebuy = (id: string) => {
   const refresh = useInvalidateAll();
   return useMutation({
-    mutationFn: (body: { purchase_price: number; client_price: number; source_url?: string | null; reason?: string | null }) =>
+    mutationFn: (body: {
+      purchase_price: number;
+      client_price: number;
+      source_url?: string | null;
+      shop?: string | null;
+      reason?: string | null;
+    }) =>
       post<{ order: Order; already_done: boolean; change: BalanceChange | null }>(
         `/api/orders/${id}/rebuy`,
         body,
@@ -386,6 +393,18 @@ export const useSetRate = () => {
   return useMutation({
     mutationFn: (krw_per_usd: number) => put<{ krw_per_usd: number }>("/api/settings/rate", { krw_per_usd }),
     onSuccess: refresh,
+  });
+};
+
+/** The shop bubbles of the buy form (admin). */
+export const useShops = () =>
+  useQuery({ queryKey: ["shops"], queryFn: () => get<{ names: string[] }>("/api/settings/shops") });
+
+export const useSetShops = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (names: string[]) => put<{ names: string[] }>("/api/settings/shops", { names }),
+    onSuccess: (data) => client.setQueryData(["shops"], data),
   });
 };
 

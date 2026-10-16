@@ -19,6 +19,7 @@ export interface Order {
   timestamps: Record<string, string>;
   // Admin only
   source_url?: string | null;
+  shop?: string | null;
   purchase_price?: number | null;
   profit?: number | null;
   charged_amount_krw?: number;
@@ -46,6 +47,7 @@ export interface Purchase {
   purchase_price: number | null;
   client_price: number | null;
   source_url: string | null;
+  shop?: string | null;
   bought_at: string | null;
   replaced_at?: string | null;
   note?: string | null;

@@ -2565,3 +2565,14 @@ table.orders .r {
   12%, 75% { opacity: 1; transform: none; }
   100% { opacity: 0; }
 }
+
+/* Shop bubbles in the buy form: wrap, never scroll sideways. */
+.shop-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.shop-chips .chip {
+  display: inline-flex;
+  align-items: center;
+}

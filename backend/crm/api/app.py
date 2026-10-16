@@ -111,12 +111,18 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
 class BuyIn(BaseModel):
     purchase_price: int = Field(ge=0)
     client_price: int = Field(gt=0)
+    shop: str | None = None
+
+
+class ShopsIn(BaseModel):
+    names: list[str] = Field(max_length=100)
 
 
 class RebuyIn(BaseModel):
     purchase_price: int = Field(ge=0)
     client_price: int = Field(gt=0)
     source_url: str | None = None
+    shop: str | None = None
     reason: str | None = Field(default=None, max_length=2000)
 
 
@@ -125,6 +131,7 @@ class NewOrderIn(BaseModel):
     model: str | None = None
     size: str | None = None
     source_url: str | None = None
+    shop: str | None = None
     photo_url: str | None = None
     thumbnail_url: str | None = None
     purchase_price: int | None = Field(default=None, ge=0)
@@ -141,6 +148,7 @@ class OrderPatchIn(BaseModel):
     model: str | None = None
     size: str | None = None
     source_url: str | None = None
+    shop: str | None = None
     photo_url: str | None = None
     thumbnail_url: str | None = None
     client_comment: str | None = None
@@ -528,7 +536,10 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
 
     @app.post("/api/orders/{order_id}/buy")
     def buy(order_id: str, body: BuyIn, p: Admin) -> dict[str, Any]:
-        result = services.orders.buy(p.actor, order_id, body.purchase_price, body.client_price)
+        extra = {"shop": body.shop} if "shop" in body.model_fields_set else {}
+        result = services.orders.buy(
+            p.actor, order_id, body.purchase_price, body.client_price, **extra
+        )
         return {
             "order": order_json(result.order, p.role),
             "already_done": result.already_done,
@@ -537,7 +548,11 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
 
     @app.post("/api/orders/{order_id}/rebuy")
     def rebuy(order_id: str, body: RebuyIn, p: Admin) -> dict[str, Any]:
-        extra = {"source_url": body.source_url} if "source_url" in body.model_fields_set else {}
+        extra = {
+            name: getattr(body, name)
+            for name in ("source_url", "shop")
+            if name in body.model_fields_set
+        }
         result = services.orders.rebuy(
             p.actor, order_id, body.purchase_price, body.client_price, reason=body.reason, **extra
         )
@@ -650,6 +665,14 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "change": change_json(result.shipping_change),
             "watch_change": change_json(result.watch_change),
         }
+
+    @app.get("/api/settings/shops")
+    def get_shops(p: Admin) -> dict[str, Any]:
+        return {"names": services.orders.shop_names(p.actor)}
+
+    @app.put("/api/settings/shops")
+    def put_shops(body: ShopsIn, p: Admin) -> dict[str, Any]:
+        return {"names": services.orders.set_shop_names(p.actor, body.names)}
 
     @app.post("/api/orders/{order_id}/duplicate")
     def duplicate_order(order_id: str, body: DuplicateIn, p: Admin) -> dict[str, Any]:

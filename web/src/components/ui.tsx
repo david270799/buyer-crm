@@ -171,13 +171,25 @@ export function Confirm({
 
 // --- inputs -------------------------------------------------------------------
 
-export function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
+export function Field({
+  label,
+  hint,
+  children,
+  group,
+}: {
+  label: string;
+  hint?: ReactNode;
+  children: ReactNode;
+  /** Several buttons inside (not one input): a <label> would click the first one. */
+  group?: boolean;
+}) {
+  const Tag = group ? "div" : "label";
   return (
-    <label className="field">
+    <Tag className="field" role={group ? "group" : undefined} aria-label={group ? label : undefined}>
       <span>{label}</span>
       {children}
       {hint && <div className="hint">{hint}</div>}
-    </label>
+    </Tag>
   );
 }
 
