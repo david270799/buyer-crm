@@ -30,18 +30,51 @@ export function CopyText({ text }: { text: string }) {
   );
 }
 
-/** The order photo; a tap opens it full screen (pinch to zoom). */
+/** The order photo; a tap opens it full screen (pinch to zoom). When the
+ * warehouse photo exists (admin only), a swipe shows it next (owner, 16.10). */
 function OrderPhoto({ order }: { order: Order }) {
-  const [open, setOpen] = useState(false);
-  const src = order.photo_url ?? order.thumbnail_url;
+  const [open, setOpen] = useState<number | null>(null);
+  const [index, setIndex] = useState(0);
+  const main = order.photo_url ?? order.thumbnail_url;
+  const arrival = order.arrival_photo_url ?? order.arrival_thumbnail_url;
+  const slides = [
+    main ? { photo_url: main, thumbnail_url: order.thumbnail_url ?? null, label: "Фото заказа" } : null,
+    arrival ? { photo_url: arrival, thumbnail_url: order.arrival_thumbnail_url ?? null, label: "Пришло на склад" } : null,
+  ].filter((s): s is { photo_url: string; thumbnail_url: string | null; label: string } => s !== null);
+  if (slides.length < 2) {
+    return (
+      <>
+        <button type="button" className="photo-button" onClick={() => main && setOpen(0)} aria-label="Открыть фото">
+          <Photo src={main} alt={orderTitle(order)} className="large contain" />
+        </button>
+        {open !== null && main && (
+          <Lightbox photos={[{ photo_url: main, thumbnail_url: order.thumbnail_url }]} start={0} onClose={() => setOpen(null)} />
+        )}
+      </>
+    );
+  }
   return (
     <>
-      <button type="button" className="photo-button" onClick={() => src && setOpen(true)} aria-label="Открыть фото">
-        <Photo src={src} alt={orderTitle(order)} className="large contain" />
-      </button>
-      {open && src && (
-        <Lightbox photos={[{ photo_url: src, thumbnail_url: order.thumbnail_url }]} start={0} onClose={() => setOpen(false)} />
-      )}
+      <div
+        className="photo-swipe"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          setIndex(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)));
+        }}
+      >
+        {slides.map((slide, i) => (
+          <button key={slide.photo_url} type="button" className="photo-button" onClick={() => setOpen(i)} aria-label={slide.label}>
+            <Photo src={slide.photo_url} alt={slide.label} className="large contain" />
+            <span className="photo-swipe-label">{slide.label}</span>
+          </button>
+        ))}
+      </div>
+      <div className="photo-dots" aria-hidden>
+        {slides.map((slide, i) => (
+          <i key={slide.photo_url} className={i === index ? "active" : ""} />
+        ))}
+      </div>
+      {open !== null && <Lightbox photos={slides} start={open} onClose={() => setOpen(null)} />}
     </>
   );
 }

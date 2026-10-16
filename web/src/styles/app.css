@@ -2645,3 +2645,32 @@ table.orders .r {
 }
 .review-text { font-size: 14px; line-height: 1.45; word-break: keep-all; }
 .badge.size-wrong { background: var(--negative); color: #fff; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
+
+/* Order photo + warehouse photo: swipe between them (owner, 16.10). */
+.photo-swipe {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  border-radius: var(--radius-lg);
+}
+.photo-swipe::-webkit-scrollbar { display: none; }
+.photo-swipe .photo-button {
+  position: relative;
+  flex: 0 0 100%;
+  scroll-snap-align: center;
+}
+.photo-swipe-label {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+.photo-dots { display: flex; justify-content: center; gap: 6px; margin-top: 8px; }
+.photo-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--border); transition: width 0.2s ease, background 0.2s ease; }
+.photo-dots i.active { width: 16px; border-radius: 3px; background: var(--text); }
