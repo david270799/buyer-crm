@@ -551,3 +551,36 @@ def test_shipment_with_watches_over_the_api(db, api):
     patched = api("PATCH", "/api/shipments/1", json={"watch_count": 1}).json()
     assert patched["watch_change"]["amount_krw"] == 13_500
     assert balance(db) == START_BALANCE - 50_000 - 13_500
+
+
+def test_client_marks_a_shipment_delivered_and_nothing_else(db, api):
+    for n in (1, 2):
+        seed_order(db, f"N{n}", status="warehouse", client_price=10)
+    seed_order(db, "N3", status="warehouse", client_price=10)
+    shipment = api("POST", "/api/shipments", json={"order_ids": ["N1", "N2"]}).json()["shipment"]
+    api("POST", "/api/orders/N2/cancel")  # returned pair stays cancelled
+
+    response = api("POST", f"/api/shipments/{shipment['id']}/delivered", who=CLIENT_TG)
+
+    assert response.status_code == 200 and response.json()["updated"] == ["N1"]
+    assert db.get("orders", "N1")["status"] == "delivered"
+    assert db.get("orders", "N2")["status"] == "cancelled"
+    assert db.get("orders", "N3")["status"] == "warehouse"
+    assert balance(db) == START_BALANCE
+    again = api("POST", f"/api/shipments/{shipment['id']}/delivered", who=CLIENT_TG)
+    assert again.json()["updated"] == []
+    # Still read-only otherwise; strangers and the admin's preview get nothing.
+    assert api("POST", "/api/orders/N3/cancel", who=CLIENT_TG).status_code == 403
+    assert api("POST", f"/api/shipments/{shipment['id']}/delivered", who=555).status_code == 403
+    preview = api(
+        "POST",
+        f"/api/shipments/{shipment['id']}/delivered",
+        headers={"X-View-As": "client"},
+    )
+    assert preview.status_code == 403
+    # The admin undoes a mistaken tap: back to «Отправлен», the sending date stays.
+    sent_at = db.get("orders", "N1")["cargo_at"]
+    undo = api("POST", "/api/orders/bulk/status", json={"order_ids": ["N1"], "status": "cargo"})
+    assert undo.status_code == 200
+    assert db.get("orders", "N1")["status"] == "cargo"
+    assert db.get("orders", "N1")["cargo_at"] == sent_at

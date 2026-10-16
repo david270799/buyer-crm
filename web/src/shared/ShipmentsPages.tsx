@@ -1,19 +1,20 @@
-import { Package, Pencil } from "lucide-react";
-import type { ReactNode } from "react";
+import { Check, Package, Pencil } from "lucide-react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import { useShipment, useShipments } from "../api/hooks";
+import { useShipment, useShipmentDelivered, useShipments } from "../api/hooks";
 import type { Order, Shipment } from "../api/types";
 import { PageHead } from "../components/Layout";
 import { Thumb } from "../components/orders";
 import { PhotoCarousel } from "../components/PhotoCarousel";
 import { StatusBadge } from "../components/status";
-import { Empty, ErrorState, Loading } from "../components/ui";
+import { Confirm, Empty, ErrorState, Loading, errorText, useToast } from "../components/ui";
 import { date, items, krw, orderTitle } from "../lib/format";
 import { CopyText } from "./OrderDetailsPage";
 
 export function ShipmentsPage({ action }: { action?: ReactNode }) {
   const { data, error, isLoading, refetch } = useShipments();
+  const [arrived, setArrived] = useState<Shipment | null>(null);
   return (
     <>
       <PageHead title="Отправки" sub={data ? `${data.items.length} всего` : undefined} action={action} />
@@ -43,12 +44,14 @@ export function ShipmentsPage({ action }: { action?: ReactNode }) {
               </div>
               <div className="stack" style={{ gap: 4, alignItems: "flex-end" }}>
                 <ShipmentStatus delivered={s.delivered} />
+                {!s.delivered && <DeliveredButton onClick={() => setArrived(s)} />}
                 {s.shipping_cost_krw ? <div className="amount small muted">{krw(s.shipping_cost_krw)}</div> : null}
               </div>
             </Link>
           ))}
         </div>
       )}
+      {arrived && <DeliveredConfirm shipment={arrived} onClose={() => setArrived(null)} />}
     </>
   );
 }
@@ -61,6 +64,7 @@ export function ShipmentDetailsPage({
 }) {
   const { id = "" } = useParams();
   const { data, error, isLoading, refetch } = useShipment(id);
+  const [arrived, setArrived] = useState(false);
   if (isLoading) return <Loading rows={3} height={120} />;
   if (error || !data) return <ErrorState error={error} onRetry={refetch} />;
   const { shipment, orders } = data;
@@ -76,6 +80,7 @@ export function ShipmentDetailsPage({
           <span className="row" style={{ gap: 8 }}>
             <span>{shipment.shipment_number ?? "—"}</span>
             <ShipmentStatus delivered={shipment.delivered} />
+            {!shipment.delivered && !onEdit && <DeliveredButton onClick={() => setArrived(true)} />}
           </span>
         }
         action={onEdit?.(shipment, orders) ?? null}
@@ -152,7 +157,52 @@ export function ShipmentDetailsPage({
           </div>
         </div>
       </div>
+      {arrived && <DeliveredConfirm shipment={shipment} onClose={() => setArrived(false)} />}
     </>
+  );
+}
+
+/** Small «Доставлено» button: the one status the client sets (inside a list link, so it stops the click). */
+function DeliveredButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="btn small delivered-btn"
+      onClick={(e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      <Check size={14} /> Доставлено
+    </button>
+  );
+}
+
+function DeliveredConfirm({ shipment, onClose }: { shipment: Shipment; onClose: () => void }) {
+  const toast = useToast();
+  const mark = useShipmentDelivered();
+  return (
+    <Confirm
+      title="Отправка пришла?"
+      confirmLabel="Да, доставлено"
+      busy={mark.isPending}
+      onClose={onClose}
+      onConfirm={() =>
+        mark.mutate(shipment.id, {
+          onSuccess: (r) => {
+            toast(r.updated.length ? `Доставлено: ${items(r.updated.length)}` : "Уже отмечено");
+            onClose();
+          },
+          onError: (e) => toast(errorText(e), "error"),
+        })
+      }
+    >
+      <div className="small">
+        Все заказы отправки <b className="num">{shipment.tracking_code ?? shipment.shipment_number ?? ""}</b> станут
+        «Доставлен».
+      </div>
+    </Confirm>
   );
 }
 

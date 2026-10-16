@@ -351,6 +351,15 @@ export const useDuplicateOrder = (id: string) => {
   });
 };
 
+/** The client's only write: the parcel arrived («Доставлено»). */
+export const useShipmentDelivered = () => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (id: string) => post<{ updated: string[] }>(`/api/shipments/${id}/delivered`, {}),
+    onSuccess: refresh,
+  });
+};
+
 export const useSplitShipment = (id: string) => {
   const refresh = useInvalidateAll();
   return useMutation({

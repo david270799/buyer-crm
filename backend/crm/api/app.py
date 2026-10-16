@@ -656,6 +656,15 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         copies = services.orders.duplicate(p.actor, order_id, body.count)
         return {"items": [order_json(o, p.role) for o in copies]}
 
+    @app.post("/api/shipments/{reference}/delivered")
+    def shipment_delivered(reference: str, p: Any_) -> dict[str, Any]:
+        """The client's only write (the owner, 16.10.2026): the parcel arrived."""
+        if p.preview:
+            raise ApiError(403, "forbidden", "В режиме «Как видит клиент» ничего не меняется.")
+        shipment_id = services.shipments.resolve_id(reference)
+        result = services.orders.mark_shipment_delivered(p.actor, shipment_id)
+        return {"updated": result.updated}
+
     @app.post("/api/shipments/{reference}/split")
     def split_shipment(reference: str, body: ShipmentSplitIn, p: Admin) -> dict[str, Any]:
         shipment = services.shipments.split_shipment(

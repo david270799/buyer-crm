@@ -2452,3 +2452,14 @@ table.orders .r {
   color: inherit;
   opacity: 0.75;
 }
+
+/* «Доставлено» on a shipment: the client's only status button (16.10.2026). */
+.btn.small.delivered-btn {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  gap: 4px;
+  color: var(--st-delivered);
+  border-color: var(--st-delivered);
+  background: var(--st-delivered-soft);
+}

@@ -886,19 +886,54 @@ export function DiscountSheet({ orders, onClose, onDone }: { orders: Order[]; on
 }
 
 /** "Доставлена" on a shipment page: every order of the shipment → delivered. */
+/** Admin only: undo «Доставлено» (the client may have tapped it by mistake). No money moves. */
+function ShipmentUndeliverButton({ orders }: { orders: Order[] }) {
+  const toast = useToast();
+  const setStatus = useBulkStatus();
+  const [confirming, setConfirming] = useState(false);
+  const delivered = orders.filter((o) => o.status === "delivered");
+  if (!delivered.length) return null;
+  return (
+    <>
+      <button className="btn small" onClick={() => setConfirming(true)}>
+        <Undo2 size={14} /> В пути
+      </button>
+      {confirming && (
+        <Confirm
+          title="Вернуть «В пути»?"
+          confirmLabel="Вернуть «Отправлен»"
+          busy={setStatus.isPending}
+          onClose={() => setConfirming(false)}
+          onConfirm={() =>
+            setStatus.mutate(
+              { order_ids: delivered.map((o) => o.id), status: "cargo" },
+              {
+                onSuccess: (r) => {
+                  toast(bulkSummary(r, "Снова «Отправлен»"));
+                  setConfirming(false);
+                },
+                onError: (e) => toast(errorText(e), "error"),
+              },
+            )
+          }
+        >
+          <div className="small">
+            Отмена отметки «Доставлено» (например, клиент нажал по ошибке). Заказы снова станут «Отправлен»:{" "}
+            {delivered.map((o) => o.id).join(", ")}. Деньги не меняются.
+          </div>
+        </Confirm>
+      )}
+    </>
+  );
+}
+
 export function ShipmentDeliveredButton({ orders }: { orders: Order[] }) {
   const toast = useToast();
   const setStatus = useBulkStatus();
   const [confirming, setConfirming] = useState(false);
   const pending = orders.filter((o) => o.status !== "delivered" && o.status !== "cancelled");
   if (!orders.length) return null;
-  if (!pending.length) {
-    return (
-      <button className="btn small" disabled>
-        <CheckCheck size={14} /> Доставлена
-      </button>
-    );
-  }
+  if (!pending.length) return <ShipmentUndeliverButton orders={orders} />;
   return (
     <>
       <button className="btn small primary" onClick={() => setConfirming(true)}>

@@ -917,69 +917,102 @@ class OrderService:
             raise ValidationError(_STATUS_HAS_OWN_COMMAND[new_status])
         ids = list(dict.fromkeys(normalize_order_id(i) for i in order_ids))
         require_bulk_size(ids)
-        ts_field = status_timestamp_field(new_status)
+        return self._db.run_transaction(lambda tx: self._set_status(tx, actor, ids, new_status))
+
+    def mark_shipment_delivered(self, actor: Actor, shipment_id: str) -> BulkResult:
+        """The client's only action (the owner, 16.10.2026): «Доставлено» on a
+        shipment that arrived. Only its «Отправлен» orders become «Доставлен»;
+        no money moves, nothing else can be changed this way."""
+        if actor.role not in (Role.ADMIN, Role.CLIENT):
+            require_admin(actor)
 
         def fn(tx: Transaction) -> BulkResult:
-            orders = self._orders.get_many(tx, ids)
-            result = BulkResult()
-            to_update: list[Order] = []
-            for order_id in ids:
-                order = orders[order_id]
-                if order is None:
-                    result.not_found.append(order_id)
-                elif order.status is None:
-                    result.skipped.append((order_id, f"неизвестный статус «{order.status_raw}»"))
-                elif order.status is OrderStatus.NEW:
-                    result.skipped.append((order_id, "не выкуплен — сначала /buy"))
-                elif order.status is OrderStatus.CANCELLED:
-                    result.skipped.append((order_id, "отменён"))
-                elif order.status is new_status:
-                    result.unchanged.append(order_id)
-                elif rollback and not (order.status is OrderStatus.WAREHOUSE and order.is_charged):
-                    result.skipped.append(
-                        (order_id, "«Выкуплен» можно вернуть только из «На складе»")
-                    )
-                elif new_status is OrderStatus.CARGO and not order.shipment_id:
-                    result.skipped.append((order_id, "нет отправки — используйте /cargo"))
-                elif new_status is OrderStatus.WAREHOUSE and order.shipment_id:
-                    result.skipped.append((order_id, f"входит в отправку {order.shipment_id}"))
-                else:
-                    to_update.append(order)
-
-            now = self._clock.now()
-            for order in to_update:
-                fields = {"status": new_status.value, "updated_at": now, "updated_by": actor.id}
-                if not rollback:  # keep the real purchase date (profit by month)
-                    fields[ts_field] = now
-                self._orders.update(tx, order.id, fields)
-                self._auditor.record(
-                    tx,
-                    actor,
-                    now,
-                    action="order.status",
-                    entity_type="order",
-                    entity_id=order.id,
-                    before={"status": order.status_raw},
-                    after={"status": new_status.value},
-                )
-                result.updated.append(order.id)
-            if result.updated:
-                event_type, title = (
-                    (EventType.ORDER_STATUS, "Статус возвращён: «Выкуплен»")
-                    if rollback
-                    else _STATUS_EVENTS.get(new_status, (EventType.ORDER_STATUS, "Статус обновлён"))
-                )
-                self._events.record(
-                    tx,
-                    actor,
-                    now,
-                    event_type,
-                    f"{title}: {_ids(result.updated)}",
-                    order_ids=result.updated,
-                )
-            return result
+            shipment = self._shipments.get(tx, shipment_id)
+            if shipment is None:
+                raise NotFoundError(f"Отправка {shipment_id} не найдена.")
+            orders = self._orders.get_many(tx, shipment.order_ids)
+            ids = [
+                i
+                for i in shipment.order_ids
+                if (o := orders.get(i)) is not None
+                and o.status is OrderStatus.CARGO
+                and o.shipment_id == shipment_id
+            ]
+            if not ids:
+                return BulkResult()
+            return self._set_status(tx, actor, ids, OrderStatus.DELIVERED)
 
         return self._db.run_transaction(fn)
+
+    def _set_status(
+        self, tx: Transaction, actor: Actor, ids: list[str], new_status: OrderStatus
+    ) -> BulkResult:
+        rollback = new_status is OrderStatus.BOUGHT
+        ts_field = status_timestamp_field(new_status)
+        orders = self._orders.get_many(tx, ids)
+        result = BulkResult()
+        to_update: list[Order] = []
+        for order_id in ids:
+            order = orders[order_id]
+            if order is None:
+                result.not_found.append(order_id)
+            elif order.status is None:
+                result.skipped.append((order_id, f"неизвестный статус «{order.status_raw}»"))
+            elif order.status is OrderStatus.NEW:
+                result.skipped.append((order_id, "не выкуплен — сначала /buy"))
+            elif order.status is OrderStatus.CANCELLED:
+                result.skipped.append((order_id, "отменён"))
+            elif order.status is new_status:
+                result.unchanged.append(order_id)
+            elif rollback and not (order.status is OrderStatus.WAREHOUSE and order.is_charged):
+                result.skipped.append((order_id, "«Выкуплен» можно вернуть только из «На складе»"))
+            elif new_status is OrderStatus.CARGO and not order.shipment_id:
+                result.skipped.append((order_id, "нет отправки — используйте /cargo"))
+            elif new_status is OrderStatus.WAREHOUSE and order.shipment_id:
+                result.skipped.append((order_id, f"входит в отправку {order.shipment_id}"))
+            else:
+                to_update.append(order)
+
+        now = self._clock.now()
+        # «Доставлен» → «Отправлен» undoes a mistaken tap (the client's button):
+        # the order keeps its real sending date.
+        undo_delivered = new_status is OrderStatus.CARGO and all(
+            o.status is OrderStatus.DELIVERED for o in to_update
+        )
+        for order in to_update:
+            fields = {"status": new_status.value, "updated_at": now, "updated_by": actor.id}
+            # keep the real purchase / sending date (profit by month)
+            if not rollback and order.status is not OrderStatus.DELIVERED:
+                fields[ts_field] = now
+            self._orders.update(tx, order.id, fields)
+            self._auditor.record(
+                tx,
+                actor,
+                now,
+                action="order.status",
+                entity_type="order",
+                entity_id=order.id,
+                before={"status": order.status_raw},
+                after={"status": new_status.value},
+            )
+            result.updated.append(order.id)
+        if result.updated:
+            event_type, title = (
+                (EventType.ORDER_STATUS, "Статус возвращён: «Выкуплен»")
+                if rollback
+                else (EventType.ORDER_STATUS, "Статус возвращён: «Отправлен»")
+                if undo_delivered
+                else _STATUS_EVENTS.get(new_status, (EventType.ORDER_STATUS, "Статус обновлён"))
+            )
+            self._events.record(
+                tx,
+                actor,
+                now,
+                event_type,
+                f"{title}: {_ids(result.updated)}",
+                order_ids=result.updated,
+            )
+        return result
 
     # --- re-purchase ---------------------------------------------------------
 
