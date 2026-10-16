@@ -1,4 +1,5 @@
 import { Camera, CheckCheck, Loader2, Plus, Sparkles, Split, Undo2, X } from "lucide-react";
+import { CategoryPicker } from "../shared/CategoryPicker";
 import { ShopPicker } from "./ShopPicker";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -25,7 +26,7 @@ import {
   useDuplicateOrder,
   recognizeLink,
 } from "../api/hooks";
-import type { BulkResult, LinkImport, Order, OrderStatus, PhotoRecognition, Shipment } from "../api/types";
+import type { BulkResult, Category, LinkImport, Order, OrderStatus, PhotoRecognition, Shipment } from "../api/types";
 import { Thumb } from "../components/orders";
 import { Checkbox, Confirm, errorText, Field, MoneyInput, Sheet, Switch, useToast } from "../components/ui";
 import { krw, STATUS_LABEL, todayKey } from "../lib/format";
@@ -72,11 +73,12 @@ export interface PhotoValue {
 }
 
 /** Fields Gemini is sure about, for filling a form; empty strings are left out. */
-export function recognizedFields(r: PhotoRecognition): { brand?: string; model?: string; size?: string } {
-  const fields: { brand?: string; model?: string; size?: string } = {};
+export function recognizedFields(r: PhotoRecognition): { brand?: string; model?: string; size?: string; category?: Category } {
+  const fields: { brand?: string; model?: string; size?: string; category?: Category } = {};
   if (r.brand) fields.brand = r.brand;
   if (r.model) fields.model = r.model;
   if (r.size) fields.size = r.size;
+  if (r.category_code) fields.category = r.category_code;
   return fields;
 }
 
@@ -1246,6 +1248,7 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
     size: order.size ?? "",
     source_url: order.source_url ?? "",
     shop: order.shop ?? null,
+    category: (order.category ?? null) as Category | null,
     client_comment: order.client_comment ?? "",
     internal_comment: order.internal_comment ?? "",
     attention_required: order.attention_required,
@@ -1275,6 +1278,7 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
                   size: text(form.size),
                   source_url: text(form.source_url),
                   shop: form.shop,
+                  category: form.category,
                   client_comment: text(form.client_comment),
                   internal_comment: text(form.internal_comment),
                   attention_required: form.attention_required,
@@ -1323,6 +1327,11 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
           <input className="input" value={form.source_url} onChange={(e) => set("source_url", e.target.value)} placeholder="https://" />
         </Field>
         <div className="full">
+          <Field label="Категория" group>
+            <CategoryPicker value={form.category} onChange={(category) => set("category", category)} />
+          </Field>
+        </div>
+        <div className="full">
           <Field label="Магазин" hint="Видите только вы" group>
             <ShopPicker value={form.shop} onChange={(shop) => set("shop", shop)} />
           </Field>
@@ -1333,6 +1342,7 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
             setForm((f) => ({ ...f, brand: brand ?? f.brand, model: model ?? f.model }))
           }
           onPhoto={(photo) => setForm((f) => ({ ...f, photo }))}
+          onCategory={(category) => setForm((f) => ({ ...f, category }))}
         />
         {editablePrices && (
           <>
@@ -1560,10 +1570,12 @@ function LinkFill({
   url,
   onBrandModel,
   onPhoto,
+  onCategory,
 }: {
   url: string;
   onBrandModel: (brand: string | null, model: string | null) => void;
   onPhoto: (photo: PhotoValue) => void;
+  onCategory?: (category: Category) => void;
 }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -1578,6 +1590,7 @@ function LinkFill({
       const r = await recognizeLink(url.trim());
       setFound(r);
       onBrandModel(r.brand, r.model);
+      if (r.category_code) onCategory?.(r.category_code);
       toast(r.brand || r.model ? `Со страницы: ${[r.brand, r.model].filter(Boolean).join(" ")}` : "Название не определено");
     } catch (error) {
       toast(errorText(error), "error");

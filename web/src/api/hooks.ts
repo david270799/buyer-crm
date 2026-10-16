@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 
 import { api, get, newIdempotencyKey, patch, post, put, query } from "./client";
 import type {
+  Category,
   BalanceChange,
   CrmEvent,
   BulkResult,
@@ -197,6 +198,7 @@ export interface NewOrderInput {
   size?: string | null;
   source_url?: string | null;
   shop?: string | null;
+  category?: Category | null;
   photo_url?: string | null;
   thumbnail_url?: string | null;
   purchase_price?: number | null;

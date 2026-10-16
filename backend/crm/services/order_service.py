@@ -19,6 +19,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
+from crm.domain.categories import check_category
 from crm.domain.enums import (
     CHARGED_STATUSES,
     STATUS_FLOW,
@@ -92,6 +93,7 @@ class NewOrder:
     size: str | None = None
     source_url: str | None = None
     shop: str | None = None
+    category: str | None = None
     purchase_price: int | None = None
     client_price: int | None = None
     client_comment: str | None = None
@@ -241,6 +243,7 @@ class OrderUpdate:
     size: str | None = UNSET
     source_url: str | None = UNSET
     shop: str | None = UNSET
+    category: str | None = UNSET
     photo_url: str | None = UNSET
     thumbnail_url: str | None = UNSET
     client_comment: str | None = UNSET
@@ -320,6 +323,8 @@ def _clean_update_fields(values: dict[str, Any]) -> dict[str, Any]:
             cleaned[name] = _clean_text(value, name, _MAX_SHORT_TEXT)
         elif name == "shop":
             cleaned[name] = clean_shop(value)
+        elif name == "category":
+            cleaned[name] = check_category(value)
         elif name in ("client_comment", "internal_comment"):
             cleaned[name] = _clean_text(value, "Комментарий", _MAX_LONG_TEXT)
         elif name == "source_url":
@@ -689,6 +694,7 @@ class OrderService:
             "size": _clean_text(new.size, "Размер", _MAX_SHORT_TEXT),
             "source_url": _clean_url(new.source_url, "Ссылка"),
             "shop": clean_shop(new.shop),
+            "category": check_category(new.category),
             "photo_url": _clean_photo_url(new.photo_url, "Фото"),
             "thumbnail_url": _clean_photo_url(new.thumbnail_url, "Миниатюра"),
             "client_comment": _clean_text(new.client_comment, "Комментарий", _MAX_LONG_TEXT),

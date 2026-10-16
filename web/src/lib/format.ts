@@ -1,4 +1,4 @@
-import type { LedgerType, OrderStatus } from "../api/types";
+import type { Category, LedgerType, OrderStatus } from "../api/types";
 
 const TZ = "Asia/Seoul";
 const NBSP = " ";
@@ -125,3 +125,13 @@ export function orderTitle(order: { brand: string | null; model: string | null; 
 export function timeOnly(value: string | null | undefined): string {
   return value ? timeFmt.format(new Date(value)) : "";
 }
+
+/** Product categories (same codes as crm/domain/categories.py). */
+export const CATEGORY_LABEL: Record<Category, string> = {
+  shoes: "Обувь",
+  clothes: "Одежда",
+  watch: "Часы",
+  bag: "Сумки",
+  accessory: "Аксессуары",
+  other: "Другое",
+};

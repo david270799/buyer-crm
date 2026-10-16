@@ -56,6 +56,7 @@ def test_client_photo_becomes_a_new_order(db, services, client):
     assert stored["created_by"] == f"tg:{CLIENT_TG}"
     assert stored["recognition"]["engine"] == "gemini-test"
     assert stored["recognition"]["confidence"] == 0.93
+    assert stored["category"] == "shoes"  # Gemini said «кроссовки»
     assert "order.intake" in audit_actions(db)
 
 

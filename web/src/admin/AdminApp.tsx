@@ -1,11 +1,13 @@
 import { Eye, LayoutGrid, Package, Plus, Settings, Truck, Wallet } from "lucide-react";
+import { CategoryPicker } from "../shared/CategoryPicker";
+import { ShopPicker } from "./ShopPicker";
 import { useState } from "react";
 import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 
 import { setClientPreview } from "../api/client";
 import { AppearanceSettings } from "../shared/AppearanceSettings";
 import { useCreateOrder, useOverview, useSetNotifications, useSetRate, useSettings } from "../api/hooks";
-import type { NotificationSettings, NotifyLevel, NotifyRecipient, Shipment } from "../api/types";
+import type { Category, NotificationSettings, NotifyLevel, NotifyRecipient, Shipment } from "../api/types";
 import { type NavItem, PageHead, Shell } from "../components/Layout";
 import { BalanceCard } from "../components/money";
 import { OrderCard } from "../components/orders";
@@ -109,6 +111,8 @@ function NewOrderPage() {
   const [purchase, setPurchase] = useState<number | null>(null);
   const [price, setPrice] = useState<number | null>(null);
   const [buyNow, setBuyNow] = useState(false);
+  const [category, setCategory] = useState<Category | null>(null);
+  const [shop, setShop] = useState<string | null>(null);
   const set = (key: keyof typeof form, value: string) => setForm({ ...form, [key]: value });
   const text = (v: string) => v.trim() || null;
   const canBuy = purchase !== null && price !== null && price > 0;
@@ -119,6 +123,8 @@ function NewOrderPage() {
         model: text(form.model),
         size: text(form.size),
         source_url: text(form.source_url),
+        category,
+        shop,
         client_comment: text(form.client_comment),
         internal_comment: text(form.internal_comment),
         purchase_price: purchase,
@@ -149,7 +155,11 @@ function NewOrderPage() {
               Бренд
               <AiFillButton
                 photoUrl={photo.photo_url}
-                onRecognized={(r) => setForm((f) => ({ ...f, ...recognizedFields(r) }))}
+                onRecognized={(r) => {
+                  const { category: found, ...fields } = recognizedFields(r);
+                  setForm((f) => ({ ...f, ...fields }));
+                  if (found) setCategory(found);
+                }}
               />
             </span>
             <input
@@ -169,6 +179,11 @@ function NewOrderPage() {
           <Field label="Ссылка" hint="Видите только вы">
             <input className="input" value={form.source_url} onChange={(e) => set("source_url", e.target.value)} placeholder="https://" />
           </Field>
+          <div className="full">
+            <Field label="Категория" group>
+              <CategoryPicker value={category} onChange={setCategory} />
+            </Field>
+          </div>
           <Field label="Закупка">
             <MoneyInput value={purchase} onChange={setPurchase} />
           </Field>
@@ -183,6 +198,11 @@ function NewOrderPage() {
           <div className="full">
             <Field label="Внутренний комментарий" hint="Клиент не видит">
               <textarea className="textarea" value={form.internal_comment} onChange={(e) => set("internal_comment", e.target.value)} />
+            </Field>
+          </div>
+          <div className="full">
+            <Field label="Магазин" hint="Видите только вы" group>
+              <ShopPicker value={shop} onChange={setShop} />
             </Field>
           </div>
           <div className="full card pad">

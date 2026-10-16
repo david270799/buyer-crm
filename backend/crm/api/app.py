@@ -31,6 +31,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from crm.api.telegram_auth import InitDataError, TelegramUser, validate_init_data
+from crm.domain.categories import category_from_text
 from crm.domain.enums import STATUS_LABELS_RU, Role, parse_status
 from crm.domain.errors import (
     ConfigurationError,
@@ -132,6 +133,7 @@ class NewOrderIn(BaseModel):
     size: str | None = None
     source_url: str | None = None
     shop: str | None = None
+    category: str | None = None
     photo_url: str | None = None
     thumbnail_url: str | None = None
     purchase_price: int | None = Field(default=None, ge=0)
@@ -149,6 +151,7 @@ class OrderPatchIn(BaseModel):
     size: str | None = None
     source_url: str | None = None
     shop: str | None = None
+    category: str | None = None
     photo_url: str | None = None
     thumbnail_url: str | None = None
     client_comment: str | None = None
@@ -831,6 +834,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "model": result.model,
             "size": result.size,
             "category": result.category,
+            "category_code": category_from_text(result.category),
             "confidence": result.confidence,
             "not_a_product": result.not_a_product,
             "engine": result.engine,
@@ -845,6 +849,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "brand": result.brand,
             "model": result.model,
             "category": result.category,
+            "category_code": category_from_text(result.category),
             "title": result.title,
             "photo_url": result.photo.photo_url if result.photo else None,
             "thumbnail_url": result.photo.thumbnail_url if result.photo else None,

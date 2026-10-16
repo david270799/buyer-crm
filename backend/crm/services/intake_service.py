@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from crm.domain.categories import category_from_text
 from crm.domain.enums import OrderStatus, Role
 from crm.domain.errors import PermissionDeniedError, ValidationError
 from crm.domain.events import EventType
@@ -141,7 +142,9 @@ class IntakeService:
                 "source_url": _safe(_clean_url, link, "Ссылка"),
             }
 
+        several = len(caption_links) >= 2  # several things in one photo: category unknown
         common = {
+            "category": None if several else category_from_text(recognition.category),
             "photo_url": incoming.photo.photo_url if incoming.photo else None,
             "thumbnail_url": incoming.photo.thumbnail_url if incoming.photo else None,
             "client_comment": _safe(

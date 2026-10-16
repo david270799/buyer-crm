@@ -17,6 +17,7 @@ export interface Order {
   client_comment: string | null;
   attention_required: boolean;
   timestamps: Record<string, string>;
+  category?: Category | null;
   // Admin only
   source_url?: string | null;
   shop?: string | null;
@@ -178,6 +179,7 @@ export interface PhotoRecognition {
   model: string | null;
   size: string | null;
   category: string | null;
+  category_code?: Category | null;
   confidence: number;
   not_a_product: boolean;
 }
@@ -186,6 +188,7 @@ export interface LinkImport {
   brand: string | null;
   model: string | null;
   category: string | null;
+  category_code?: Category | null;
   title: string | null;
   photo_url: string | null;
   thumbnail_url: string | null;
@@ -256,3 +259,5 @@ export interface NotificationSettings {
   client_has_telegram: boolean;
   bot_running: boolean;
 }
+
+export type Category = "shoes" | "clothes" | "watch" | "bag" | "accessory" | "other";
