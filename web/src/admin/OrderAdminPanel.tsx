@@ -1,4 +1,5 @@
 import { Ban, Copy, ExternalLink, Pencil, Repeat, ShoppingBag, Sparkles, Trash2, Truck, Warehouse } from "lucide-react";
+import { ArrivalPanel } from "./ArrivalPanel";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -104,6 +105,7 @@ export function OrderAdminPanel({ order }: { order: Order }) {
             </>
           )}
         </dl>
+        <ArrivalPanel order={order} />
         {order.recognition && <RecognitionInfo recognition={order.recognition} link={telegramLink(order)} />}
         {purchases.length > 1 && (
           <div className="stack" style={{ gap: 6 }}>

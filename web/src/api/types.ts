@@ -23,6 +23,11 @@ export interface Order {
   shop?: string | null;
   /** Days since the buy-out while still «Выкуплен» after 4 days; else null. */
   stuck_days?: number | null;
+  arrival_photo_url?: string | null;
+  arrival_thumbnail_url?: string | null;
+  arrival_check?: ArrivalCheck | null;
+  /** Short Korean review for the shop's review points (Gemini). */
+  review_ko?: string | null;
   purchase_price?: number | null;
   profit?: number | null;
   charged_amount_krw?: number;
@@ -261,3 +266,24 @@ export interface NotificationSettings {
 }
 
 export type Category = "shoes" | "clothes" | "watch" | "bag" | "accessory" | "other";
+
+export type ArrivalStatus = "match" | "mismatch" | "unclear" | "skipped";
+
+export interface ArrivalCheck {
+  status: ArrivalStatus;
+  size_seen: string | null;
+  ordered_size: string | null;
+  note: string | null;
+  error: string | null;
+  at: string | null;
+}
+
+export interface ArrivalResult {
+  order: Order;
+  status: ArrivalStatus;
+  size_seen: string | null;
+  review_ko: string | null;
+  note: string | null;
+  moved_to_warehouse: boolean;
+  error: string | null;
+}

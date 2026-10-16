@@ -13,6 +13,7 @@ from crm.repositories import (
     SettingsRepository,
     ShipmentRepository,
 )
+from crm.services.arrival import ArrivalService
 from crm.services.auth import RoleResolver
 from crm.services.client_service import ClientService
 from crm.services.common import Auditor, Clock, SystemClock
@@ -56,6 +57,7 @@ class Services:
     profit: ProfitService | None = None
     security: SecurityService | None = None
     groups: GroupService | None = None
+    arrival: ArrivalService | None = None
 
 
 def build_services(
@@ -81,20 +83,21 @@ def build_services(
     ledger = BalanceLedger(clients_repo, ledger_repo, recorder)
     roles = RoleResolver(db, clients_repo, admin_ids)
 
+    order_service = OrderService(
+        db,
+        clock,
+        orders_repo,
+        ledger,
+        sequences,
+        auditor,
+        recorder,
+        event_repo=events_repo,
+        intake=IntakeRepository(),
+        blobs=blob_storage,
+        profit=profit_repo,
+    )
     return Services(
-        orders=OrderService(
-            db,
-            clock,
-            orders_repo,
-            ledger,
-            sequences,
-            auditor,
-            recorder,
-            event_repo=events_repo,
-            intake=IntakeRepository(),
-            blobs=blob_storage,
-            profit=profit_repo,
-        ),
+        orders=order_service,
         shipments=ShipmentService(
             db,
             clock,
@@ -128,4 +131,5 @@ def build_services(
         profit=ProfitService(db, clock, profit_repo, auditor),
         security=SecurityService(db, clock, auditor),
         groups=GroupService(db, clock, auditor, allowed_chat_ids),
+        arrival=ArrivalService(db, clock, orders_repo, order_service, auditor, recognizer),
     )

@@ -173,6 +173,27 @@ def create_demo_database(
     clock.advance(days=2)
     # N7 stays «Выкуплен»: it shows as «не пришёл на склад» (4+ days).
     services.orders.set_status(admin, ["N6"], OrderStatus.WAREHOUSE)
+    # What «Пришло на склад» leaves on an order (Gemini is not used in the demo).
+    n6 = db.get("orders", "N6") or {}
+    db.run_transaction(
+        lambda tx: tx.update(
+            "orders",
+            "N6",
+            {
+                "arrival_photo_url": n6.get("photo_url"),
+                "arrival_thumbnail_url": n6.get("thumbnail_url"),
+                "arrival_check": {
+                    "status": "mismatch",
+                    "size_seen": "M",
+                    "ordered_size": n6.get("size"),
+                    "note": None,
+                    "error": None,
+                    "at": clock.now(),
+                },
+                "review_ko": "디자인이 고급스럽고 마감이 깔끔해요. 배송도 빨라서 만족스럽습니다.",
+            },
+        )
+    )
     services.shipments.ship_orders(
         admin,
         ["N4", "N5"],

@@ -584,3 +584,43 @@ def test_client_marks_a_shipment_delivered_and_nothing_else(db, api):
     assert undo.status_code == 200
     assert db.get("orders", "N1")["status"] == "cargo"
     assert db.get("orders", "N1")["cargo_at"] == sent_at
+
+
+def test_arrival_photo_from_the_mini_app(db, api, blobs):
+    seed_order(db, "N5", size="270")
+    api("POST", "/api/orders/N5/buy", json={"purchase_price": 1, "client_price": 2})
+    upload = api(
+        "POST",
+        "/api/images",
+        files={"file": ("p.jpg", _jpeg_bytes(), "image/jpeg")},
+    ).json()
+    response = api(
+        "POST",
+        "/api/orders/N5/arrival",
+        json={"photo_url": upload["photo_url"], "thumbnail_url": upload["thumbnail_url"]},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["moved_to_warehouse"] and body["order"]["status"] == "warehouse"
+    assert body["status"] == "skipped"  # no Gemini in tests
+    client_view = api("GET", "/api/orders/N5", who=CLIENT_TG).json()["order"]
+    assert "arrival_photo_url" not in client_view and "review_ko" not in client_view
+    assert (
+        api(
+            "POST",
+            "/api/orders/N5/arrival",
+            who=CLIENT_TG,
+            json=body["order"] | {"photo_url": upload["photo_url"]},
+        ).status_code
+        == 403
+    )
+
+
+def _jpeg_bytes() -> bytes:
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (64, 48), (200, 30, 30)).save(buffer, format="JPEG")
+    return buffer.getvalue()

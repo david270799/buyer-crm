@@ -115,6 +115,11 @@ class BuyIn(BaseModel):
     shop: str | None = None
 
 
+class ArrivalIn(BaseModel):
+    photo_url: str = Field(max_length=500)
+    thumbnail_url: str | None = Field(default=None, max_length=500)
+
+
 class ShopsIn(BaseModel):
     names: list[str] = Field(max_length=100)
 
@@ -681,6 +686,27 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "shipment": shipment_view(result.shipment, p.role),
             "change": change_json(result.shipping_change),
             "watch_change": change_json(result.watch_change),
+        }
+
+    @app.post("/api/orders/{order_id}/arrival")
+    def order_arrival(order_id: str, body: ArrivalIn, p: Admin) -> dict[str, Any]:
+        """«Пришло на склад» with a photo uploaded by /api/images (services/arrival)."""
+        if services.arrival is None or services.images is None:
+            raise ConfigurationError("Загрузка фото не настроена.")
+        image = services.images.read(body.photo_url)
+        if image is None:
+            raise NotFoundError("Фото не найдено — загрузите его заново.")
+        result = services.arrival.record(
+            p.actor, order_id, image, body.photo_url, body.thumbnail_url
+        )
+        return {
+            "order": order_json(result.order, p.role),
+            "status": result.status,
+            "size_seen": result.size_seen,
+            "review_ko": result.review_ko,
+            "note": result.note,
+            "moved_to_warehouse": result.moved_to_warehouse,
+            "error": result.error,
         }
 
     @app.get("/api/settings/shops")

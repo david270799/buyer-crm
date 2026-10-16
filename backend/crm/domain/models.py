@@ -72,6 +72,11 @@ class Order:
     source_url: str | None = None
     shop: str | None = None  # admin only: the shop it was bought in (16.10.2026)
     category: str | None = None  # crm.domain.categories code
+    # Admin only (services/arrival): the warehouse photo, the size check, a Korean review.
+    arrival_photo_url: str | None = None
+    arrival_thumbnail_url: str | None = None
+    arrival_check: Doc | None = None
+    review_ko: str | None = None
     source_chat_id: int | None = None
     source_message_id: int | None = None
     client_comment: str | None = None
@@ -124,6 +129,12 @@ class Order:
             source_url=_str_or_none(data.get("source_url")),
             shop=_str_or_none(data.get("shop")),
             category=_str_or_none(data.get("category")),
+            arrival_photo_url=_str_or_none(data.get("arrival_photo_url")),
+            arrival_thumbnail_url=_str_or_none(data.get("arrival_thumbnail_url")),
+            arrival_check=dict(data["arrival_check"])
+            if isinstance(data.get("arrival_check"), dict)
+            else None,
+            review_ko=_str_or_none(data.get("review_ko")),
             source_chat_id=_int_or_none(data.get("source_chat_id")),
             source_message_id=_int_or_none(data.get("source_message_id")),
             client_comment=_str_or_none(data.get("client_comment")),

@@ -122,6 +122,10 @@ class ImageService:
         self._storage = storage
         self._clock = clock
 
+    def read(self, url: str) -> bytes | None:
+        """A stored (already standardised) image, or None if the URL is not ours."""
+        return self._storage.read_url(url)
+
     def store(self, actor: Actor, data: bytes, folder: str = "images") -> StoredImage:
         if folder == ORDER_PHOTOS_FOLDER:
             if actor.role not in (Role.ADMIN, Role.CLIENT):

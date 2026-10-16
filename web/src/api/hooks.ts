@@ -2,6 +2,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 
 import { api, get, newIdempotencyKey, patch, post, put, query } from "./client";
 import type {
+  ArrivalResult,
   Category,
   BalanceChange,
   CrmEvent,
@@ -395,6 +396,16 @@ export const useSetRate = () => {
   const refresh = useInvalidateAll();
   return useMutation({
     mutationFn: (krw_per_usd: number) => put<{ krw_per_usd: number }>("/api/settings/rate", { krw_per_usd }),
+    onSuccess: refresh,
+  });
+};
+
+/** «Пришло на склад»: the warehouse photo → size check, review, «На складе». */
+export const useArrival = (id: string) => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (body: { photo_url: string; thumbnail_url: string | null }) =>
+      post<ArrivalResult>(`/api/orders/${id}/arrival`, body),
     onSuccess: refresh,
   });
 };

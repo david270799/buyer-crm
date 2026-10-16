@@ -2641,3 +2641,17 @@ table.orders .r {
 .month-change { font-size: 12px; font-weight: 700; }
 .month-change.up { color: var(--positive); }
 .month-change.down { color: var(--negative); }
+
+/* «Склад» block: warehouse photo, size check and the Korean review. */
+.arrival-thumb { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; border: 1px solid var(--border); }
+.arrival-ok { color: var(--positive); }
+.arrival-bad { color: var(--negative); font-weight: 600; }
+.arrival-muted { color: var(--text-2); }
+.review-block {
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.review-text { font-size: 14px; line-height: 1.45; word-break: keep-all; }
+.badge.size-wrong { background: var(--negative); color: #fff; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }

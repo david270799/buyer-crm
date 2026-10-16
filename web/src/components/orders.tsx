@@ -112,8 +112,13 @@ export function OrderCard({
       className={`order-card st-${order.status ?? "new"} ${selected ? "selected" : ""} ${canSelect ? "no-callout" : ""}`}
       {...(canSelect ? press : { onClick: open })}
     >
-      {(order.attention_required || order.stuck_days != null) && (
+      {(order.attention_required || order.stuck_days != null || order.arrival_check?.status === "mismatch") && (
         <span className="card-flags">
+          {order.arrival_check?.status === "mismatch" && (
+            <span className="badge size-wrong" title="Размер на фото со склада не совпал">
+              <AlertTriangle size={12} /> Размер?
+            </span>
+          )}
           {order.stuck_days != null && (
             <span className="badge stuck" title="Не пришёл на склад">
               <Hourglass size={12} /> {order.stuck_days} дн.
