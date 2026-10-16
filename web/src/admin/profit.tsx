@@ -7,7 +7,7 @@ import { PageHead } from "../components/Layout";
 import { Thumb } from "../components/orders";
 import { Empty, ErrorState, Loading } from "../components/ui";
 import { errorText, Field, MoneyInput, Sheet, useToast } from "../components/ui";
-import { date, krw, shortDate } from "../lib/format";
+import { date, dayKey, krw, shortDate, todayKey } from "../lib/format";
 
 const SHOWN = 5;
 
@@ -176,6 +176,7 @@ export function ProfitPage() {
               {krw(data.items.filter((i) => !i.order).reduce((s, i) => s + i.amount_krw, 0))}
             </div>
           </div>
+          {period !== "range" && <MonthCompare />}
           <ProfitSection />
           <ProfitLines items={data.items} />
         </>
@@ -233,6 +234,73 @@ function ProfitLines({ items }: { items: ProfitLine[] }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+const MONTHS_SHOWN = 6;
+const monthName = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric", timeZone: "UTC" });
+
+function monthLabel(key: string): string {
+  const [y, m] = key.split("-").map(Number);
+  return monthName.format(new Date(Date.UTC(y, m - 1, 1))).replace(" г.", "");
+}
+
+function shiftMonth(key: string, by: number): string {
+  const [y, m] = key.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + by, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function Change({ now, before }: { now: number; before: number }) {
+  if (!before) return null;
+  const pct = Math.round(((now - before) / Math.abs(before)) * 100);
+  return <span className={`month-change ${pct >= 0 ? "up" : "down"}`}>{pct >= 0 ? `+${pct}` : pct}%</span>;
+}
+
+/** «По месяцам» (owner, 16.10): this month next to the previous ones, without a chart. */
+function MonthCompare() {
+  const { data } = useProfitLines("all");
+  if (!data) return null;
+  const totals = new Map<string, number>();
+  for (const item of data.items) {
+    if (!item.at) continue;
+    const key = dayKey(item.at).slice(0, 7);
+    totals.set(key, (totals.get(key) ?? 0) + item.amount_krw);
+  }
+  const current = todayKey().slice(0, 7);
+  const months = Array.from({ length: MONTHS_SHOWN }, (_, i) => shiftMonth(current, -i));
+  const max = Math.max(1, ...months.map((m) => Math.abs(totals.get(m) ?? 0)));
+  const now = totals.get(current) ?? 0;
+  const prev = totals.get(shiftMonth(current, -1)) ?? 0;
+  return (
+    <div className="section">
+      <div className="card pad stack" style={{ gap: 10 }}>
+        <div className="row between">
+          <h3>По месяцам</h3>
+          <div className="small muted">
+            к прошлому месяцу <Change now={now} before={prev} />
+            {!prev && "—"}
+          </div>
+        </div>
+        <div className="month-rows">
+          {months.map((m, i) => {
+            const value = totals.get(m) ?? 0;
+            return (
+              <div key={m} className={`month-row ${i === 0 ? "current" : ""}`}>
+                <span className="month-name">{monthLabel(m)}</span>
+                <span className="month-bar">
+                  <i style={{ width: value ? `${Math.max(2, (Math.abs(value) / max) * 100)}%` : 0 }} />
+                </span>
+                <span className="num month-sum">{krw(value)}</span>
+                <span className="month-delta">
+                  <Change now={value} before={totals.get(shiftMonth(m, -1)) ?? 0} />
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

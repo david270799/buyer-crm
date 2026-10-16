@@ -2621,3 +2621,23 @@ table.orders .r {
 .stuck-banner.active { background: #9a3412; border-color: #9a3412; color: #fff; }
 :root[data-theme="dark"] .stuck-banner { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.4); color: #fbbf24; }
 :root[data-theme="dark"] .stuck-banner.active { background: #b45309; color: #fff; }
+
+/* Profit by month (no chart: a bar per month and the change to the month before). */
+.month-rows { display: flex; flex-direction: column; gap: 8px; }
+.month-row {
+  display: grid;
+  grid-template-columns: 96px 1fr auto 44px;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.month-row.current { font-weight: 700; }
+.month-name { text-transform: capitalize; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.month-bar { height: 8px; border-radius: 999px; background: var(--surface-2, rgba(127, 127, 127, 0.12)); overflow: hidden; }
+.month-bar i { display: block; height: 100%; border-radius: inherit; background: var(--positive); opacity: 0.75; }
+.month-row.current .month-bar i { opacity: 1; }
+.month-sum { text-align: right; white-space: nowrap; }
+.month-delta { text-align: right; }
+.month-change { font-size: 12px; font-weight: 700; }
+.month-change.up { color: var(--positive); }
+.month-change.down { color: var(--negative); }
