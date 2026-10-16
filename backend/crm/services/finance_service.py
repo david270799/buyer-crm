@@ -180,7 +180,12 @@ class FinanceService:
                 now,
                 EventType.RATE,
                 "Обновлён курс доллара",
-                body=f"1 $ = {krw_per_usd.normalize():,f} ₩",
+                body=f"1 $ = {krw_per_usd.normalize():,f} ₩"
+                + (
+                    f" (было {before.krw_per_usd.normalize():,f} ₩)"
+                    if before.krw_per_usd and before.krw_per_usd != krw_per_usd
+                    else ""
+                ),
             )
             return GeneralSettings(krw_per_usd=krw_per_usd, updated_at=now, updated_by=actor.id)
 

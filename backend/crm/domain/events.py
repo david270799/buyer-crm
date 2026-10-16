@@ -45,6 +45,7 @@ IMPORTANT_EVENTS = frozenset(
         EventType.ATTENTION,
         EventType.SHIPPING_COST,
         EventType.ADJUSTMENT,
+        EventType.RATE,
     }
 )
 
