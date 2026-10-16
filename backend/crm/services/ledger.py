@@ -29,11 +29,11 @@ def debt_level(balance: int) -> int:
 
 
 def debt_warning_text(balance: int) -> tuple[str, str]:
-    """Title and body in Uzbek (the client's language, the owner's choice)."""
+    """Title and body in Russian (the owner, 16.10.2026: Uzbek is not needed)."""
     passed = debt_level(balance) * DEBT_STEP_KRW
     return (
-        f"Qarzingiz {format_krw(passed)} dan oshdi",
-        f"Joriy balans: {format_krw(balance)}\nIltimos, balansni to‘ldiring.",
+        f"Ваш долг превысил {format_krw(passed)}",
+        f"Текущий баланс: {format_krw(balance)}\nПожалуйста, пополните баланс.",
     )
 
 

@@ -29,7 +29,7 @@ def test_each_million_warns_once_and_a_big_jump_warns_once(db, services, admin):
     services.finance.adjust(admin, -2_000_000, "x")  # → −3,200,000: passed 2M and 3M → one
     found = warnings(db)
     assert len(found) == 2
-    assert "1,000,000" in found[0]["title"] and "dan oshdi" in found[0]["title"]
+    assert found[0]["title"] == "Ваш долг превысил ₩ 1,000,000"
     assert "3,000,000" in found[1]["title"]
     assert "3,200,000" in found[1]["body"]
 

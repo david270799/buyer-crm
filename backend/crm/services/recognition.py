@@ -179,8 +179,10 @@ null if not sure.
 - model: as precise as you can really tell, with the version or colourway name if it is \
 visible or well known, e.g. "Dunk Low Retro 'Panda'", "990v6", "Samba OG". null if not sure. \
 Never guess a model you cannot identify.
-- category: in Russian, one or two words ("кроссовки", "ботинки", "одежда", "сумка", \
-"аксессуар"). null if unclear.
+- category: the type of the item, exactly one of: "обувь" (sneakers, shoes, boots, sandals), \
+"одежда" (any clothes), "часы" (watches), "сумка" (bags, backpacks, wallets), "аксессуар" (caps, \
+belts, glasses, jewellery...), "другое". Decide from the photo even when brand and model are \
+unclear; null only if you cannot tell at all.
 - size: the size the client asked for, exactly as written in the caption \
 ("42", "270", "US 9", "M"). If the caption has no size but a size is clearly selected in a \
 shop screenshot, give that. Otherwise null. Never invent a size.
@@ -199,7 +201,11 @@ RESPONSE_SCHEMA: dict[str, Any] = {
         "is_product": {"type": "BOOLEAN"},
         "brand": {"type": "STRING", "nullable": True},
         "model": {"type": "STRING", "nullable": True},
-        "category": {"type": "STRING", "nullable": True},
+        "category": {
+            "type": "STRING",
+            "nullable": True,
+            "enum": ["обувь", "одежда", "часы", "сумка", "аксессуар", "другое"],
+        },
         "size": {"type": "STRING", "nullable": True},
         "size_source": {"type": "STRING", "enum": ["text", "image", "none"]},
         "link": {"type": "STRING", "nullable": True},
