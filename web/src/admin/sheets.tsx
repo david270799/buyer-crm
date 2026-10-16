@@ -406,10 +406,11 @@ export function CancelConfirm({ order, onClose }: { order: Order; onClose: () =>
   const toast = useToast();
   const cancel = useCancel(order.id);
   const refund = order.charged_amount_krw ?? 0;
+  const shipped = order.status === "cargo" || order.status === "delivered";
   return (
     <Confirm
-      title={`Отменить ${order.id}?`}
-      confirmLabel={refund ? `Отменить и вернуть ${krw(refund)}` : "Отменить заказ"}
+      title={shipped ? `Возврат ${order.id}?` : `Отменить ${order.id}?`}
+      confirmLabel={refund ? `${shipped ? "Возврат" : "Отменить"} и вернуть ${krw(refund)}` : "Отменить заказ"}
       danger
       busy={cancel.isPending}
       onClose={onClose}
@@ -423,7 +424,10 @@ export function CancelConfirm({ order, onClose }: { order: Order; onClose: () =>
         })
       }
     >
-      <div className="muted small">Статус станет «Отменён». Отменить отмену нельзя.</div>
+      <div className="muted small">
+        Статус станет «Отменён». Отменить отмену нельзя.
+        {shipped && " Товар вернули: клиенту вернётся цена заказа, доставка не возвращается."}
+      </div>
       {refund > 0 ? (
         <BalancePreview delta={refund} label="Вернётся на баланс" />
       ) : (

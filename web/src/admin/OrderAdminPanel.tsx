@@ -64,7 +64,8 @@ export function OrderAdminPanel({ order }: { order: Order }) {
 
   const status = order.status;
   const beforeShipping = (status === "bought" || status === "warehouse") && !order.shipment_id;
-  const canCancel = status === "new" || beforeShipping;
+  const canCancel = Boolean(status) && status !== "cancelled";
+  const shipped = status === "cargo" || status === "delivered";
   const canRebuy = beforeShipping && (order.charged_amount_krw ?? 0) > 0;
   const purchases = order.purchases ?? [];
   const profit = order.profit ?? null;
@@ -152,7 +153,7 @@ export function OrderAdminPanel({ order }: { order: Order }) {
           )}
           {canCancel && (
             <button className="btn danger" onClick={() => setDialog("cancel")}>
-              <Ban size={16} /> Отменить
+              <Ban size={16} /> {shipped ? "Возврат" : "Отменить"}
             </button>
           )}
           <button className="btn" onClick={() => setDialog("copy")}>

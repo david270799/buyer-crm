@@ -824,15 +824,10 @@ class OrderService:
             order = self._require_order(tx, order_id)
             if order.status is OrderStatus.CANCELLED:
                 return CancelResult(order=order, already_done=True)
-            if order.status in (OrderStatus.CARGO, OrderStatus.DELIVERED):
-                raise ConflictError(
-                    f"Заказ {order_id} уже в статусе «{label(order.status)}». После отправки "
-                    "заказ не отменяется и деньги за него не возвращаются."
-                )
-            if order.shipment_id:
-                raise ConflictError(
-                    f"Заказ {order_id} входит в отправку {order.shipment_id} — отмена невозможна."
-                )
+            # Any status (the owner, 16.10.2026): a delivered pair that did not fit
+            # comes back and its price is returned. The order stays in its shipment
+            # (it really travelled); the shipping cost is not refunded.
+            returned = order.status in _SENT
 
             refund = order.charged_amount_krw
             client = self._ledger.load_client(tx) if refund > 0 else None
@@ -888,7 +883,7 @@ class OrderService:
                 actor,
                 now,
                 EventType.ORDER_CANCELLED,
-                f"Заказ {order_id} отменён",
+                f"Заказ {order_id}: возврат товара" if returned else f"Заказ {order_id} отменён",
                 body=(
                     f"{_describe(order)}\nВозврат на баланс: {format_krw(refund, signed=True)}"
                     if refund

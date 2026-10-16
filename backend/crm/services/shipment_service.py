@@ -293,7 +293,8 @@ class ShipmentService:
         done: set[str] = set()
         for shipment in shipments:
             found = [orders.get(i) for i in shipment.order_ids]
-            found = [o for o in found if o is not None]
+            # A returned (cancelled) pair does not keep the shipment «В пути».
+            found = [o for o in found if o is not None and o.status is not OrderStatus.CANCELLED]
             if found and all(o.status is OrderStatus.DELIVERED for o in found):
                 done.add(shipment.id)
         return done

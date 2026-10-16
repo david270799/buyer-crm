@@ -48,5 +48,15 @@ def test_delivered_status(db, services, admin):
     assert services.shipments.delivered_ids(shipments) == {part.id}
 
 
+def test_returned_order_does_not_keep_the_shipment_in_transit(db, services, admin):
+    first = _ship(services, admin)
+    db.run_transaction(lambda tx: tx.update("orders", "N1", {"status": "delivered"}))
+    db.run_transaction(lambda tx: tx.update("orders", "N2", {"status": "delivered"}))
+    services.orders.cancel(admin, "N3")  # the pair came back
+
+    assert services.shipments.delivered_ids([db_ship(services, first.id)]) == {first.id}
+    assert db.get("orders", "N3")["shipment_id"] == first.id
+
+
 def db_ship(services, shipment_id):
     return services.shipments.get_shipment(None, shipment_id)[0]
