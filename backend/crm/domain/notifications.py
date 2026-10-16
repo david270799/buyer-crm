@@ -20,6 +20,7 @@ class NotifyRecipient(StrEnum):
     OFF = "off"
     ADMINS = "admins"  # to see how notifications look before the client gets them
     CLIENT = "client"
+    BOTH = "both"  # the client, plus a copy to the admins to see what the client sees
 
 
 class NotifyLevel(StrEnum):
@@ -38,6 +39,7 @@ RECIPIENT_LABELS = {
     NotifyRecipient.OFF: "выключены",
     NotifyRecipient.ADMINS: "только мне (проверка)",
     NotifyRecipient.CLIENT: "клиенту",
+    NotifyRecipient.BOTH: "мне и клиенту",
 }
 
 LEVEL_LABELS = {

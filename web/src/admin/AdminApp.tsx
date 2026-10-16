@@ -243,6 +243,7 @@ const RECIPIENTS: { value: NotifyRecipient; label: string }[] = [
   { value: "off", label: "Выключены" },
   { value: "admins", label: "Только мне" },
   { value: "client", label: "Клиенту" },
+  { value: "both", label: "Мне и клиенту" },
 ];
 
 const LEVELS: { value: NotifyLevel; label: string }[] = [
@@ -301,7 +302,7 @@ function NotificationsCard({ settings }: { settings: NotificationSettings }) {
           </div>
         </div>
       )}
-      {settings.recipient === "client" && !settings.client_has_telegram && (
+      {(settings.recipient === "client" || settings.recipient === "both") && !settings.client_has_telegram && (
         <div className="banner warning small">У клиента не указан Telegram ID — отправлять некому.</div>
       )}
       {on && !settings.bot_running && (

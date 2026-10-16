@@ -236,7 +236,7 @@ export interface OrderFilters {
   limit?: number;
 }
 
-export type NotifyRecipient = "off" | "admins" | "client";
+export type NotifyRecipient = "off" | "admins" | "client" | "both";
 export type NotifyLevel = "important" | "all";
 
 export interface NotificationSettings {

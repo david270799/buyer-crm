@@ -237,7 +237,7 @@ class RateIn(BaseModel):
 
 
 class NotificationsIn(BaseModel):
-    recipient: Literal["off", "admins", "client"] | None = None
+    recipient: Literal["off", "admins", "client", "both"] | None = None
     level: Literal["important", "all"] | None = None
 
 

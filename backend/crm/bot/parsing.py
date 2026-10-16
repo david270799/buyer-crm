@@ -37,7 +37,7 @@ PROFIT_USAGE = (
 )
 RATE_USAGE = "Формат: /rate <KRW за 1 USD>\nПример: /rate 1350"
 NOTIFY_USAGE = (
-    "Формат: /notify [off | me | client] [important | all]\n"
+    "Формат: /notify [off | me | client | both] [important | all]\n"
     "Пример: /notify me all — все уведомления только вам, для проверки"
 )
 
@@ -49,6 +49,8 @@ _NOTIFY_WORDS = {
     "admins": ("recipient", "admins"),
     "client": ("recipient", "client"),
     "клиенту": ("recipient", "client"),
+    "both": ("recipient", "both"),
+    "оба": ("recipient", "both"),
     "important": ("level", "important"),
     "важные": ("level", "important"),
     "all": ("level", "all"),

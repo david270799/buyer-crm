@@ -163,13 +163,14 @@ class NotificationService:
         self._recorder.remove_listener(callback)
 
     def _chat_ids(self, settings: NotificationSettings) -> tuple[int, ...]:
-        if settings.recipient is NotifyRecipient.ADMINS:
-            return tuple(sorted(self._admin_ids))
-        if settings.recipient is NotifyRecipient.CLIENT:
+        ids: list[int] = []
+        if settings.recipient in (NotifyRecipient.CLIENT, NotifyRecipient.BOTH):
             client = self._clients.get_main(self._db)
             if client is not None and client.telegram_id is not None:
-                return (client.telegram_id,)
-        return ()
+                ids.append(client.telegram_id)
+        if settings.recipient in (NotifyRecipient.ADMINS, NotifyRecipient.BOTH):
+            ids.extend(i for i in sorted(self._admin_ids) if i not in ids)
+        return tuple(ids)
 
     def due(self, limit: int = 50) -> DueBatch:
         """Pending events to send now, oldest first. Events that must not be

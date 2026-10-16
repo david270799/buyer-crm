@@ -422,13 +422,17 @@ def notify_settings(settings: NotificationSettings, client_has_telegram: bool) -
         f"Кому: {RECIPIENT_LABELS[settings.recipient]}",
         f"Что: {LEVEL_LABELS[settings.level]}",
     ]
-    if settings.recipient is NotifyRecipient.CLIENT and not client_has_telegram:
+    if (
+        settings.recipient in (NotifyRecipient.CLIENT, NotifyRecipient.BOTH)
+        and not client_has_telegram
+    ):
         lines.append("⚠️ У клиента не указан Telegram ID — отправлять некому.")
     if settings.has_recent_error and settings.last_error:
         lines.append(f"⚠️ Последняя отправка не удалась: {e(settings.last_error)}")
     lines.append(
         "\n/notify off — выключить\n/notify me — только мне (проверка)\n"
-        "/notify client — клиенту\n/notify important | all — только важные или все"
+        "/notify client — клиенту\n/notify both — мне и клиенту\n"
+        "/notify important | all — только важные или все"
     )
     return "\n".join(lines)
 
