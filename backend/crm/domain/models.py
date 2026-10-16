@@ -60,6 +60,7 @@ class Order:
     brand: str | None = None
     model: str | None = None
     size: str | None = None
+    size_kr: str | None = None  # the Korean size of the same item (16.10.2026): 95, 260
     purchase_price: int | None = None
     client_price: int | None = None
     profit: int | None = None
@@ -118,6 +119,7 @@ class Order:
             brand=_str_or_none(data.get("brand")),
             model=_str_or_none(data.get("model")),
             size=_str_or_none(data.get("size")),
+            size_kr=_str_or_none(data.get("size_kr")),
             purchase_price=purchase_price,
             client_price=client_price,
             profit=profit,

@@ -164,7 +164,10 @@ export function OrderDetailsPage({ adminPanel }: { adminPanel?: (order: Order) =
             </div>
             <dl className="kv">
               <dt>Размер</dt>
-              <dd>{order.size ?? "—"}</dd>
+              <dd>
+                {order.size ?? "—"}
+                {order.size_kr ? ` · KR ${order.size_kr}` : ""}
+              </dd>
               {order.category && (
                 <>
                   <dt>Категория</dt>

@@ -6,6 +6,7 @@ review points. The photo and the result are saved on the order (admin only) and 
 """
 
 import logging
+import random
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -31,17 +32,64 @@ def _norm(size: str | None) -> str:
     return "".join((size or "").casefold().split()).removesuffix("mm")
 
 
+def ordered_sizes(order: Order) -> list[str]:
+    """The ordered size and its Korean version (e.g. «L» and «100», «42» and «265»)."""
+    return [s for s in (order.size, order.size_kr) if s]
+
+
 def judge(order: Order, answer: dict[str, Any] | None) -> str:
-    if order.category == "watch" or not order.size or answer is None:
+    sizes = ordered_sizes(order)
+    if order.category == "watch" or not sizes or answer is None:
         return SKIPPED
     seen = answer.get("size_seen")
     if not seen:
         return UNCLEAR
-    if _norm(seen) == _norm(order.size):
+    if any(_norm(seen) == _norm(size) for size in sizes):
         return MATCH
     if answer.get("confidence", 0) < MIN_CONFIDENCE or answer.get("matches") is None:
         return UNCLEAR
     return MATCH if answer["matches"] else MISMATCH
+
+
+# Each review gets a random angle, tone and length so they never read alike
+# (the owner, 16.10.2026: «все отзывы однообразные»).
+_ANGLES = (
+    "착용감 (comfort when wearing)",
+    "디자인과 색감 (design and colour)",
+    "마감과 품질 (finish and quality)",
+    "사이즈 (true to size)",
+    "가격 대비 만족도 (value for money)",
+    "배송과 포장 (delivery and packaging)",
+    "사진과 실물 비교 (looks like the photos)",
+    "선물용 (bought as a gift)",
+    "코디 활용 (easy to match with outfits)",
+    "재구매 의사 (would buy again)",
+)
+_TONES = (
+    "calm and short, like a busy office worker",
+    "cheerful, like a student",
+    "detailed, like someone who compares a lot before buying",
+    "simple and plain, no exclamation marks",
+    "slightly enthusiastic, one exclamation mark at most",
+    "practical, like a parent buying for the family",
+)
+
+
+def review_style(rng: random.Random | None = None) -> str:
+    rng = rng or random.Random()
+    angles = rng.sample(_ANGLES, 2)
+    length = rng.randint(50, 70)
+    tone = rng.choice(_TONES)
+    return f"focus on {angles[0]} and {angles[1]}; tone: {tone}; about {length} characters"
+
+
+def _item_line(order: Order) -> str:
+    parts = [order.brand, order.model]
+    line = " ".join(p for p in parts if p) or "товар"
+    sizes = ordered_sizes(order)
+    if sizes:
+        line += f", размер {' / '.join(sizes)}"
+    return line
 
 
 @dataclass(frozen=True)
@@ -71,6 +119,12 @@ class ArrivalService:
         self._order_service = order_service
         self._auditor = auditor
         self._recognizer = recognizer
+
+    def _recent_reviews(self, limit: int = 8) -> list[str]:
+        """The latest reviews: Gemini is told not to repeat their wording."""
+        orders = [o for o in self._orders.list_all(self._db) if o.review_ko]
+        orders.sort(key=lambda o: str(o.timestamp("updated_at") or ""), reverse=True)
+        return [o.review_ko for o in orders[:limit] if o.review_ko]
 
     def waiting(self, actor: Actor, limit: int = 40) -> list[Order]:
         """Bought orders not at the warehouse yet, oldest buy-out first."""
@@ -102,10 +156,16 @@ class ArrivalService:
 
         answer: dict[str, Any] | None = None
         error = None
-        if self._recognizer is not None and hasattr(self._recognizer, "check_arrival"):
+        if order.category == "watch":
+            pass  # watches: the photo is only saved — no check, no review (owner, 16.10)
+        elif self._recognizer is not None and hasattr(self._recognizer, "check_arrival"):
             try:
                 answer = self._recognizer.check_arrival(
-                    image, order.title or "товар", order.size or "не указан"
+                    image,
+                    item=_item_line(order),
+                    sizes=ordered_sizes(order),
+                    review_style=review_style(),
+                    avoid=self._recent_reviews(),
                 )
             except RecognitionError as exc:
                 error = str(exc)

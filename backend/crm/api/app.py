@@ -136,6 +136,7 @@ class NewOrderIn(BaseModel):
     brand: str | None = None
     model: str | None = None
     size: str | None = None
+    size_kr: str | None = None
     source_url: str | None = None
     shop: str | None = None
     category: str | None = None
@@ -154,6 +155,7 @@ class OrderPatchIn(BaseModel):
     brand: str | None = None
     model: str | None = None
     size: str | None = None
+    size_kr: str | None = None
     source_url: str | None = None
     shop: str | None = None
     category: str | None = None

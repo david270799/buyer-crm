@@ -17,6 +17,7 @@ CLIENT_ORDER_FIELDS = (
     "brand",
     "model",
     "size",
+    "size_kr",
     "category",
     "client_price",
     "cargo_code",

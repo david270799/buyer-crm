@@ -12,7 +12,7 @@ export function arrivalLine(check: ArrivalCheck, order: Order): { text: string; 
   if (check.status === "mismatch")
     return { text: `⚠️ Размер не тот: на фото ${seen}, заказан ${check.ordered_size ?? order.size ?? "—"}`, tone: "bad" };
   if (check.status === "unclear") return { text: `❓ Размер на фото не прочитан точно (видно: ${seen})`, tone: "muted" };
-  if (order.category === "watch") return { text: "⌚ Часы — размер не проверяется", tone: "muted" };
+  if (order.category === "watch") return { text: "⌚ Часы — фото сохранено, проверка не нужна", tone: "muted" };
   if (check.error) return { text: `Проверка не выполнена: ${check.error}`, tone: "muted" };
   return { text: "Размер не проверялся", tone: "muted" };
 }
@@ -133,8 +133,11 @@ function ArrivalSheet({ order, onClose }: { order: Order; onClose: () => void })
       ) : (
         <div className="stack">
           <div className="small muted">
-            Сфотографируйте этикетку с размером (или сам товар). Gemini сверит размер с заказом
-            {order.size ? ` (${order.size})` : ""}, поставит «На складе» и напишет отзыв на корейском.
+            {order.category === "watch"
+              ? "Часы: фото просто сохранится, заказ станет «На складе». Проверки и отзыва нет."
+              : `Сфотографируйте этикетку с размером (или сам товар). Gemini сверит размер с заказом${
+                  order.size || order.size_kr ? ` (${[order.size, order.size_kr].filter(Boolean).join(" / ")})` : ""
+                }, поставит «На складе» и напишет отзыв на корейском.`}
           </div>
           <PhotoInput value={photo} onChange={setPhoto} />
         </div>

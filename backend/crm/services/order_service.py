@@ -91,6 +91,7 @@ class NewOrder:
     brand: str | None = None
     model: str | None = None
     size: str | None = None
+    size_kr: str | None = None
     source_url: str | None = None
     shop: str | None = None
     category: str | None = None
@@ -241,6 +242,7 @@ class OrderUpdate:
     brand: str | None = UNSET
     model: str | None = UNSET
     size: str | None = UNSET
+    size_kr: str | None = UNSET
     source_url: str | None = UNSET
     shop: str | None = UNSET
     category: str | None = UNSET
@@ -319,7 +321,7 @@ def clean_shop(value: str | None) -> str | None:
 def _clean_update_fields(values: dict[str, Any]) -> dict[str, Any]:
     cleaned: dict[str, Any] = {}
     for name, value in values.items():
-        if name in ("brand", "model", "size"):
+        if name in ("brand", "model", "size", "size_kr"):
             cleaned[name] = _clean_text(value, name, _MAX_SHORT_TEXT)
         elif name == "shop":
             cleaned[name] = clean_shop(value)
@@ -349,6 +351,7 @@ def _matches(order: Order, needle: str, admin: bool) -> bool:
         order.brand,
         order.model,
         order.size,
+        order.size_kr,
         order.cargo_code,
         order.shipment_id,
         order.client_comment,
@@ -692,6 +695,7 @@ class OrderService:
             "brand": _clean_text(new.brand, "Бренд", _MAX_SHORT_TEXT),
             "model": _clean_text(new.model, "Модель", _MAX_SHORT_TEXT),
             "size": _clean_text(new.size, "Размер", _MAX_SHORT_TEXT),
+            "size_kr": _clean_text(new.size_kr, "Корейский размер", _MAX_SHORT_TEXT),
             "source_url": _clean_url(new.source_url, "Ссылка"),
             "shop": clean_shop(new.shop),
             "category": check_category(new.category),
@@ -772,6 +776,7 @@ class OrderService:
             brand=source.brand,
             model=source.model,
             size=source.size,
+            size_kr=source.size_kr,
             source_url=source.source_url,
             client_comment=source.client_comment,
             internal_comment=f"Копия {source.id}",

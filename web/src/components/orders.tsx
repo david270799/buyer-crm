@@ -84,7 +84,7 @@ export function OrderCard({
             <span className="num faint">{order.id}</span> {[order.brand, order.model].filter(Boolean).join(" ") || "Без названия"}
           </div>
           <div className="tiny faint">
-            {order.size ? `Размер ${order.size}` : "Размер —"}
+            {order.size ? `Размер ${order.size}${order.size_kr ? ` · KR ${order.size_kr}` : ""}` : "Размер —"}
             {order.stuck_days != null && (
               <span className="row-stuck">
                 {" "}
@@ -142,7 +142,11 @@ export function OrderCard({
         <div className="brand">{order.brand ?? order.id}</div>
         <div className="model">{order.model ?? orderTitle(order)}</div>
         <div className="meta">
-          {order.size ? `Размер ${order.size}` : <span className="faint">Размер —</span>}
+          {order.size ? (
+            `Размер ${order.size}${order.size_kr ? ` · KR ${order.size_kr}` : ""}`
+          ) : (
+            <span className="faint">Размер —</span>
+          )}
         </div>
         <div className="price">{krw(order.client_price)}</div>
         {showCost && order.purchase_price != null && (

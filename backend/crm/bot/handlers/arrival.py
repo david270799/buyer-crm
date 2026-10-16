@@ -55,7 +55,7 @@ def result_text(result: ArrivalResult) -> str:
     head = f"<b>{fmt.e(order.id)}</b> · {fmt.e(order.title or 'товар')}"
     lines = [head]
     lines.append("🏠 Статус: «На складе»" if result.moved_to_warehouse else "Фото сохранено")
-    ordered = fmt.e(order.size or "—")
+    ordered = fmt.e(" / ".join(s for s in (order.size, order.size_kr) if s) or "—")
     seen = fmt.e(result.size_seen or "—")
     if result.status == MATCH:
         lines.append(f"✅ Размер совпадает: {seen}")
@@ -64,8 +64,8 @@ def result_text(result: ArrivalResult) -> str:
     elif result.status == UNCLEAR:
         lines.append(f"❓ Размер на фото не прочитан точно (видно: {seen}, заказан {ordered})")
     elif order.category == "watch":
-        lines.append("⌚ Часы — размер не проверяется")
-    elif not order.size:
+        lines.append("⌚ Часы — фото сохранено, проверка не нужна")
+    elif not (order.size or order.size_kr):
         lines.append("Размер в заказе не указан — не с чем сравнить")
     if result.note:
         lines.append(f"📝 {fmt.e(result.note)}")

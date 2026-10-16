@@ -107,7 +107,15 @@ function NewOrderPage() {
   const create = useCreateOrder();
   const balance = useBalance();
   const [photo, setPhoto] = useState<PhotoValue>({ photo_url: null, thumbnail_url: null });
-  const [form, setForm] = useState({ brand: "", model: "", size: "", source_url: "", client_comment: "", internal_comment: "" });
+  const [form, setForm] = useState({
+    brand: "",
+    model: "",
+    size: "",
+    size_kr: "",
+    source_url: "",
+    client_comment: "",
+    internal_comment: "",
+  });
   const [purchase, setPurchase] = useState<number | null>(null);
   const [price, setPrice] = useState<number | null>(null);
   const [buyNow, setBuyNow] = useState(false);
@@ -122,6 +130,7 @@ function NewOrderPage() {
         brand: text(form.brand),
         model: text(form.model),
         size: text(form.size),
+        size_kr: text(form.size_kr),
         source_url: text(form.source_url),
         category,
         shop,
@@ -174,7 +183,10 @@ function NewOrderPage() {
             <input className="input" value={form.model} onChange={(e) => set("model", e.target.value)} placeholder="Air Max 95" />
           </Field>
           <Field label="Размер">
-            <input className="input" value={form.size} onChange={(e) => set("size", e.target.value)} placeholder="270" />
+            <input className="input" value={form.size} onChange={(e) => set("size", e.target.value)} placeholder="42 или L" />
+          </Field>
+          <Field label="Корейский размер" hint="Если есть: 265, 95, 100">
+            <input className="input" value={form.size_kr} onChange={(e) => set("size_kr", e.target.value)} placeholder="265" />
           </Field>
           <Field label="Ссылка" hint="Видите только вы">
             <input className="input" value={form.source_url} onChange={(e) => set("source_url", e.target.value)} placeholder="https://" />

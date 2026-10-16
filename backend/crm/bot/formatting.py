@@ -38,6 +38,10 @@ from crm.services.profit_service import ProfitResult
 from crm.services.shipment_service import ShipmentUpdateResult, ShipResult
 
 
+def _kr(view: dict) -> str:
+    return f" · KR {e(view['size_kr'])}" if view.get("size_kr") else ""
+
+
 def e(value: object) -> str:
     return html.escape(str(value), quote=False)
 
@@ -77,7 +81,7 @@ def order_details(order: Order, role: Role) -> str:
     if title:
         lines.append(e(title))
     if view["size"]:
-        lines.append(f"Размер: {e(view['size'])}")
+        lines.append(f"Размер: {e(view['size'])}{_kr(view)}")
     lines.append(f"Цена: {_money(view['client_price'])}")
     if role is Role.ADMIN:
         lines.append(
@@ -467,7 +471,7 @@ def intake_accepted(order: Order, audience: Role) -> str:
     lines = [f"🆕 <b>Заказ {e(order.id)} принят</b>"]
     title = " ".join(part for part in (view["brand"], view["model"]) if part)
     lines.append(e(title) if title else "Модель уточнит администратор")
-    lines.append(f"Размер: {e(view['size'])}" if view["size"] else "Размер: не указан")
+    lines.append(f"Размер: {e(view['size'])}{_kr(view)}" if view["size"] else "Размер: не указан")
     if view["client_comment"]:
         lines.append(f"💬 {e(view['client_comment'])}")
     if audience is Role.ADMIN:
@@ -505,7 +509,7 @@ def intake_questions(
     if title:
         lines.append(e(title))
     if view["size"]:
-        lines.append(f"Размер: {e(view['size'])}")
+        lines.append(f"Размер: {e(view['size'])}{_kr(view)}")
     if caption:
         short = caption if len(caption) <= 200 else caption[:200] + "…"
         lines.append(f"Подпись: «{e(short)}»")

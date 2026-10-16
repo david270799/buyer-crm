@@ -500,7 +500,7 @@ async def test_redelivered_ta_photo_creates_nothing_more(db, env):
 
 
 class ArrivalGemini(FakeGemini):
-    def check_arrival(self, image, item, size):
+    def check_arrival(self, image, **_):
         return {
             "size_seen": "265",
             "matches": False,

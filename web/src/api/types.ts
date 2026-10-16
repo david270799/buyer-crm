@@ -18,6 +18,8 @@ export interface Order {
   attention_required: boolean;
   timestamps: Record<string, string>;
   category?: Category | null;
+  /** The Korean size of the same item (95, 100, 260…), next to the usual one. */
+  size_kr?: string | null;
   // Admin only
   source_url?: string | null;
   shop?: string | null;

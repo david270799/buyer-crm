@@ -197,6 +197,7 @@ export interface NewOrderInput {
   brand?: string | null;
   model?: string | null;
   size?: string | null;
+  size_kr?: string | null;
   source_url?: string | null;
   shop?: string | null;
   category?: Category | null;

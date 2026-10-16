@@ -1246,6 +1246,7 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
     brand: order.brand ?? "",
     model: order.model ?? "",
     size: order.size ?? "",
+    size_kr: order.size_kr ?? "",
     source_url: order.source_url ?? "",
     shop: order.shop ?? null,
     category: (order.category ?? null) as Category | null,
@@ -1276,6 +1277,7 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
                   brand: text(form.brand),
                   model: text(form.model),
                   size: text(form.size),
+                  size_kr: text(form.size_kr),
                   source_url: text(form.source_url),
                   shop: form.shop,
                   category: form.category,
@@ -1322,6 +1324,9 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
         </Field>
         <Field label="Размер">
           <input className="input" value={form.size} onChange={(e) => set("size", e.target.value)} />
+        </Field>
+        <Field label="Корейский размер" hint="Если есть: 265, 95, 100">
+          <input className="input" value={form.size_kr} onChange={(e) => set("size_kr", e.target.value)} />
         </Field>
         <Field label="Ссылка" hint="Видите только вы">
           <input className="input" value={form.source_url} onChange={(e) => set("source_url", e.target.value)} placeholder="https://" />
