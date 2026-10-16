@@ -273,7 +273,7 @@ function NotificationsCard({ settings }: { settings: NotificationSettings }) {
       </div>
       <div className="stack" style={{ gap: 8 }}>
         <div className="small muted">Кому</div>
-        <div className="chips">
+        <div className="chips" style={{ flexWrap: "wrap" }}>
           {RECIPIENTS.map((r) => (
             <button
               key={r.value}
