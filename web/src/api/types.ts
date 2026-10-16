@@ -20,6 +20,8 @@ export interface Order {
   // Admin only
   source_url?: string | null;
   shop?: string | null;
+  /** Days since the buy-out while still «Выкуплен» after 4 days; else null. */
+  stuck_days?: number | null;
   purchase_price?: number | null;
   profit?: number | null;
   charged_amount_krw?: number;
@@ -150,6 +152,7 @@ export interface Overview {
     attention_count: number;
     total: number;
     active: number;
+    stuck_count?: number | null;
     profit_total_krw?: number | null;
     profit_month_krw?: number | null;
   };
@@ -234,6 +237,7 @@ export interface OrderFilters {
   status?: OrderStatus | "";
   q?: string;
   attention?: boolean;
+  stuck?: boolean;
   sort?: "newest" | "oldest" | "price_desc" | "price_asc" | "status";
   offset?: number;
   limit?: number;

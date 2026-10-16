@@ -91,7 +91,8 @@ export function useOrderFilters() {
     }
     setParams(merged, { replace: true });
   };
-  return { status, attention, q: params.get("q") ?? "", sort: params.get("sort") ?? "", update };
+  const stuck = params.get("stuck") === "1";
+  return { status, attention, stuck, q: params.get("q") ?? "", sort: params.get("sort") ?? "", update };
 }
 
 export type OrderSort = NonNullable<OrderFilters["sort"]>;

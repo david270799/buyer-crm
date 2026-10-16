@@ -138,10 +138,11 @@ def create_demo_database(
 
     clock.advance(days=1)
     services.finance.deposit(admin, DEMO_DEPOSIT, "Перевод от клиента")
+    shops = iter(("Musinsa", "Nike", "KREAM", "29CM", "SSG.com", "Coupang", "Naver", "G-Market"))
     for order_id, _brand, _model, _size, purchase, price, _tint in _ORDERS:
         if purchase is not None and price is not None:
             clock.advance(hours=7)
-            services.orders.buy(admin, order_id, purchase, price)
+            services.orders.buy(admin, order_id, purchase, price, shop=next(shops, None))
 
     clock.advance(days=1)
     services.orders.rebuy(
@@ -150,6 +151,7 @@ def create_demo_database(
         212_000,
         249_000,
         source_url="https://store.example.kr/salomon-xt6",
+        shop="Lotte Home Shopping",
         reason="В первом магазине закончился размер 265 — выкупили в другом магазине.",
     )
 
@@ -169,7 +171,8 @@ def create_demo_database(
     assert first.shipment is not None
 
     clock.advance(days=2)
-    services.orders.set_status(admin, ["N6", "N7"], OrderStatus.WAREHOUSE)
+    # N7 stays «Выкуплен»: it shows as «не пришёл на склад» (4+ days).
+    services.orders.set_status(admin, ["N6"], OrderStatus.WAREHOUSE)
     services.shipments.ship_orders(
         admin,
         ["N4", "N5"],

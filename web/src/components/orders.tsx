@@ -1,4 +1,4 @@
-import { AlertTriangle, ImageOff } from "lucide-react";
+import { AlertTriangle, Hourglass, ImageOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import type { Order } from "../api/types";
@@ -85,6 +85,13 @@ export function OrderCard({
           </div>
           <div className="tiny faint">
             {order.size ? `Размер ${order.size}` : "Размер —"}
+            {order.stuck_days != null && (
+              <span className="row-stuck">
+                {" "}
+                · <Hourglass size={11} style={{ verticalAlign: -1 }} /> {order.stuck_days} дн.
+                {order.shop ? ` · ${order.shop}` : ""}
+              </span>
+            )}
             {order.attention_required && (
               <span className="row-attention">
                 {" "}
@@ -105,9 +112,23 @@ export function OrderCard({
       className={`order-card st-${order.status ?? "new"} ${selected ? "selected" : ""} ${canSelect ? "no-callout" : ""}`}
       {...(canSelect ? press : { onClick: open })}
     >
-      {order.attention_required && (
-        <span className="badge warn attention">
-          <AlertTriangle size={12} /> Внимание
+      {(order.attention_required || order.stuck_days != null) && (
+        <span className="card-flags">
+          {order.stuck_days != null && (
+            <span className="badge stuck" title="Не пришёл на склад">
+              <Hourglass size={12} /> {order.stuck_days} дн.
+            </span>
+          )}
+          {order.stuck_days != null && order.shop && (
+            <span className="badge stuck shop" title="Магазин">
+              {order.shop}
+            </span>
+          )}
+          {order.attention_required && (
+            <span className="badge warn">
+              <AlertTriangle size={12} /> Внимание
+            </span>
+          )}
         </span>
       )}
       {check}

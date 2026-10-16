@@ -252,7 +252,7 @@ class NotificationsIn(BaseModel):
 # --- serialisation --------------------------------------------------------
 
 
-def order_json(order: Order, role: Role) -> dict[str, Any]:
+def _order_json(order: Order, role: Role) -> dict[str, Any]:
     view = order_view(order, role)
     view["title"] = order.title
     view["status_label"] = STATUS_LABELS_RU.get(order.status) if order.status else None
@@ -295,6 +295,12 @@ def _rate(value: Decimal | None) -> float | None:
 
 
 def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
+    def order_json(order: Order, role: Role) -> dict[str, Any]:
+        view = _order_json(order, role)
+        if role is Role.ADMIN:
+            view["stuck_days"] = services.orders.stuck_days(order)
+        return view
+
     app = FastAPI(
         title="Buyer CRM API", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
     )
@@ -423,6 +429,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "active": orders.active,
         }
         if p.role is Role.ADMIN:
+            summary["stuck_count"] = orders.stuck_count
             summary["profit_total_krw"] = orders.profit_total_krw
             summary["profit_month_krw"] = orders.profit_month_krw
         usd = balance.balance_usd
@@ -442,6 +449,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         status: str | None = None,
         q: Annotated[str | None, Query(max_length=100)] = None,
         attention: bool | None = None,
+        stuck: bool | None = None,
         sort: Literal["newest", "oldest", "price_desc", "price_asc", "status"] = "newest",
         offset: Annotated[int, Query(ge=0)] = 0,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
@@ -452,7 +460,13 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         page = services.orders.list_orders(
             p.actor,
             OrderQuery(
-                status=parsed, search=q, attention=attention, sort=sort, offset=offset, limit=limit
+                status=parsed,
+                search=q,
+                attention=attention,
+                stuck=stuck,
+                sort=sort,
+                offset=offset,
+                limit=limit,
             ),
         )
         return {"items": [order_json(o, p.role) for o in page.items], "total": page.total}

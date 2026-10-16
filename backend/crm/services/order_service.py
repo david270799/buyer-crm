@@ -15,7 +15,7 @@ Money rules (see docs/architecture.md, "Финансовые инвариант�
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -64,6 +64,7 @@ from crm.storage.blobs import BlobStorage
 logger = logging.getLogger(__name__)
 
 ORDER_COUNTER = "orders"
+STUCK_AFTER = timedelta(days=4)
 _SENT = (OrderStatus.CARGO, OrderStatus.DELIVERED)
 
 _MAX_SHORT_TEXT = 200
@@ -264,6 +265,7 @@ class OrderQuery:
     status: OrderStatus | None = None
     search: str | None = None
     attention: bool | None = None
+    stuck: bool | None = None  # admin: bought ≥ STUCK_AFTER ago, not at the warehouse yet
     sort: str = "newest"
     offset: int = 0
     limit: int = 50
@@ -282,6 +284,7 @@ class OrdersOverview:
     total: int
     active: int
     # Admin only (None for the client):
+    stuck_count: int | None = None
     profit_total_krw: int | None = None
     profit_month_krw: int | None = None
     recent: list[Order] = field(default_factory=list)
@@ -429,6 +432,8 @@ class OrderService:
             orders = [o for o in orders if o.status is query.status]
         if query.attention is not None:
             orders = [o for o in orders if o.attention_required is query.attention]
+        if query.stuck is not None and actor.role is Role.ADMIN:
+            orders = [o for o in orders if (self.stuck_days(o) is not None) is query.stuck]
         needle = (query.search or "").strip().lower()
         if needle:
             admin = actor.role is Role.ADMIN
@@ -437,6 +442,15 @@ class OrderService:
         limit = max(1, min(query.limit, 200))
         offset = max(0, query.offset)
         return OrderPage(items=orders[offset : offset + limit], total=len(orders))
+
+    def stuck_days(self, order: Order) -> int | None:
+        """Days since the buy-out when the order is still «Выкуплен» after
+        STUCK_AFTER (the owner, 16.10.2026: 4 days for every shop); else None."""
+        bought_at = order.timestamp("bought_at")
+        if order.status is not OrderStatus.BOUGHT or not isinstance(bought_at, datetime):
+            return None
+        waited = self._clock.now() - bought_at
+        return waited.days if waited >= STUCK_AFTER else None
 
     def overview(self, actor: Actor, recent: int = 6) -> OrdersOverview:
         orders = self._orders.list_all(self._db)
@@ -453,6 +467,7 @@ class OrderService:
             recent=sorted(orders, key=_sort_key("newest"), reverse=True)[:recent],
         )
         if actor.role is Role.ADMIN:
+            result.stuck_count = sum(1 for o in orders if self.stuck_days(o) is not None)
             month = to_local(self._clock.now()).strftime("%Y-%m")
             charged = [o for o in orders if o.status in CHARGED_STATUSES and o.profit is not None]
             result.profit_total_krw = sum(o.profit for o in charged)

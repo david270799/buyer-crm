@@ -646,11 +646,20 @@ h3 {
   color: var(--text-2);
 }
 
-.order-card .attention {
+.order-card .attention,
+.order-card .card-flags {
   position: absolute;
   top: 8px;
   left: 8px;
   z-index: 2;
+}
+
+.order-card .card-flags {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: calc(100% - 48px);
 }
 
 .order-card .check {
@@ -2576,3 +2585,39 @@ table.orders .r {
   display: inline-flex;
   align-items: center;
 }
+
+/* «Не пришёл на склад» (bought 4+ days ago): orange, with the shop. */
+.badge.stuck {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff1e0;
+  color: #b45309;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:root[data-theme="dark"] .badge.stuck { background: rgba(245, 158, 11, 0.18); color: #fbbf24; }
+.order-row .row-stuck { color: #b45309; font-weight: 600; }
+:root[data-theme="dark"] .order-row .row-stuck { color: #fbbf24; }
+
+.stuck-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #f5c98b;
+  border-radius: var(--radius);
+  background: #fff7ed;
+  color: #9a3412;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.stuck-banner.active { background: #9a3412; border-color: #9a3412; color: #fff; }
+:root[data-theme="dark"] .stuck-banner { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.4); color: #fbbf24; }
+:root[data-theme="dark"] .stuck-banner.active { background: #b45309; color: #fff; }

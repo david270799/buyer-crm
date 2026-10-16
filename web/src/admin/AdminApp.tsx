@@ -17,7 +17,7 @@ import { NotificationsPage } from "../shared/NotificationsPage";
 import { OrderDetailsPage } from "../shared/OrderDetailsPage";
 import { EditButton, ShipmentDetailsPage, ShipmentsPage } from "../shared/ShipmentsPages";
 import { OrderAdminPanel } from "./OrderAdminPanel";
-import { AdminOrdersPage } from "./OrdersPage";
+import { AdminOrdersPage, StuckBanner } from "./OrdersPage";
 import { PinSettings } from "./pin";
 import { ProfitPage } from "./profit";
 import { AiFillButton, MoneySheet, NewShipmentFlow, ShipmentDeliveredButton, ShipmentSplitButton, PhotoInput, type PhotoValue, recognizedFields, ShipmentEditSheet, useBalance } from "./sheets";
@@ -33,6 +33,7 @@ const NAV: NavItem[] = [
 function Dashboard() {
   const { data, error, isLoading, refetch } = useOverview();
   const [money, setMoney] = useState(false);
+  const navigate = useNavigate();
   if (isLoading) return <Loading rows={3} height={110} />;
   if (error || !data) return <ErrorState error={error} onRetry={refetch} />;
   const o = data.orders;
@@ -72,6 +73,7 @@ function Dashboard() {
             </div>
           </Link>
         </div>
+        <StuckBanner active={false} onToggle={() => navigate("/orders?stuck=1")} />
         <StatusTiles counts={o.status_counts} />
         <button className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setMoney(true)}>
           <Wallet size={16} /> Пополнить баланс

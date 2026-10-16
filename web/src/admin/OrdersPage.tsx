@@ -1,8 +1,8 @@
-import { AlertTriangle, MessageSquare, Percent, Plus, Tag, Trash2, Truck, X } from "lucide-react";
+import { AlertTriangle, Hourglass, MessageSquare, Percent, Plus, Tag, Trash2, Truck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { useOrders } from "../api/hooks";
+import { useOrders, useOverview } from "../api/hooks";
 import type { Order } from "../api/types";
 import { PageHead } from "../components/Layout";
 import { OrderCard, Thumb } from "../components/orders";
@@ -46,6 +46,11 @@ function OrderRow({ order, selection }: { order: Order; selection: ReturnType<ty
       <td className="num" style={{ fontWeight: 600 }}>
         {order.id}
         {order.attention_required && <AlertTriangle size={13} style={{ marginLeft: 6, verticalAlign: -1, color: "var(--warning)" }} />}
+        {order.stuck_days != null && (
+          <div className="badge stuck" style={{ marginTop: 4 }} title="Не пришёл на склад">
+            <Hourglass size={11} /> {order.stuck_days} дн.{order.shop ? ` · ${order.shop}` : ""}
+          </div>
+        )}
       </td>
       <td>
         <div style={{ fontWeight: 500 }}>{order.brand ?? "—"}</div>
@@ -111,12 +116,13 @@ export function AdminOrdersPage() {
   const [bulk, setBulk] = useState<Bulk>(null);
   useEffect(() => {
     setLimit(PAGE);
-  }, [filters.status, q, sort, filters.attention]);
+  }, [filters.status, q, sort, filters.attention, filters.stuck]);
 
   const { data, error, isLoading, isFetching, refetch } = useOrders({
     status: filters.status,
     q,
     attention: filters.attention || undefined,
+    stuck: filters.stuck || undefined,
     sort,
     limit,
   });
@@ -156,6 +162,10 @@ export function AdminOrdersPage() {
           />
         )}
         <StatusChips value={filters.status} onChange={(s) => filters.update({ status: s || null })} />
+        <StuckBanner
+          active={filters.stuck}
+          onToggle={() => filters.update(filters.stuck ? { stuck: null } : { stuck: "1", status: null })}
+        />
       </div>
 
       <div className="section">
@@ -242,5 +252,23 @@ export function AdminOrdersPage() {
         />
       )}
     </>
+  );
+}
+
+/** «Не пришли на склад»: bought 4+ days ago and still «Выкуплен» (owner, 16.10). */
+export function StuckBanner({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+  const { data } = useOverview();
+  const count = data?.orders.stuck_count ?? 0;
+  if (!count && !active) return null;
+  return (
+    <button type="button" className={`stuck-banner ${active ? "active" : ""}`} onClick={onToggle}>
+      <Hourglass size={16} />
+      <span className="grow">
+        {active
+          ? "Показаны заказы, не пришедшие на склад"
+          : `${count} ${plural(count, "заказ не пришёл", "заказа не пришли", "заказов не пришли")} на склад за 4 дня`}
+      </span>
+      <b>{active ? "Сбросить" : "Показать"}</b>
+    </button>
   );
 }
