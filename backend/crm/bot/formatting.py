@@ -21,6 +21,7 @@ from crm.domain.notifications import (
     NotificationSettings,
     NotifyRecipient,
 )
+from crm.domain.size_label import size_text
 from crm.domain.timeutil import format_date, format_datetime
 from crm.domain.views import order_view
 from crm.services.client_service import ClientChange
@@ -36,10 +37,6 @@ from crm.services.order_service import (
 )
 from crm.services.profit_service import ProfitResult
 from crm.services.shipment_service import ShipmentUpdateResult, ShipResult
-
-
-def _kr(view: dict) -> str:
-    return f" · KR {e(view['size_kr'])}" if view.get("size_kr") else ""
 
 
 def e(value: object) -> str:
@@ -80,8 +77,8 @@ def order_details(order: Order, role: Role) -> str:
     title = " ".join(part for part in (view["brand"], view["model"]) if part)
     if title:
         lines.append(e(title))
-    if view["size"]:
-        lines.append(f"Размер: {e(view['size'])}{_kr(view)}")
+    if size_text(view["size"], view.get("size_kr")):
+        lines.append(f"Размер: {e(size_text(view['size'], view.get('size_kr')))}")
     lines.append(f"Цена: {_money(view['client_price'])}")
     if role is Role.ADMIN:
         lines.append(
@@ -129,7 +126,8 @@ def buy_result(result: BuyResult, audience: Role) -> str:
         )
     lines = [f"✅ Заказ <b>{e(order.id)}</b> выкуплен"]
     if order.title:
-        lines.append(e(order.title) + (f" · {e(order.size)}" if order.size else ""))
+        sizes = size_text(order.size, order.size_kr)
+        lines.append(e(order.title) + (f" · {e(sizes)}" if sizes else ""))
     if audience is Role.ADMIN:
         lines += [
             f"Закупка: {_money(order.purchase_price)}",
@@ -471,7 +469,8 @@ def intake_accepted(order: Order, audience: Role) -> str:
     lines = [f"🆕 <b>Заказ {e(order.id)} принят</b>"]
     title = " ".join(part for part in (view["brand"], view["model"]) if part)
     lines.append(e(title) if title else "Модель уточнит администратор")
-    lines.append(f"Размер: {e(view['size'])}{_kr(view)}" if view["size"] else "Размер: не указан")
+    sizes = size_text(view["size"], view.get("size_kr"))
+    lines.append(f"Размер: {e(sizes)}" if sizes else "Размер: не указан")
     if view["client_comment"]:
         lines.append(f"💬 {e(view['client_comment'])}")
     if audience is Role.ADMIN:
@@ -508,8 +507,8 @@ def intake_questions(
     lines += [f"• {e(q)}" for q in questions]
     if title:
         lines.append(e(title))
-    if view["size"]:
-        lines.append(f"Размер: {e(view['size'])}{_kr(view)}")
+    if size_text(view["size"], view.get("size_kr")):
+        lines.append(f"Размер: {e(size_text(view['size'], view.get('size_kr')))}")
     if caption:
         short = caption if len(caption) <= 200 else caption[:200] + "…"
         lines.append(f"Подпись: «{e(short)}»")

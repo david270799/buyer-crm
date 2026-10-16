@@ -185,6 +185,7 @@ export interface PhotoRecognition {
   brand: string | null;
   model: string | null;
   size: string | null;
+  size_kr?: string | null;
   category: string | null;
   category_code?: Category | null;
   confidence: number;

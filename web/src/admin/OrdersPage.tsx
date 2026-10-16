@@ -8,7 +8,7 @@ import { PageHead } from "../components/Layout";
 import { OrderCard, Thumb } from "../components/orders";
 import { StatusBadge } from "../components/status";
 import { Checkbox, Empty, ErrorState, Loading, useDebounced, useLongPress, useSelection } from "../components/ui";
-import { krw, plural, shortDate } from "../lib/format";
+import { krw, plural, shortDate, sizeText } from "../lib/format";
 import {
   AttentionButton,
   SearchButton,
@@ -56,7 +56,7 @@ function OrderRow({ order, selection }: { order: Order; selection: ReturnType<ty
         <div style={{ fontWeight: 500 }}>{order.brand ?? "—"}</div>
         <div className="small muted">{order.model ?? ""}</div>
       </td>
-      <td>{order.size ?? "—"}</td>
+      <td>{sizeText(order) ?? "—"}</td>
       <td>
         <StatusBadge status={order.status} />
       </td>

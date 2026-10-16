@@ -86,7 +86,7 @@ def questions(order: Order, recognition: Recognition) -> list[str]:
     if not (order.brand or order.model):
         reason = f" ({recognition.error})" if recognition.error else ""
         found.append(f"модель не распознана{reason}")
-    if not order.size:
+    if not (order.size or order.size_kr):
         found.append("размер не указан")
     return found
 

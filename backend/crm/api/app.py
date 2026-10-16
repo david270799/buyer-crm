@@ -51,6 +51,7 @@ from crm.services.container import Services
 from crm.services.ledger import BalanceChange
 from crm.services.order_service import BulkUpdate, NewOrder, OrderQuery, OrderUpdate
 from crm.services.shipment_service import ShipmentDetails, ShipmentUpdate
+from crm.services.sizes import order_sizes
 from crm.storage import TransactionContentionError
 
 logger = logging.getLogger(__name__)
@@ -856,11 +857,13 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         if services.photo_recognition is None:
             raise ConfigurationError("Распознавание не подключено.")
         result = services.photo_recognition.recognize(p.actor, body.photo_url, body.text)
+        size, size_kr = order_sizes(result.size, body.text, from_caption=True)
         return {
             "recognized": result.recognized,
             "brand": result.brand,
             "model": result.model,
-            "size": result.size,
+            "size": size,
+            "size_kr": size_kr,
             "category": result.category,
             "category_code": category_from_text(result.category),
             "confidence": result.confidence,

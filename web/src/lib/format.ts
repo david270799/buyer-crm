@@ -135,3 +135,8 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   accessory: "Аксессуары",
   other: "Другое",
 };
+
+/** «L · KR 80», «KR 270», «42»: the usual and the Korean size together. */
+export function sizeText(order: { size?: string | null; size_kr?: string | null }): string | null {
+  return [order.size, order.size_kr ? `KR ${order.size_kr}` : null].filter(Boolean).join(" · ") || null;
+}

@@ -2,7 +2,7 @@ import { AlertTriangle, Hourglass, ImageOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import type { Order } from "../api/types";
-import { krw, orderTitle } from "../lib/format";
+import { krw, orderTitle, sizeText } from "../lib/format";
 import { Dots, StatusBadge } from "./status";
 import { Checkbox, useLongPress } from "./ui";
 
@@ -84,7 +84,7 @@ export function OrderCard({
             <span className="num faint">{order.id}</span> {[order.brand, order.model].filter(Boolean).join(" ") || "Без названия"}
           </div>
           <div className="tiny faint">
-            {order.size ? `Размер ${order.size}${order.size_kr ? ` · KR ${order.size_kr}` : ""}` : "Размер —"}
+            {sizeText(order) ? `Размер ${sizeText(order)}` : "Размер —"}
             {order.stuck_days != null && (
               <span className="row-stuck">
                 {" "}
@@ -142,11 +142,7 @@ export function OrderCard({
         <div className="brand">{order.brand ?? order.id}</div>
         <div className="model">{order.model ?? orderTitle(order)}</div>
         <div className="meta">
-          {order.size ? (
-            `Размер ${order.size}${order.size_kr ? ` · KR ${order.size_kr}` : ""}`
-          ) : (
-            <span className="faint">Размер —</span>
-          )}
+          {sizeText(order) ? `Размер ${sizeText(order)}` : <span className="faint">Размер —</span>}
         </div>
         <div className="price">{krw(order.client_price)}</div>
         {showCost && order.purchase_price != null && (

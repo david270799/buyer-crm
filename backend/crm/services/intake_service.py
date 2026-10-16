@@ -37,9 +37,10 @@ from crm.services.order_service import (
     _clean_url,
     _describe,
 )
-from crm.services.order_split import PlannedItem, plan
-from crm.services.recognition import Recognition, extract_urls
+from crm.services.order_split import PlannedItem, plan, strip_quantity
+from crm.services.recognition import _SIZE_RE, Recognition, extract_urls
 from crm.services.sequences import SequenceAllocator
+from crm.services.sizes import order_sizes
 from crm.storage import Database, DocumentExistsError, Transaction
 
 _URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
@@ -87,6 +88,8 @@ def client_note(caption: str | None, recognition: Recognition) -> str | None:
     compact = text.casefold().replace(" ", "")
     if recognition.size and compact == recognition.size.casefold().replace(" ", ""):
         return None
+    if not _SIZE_RE.sub("", text).strip(" -/,"):
+        return None  # only sizes («L 80», «42/265»)
     return text[:500]
 
 
@@ -133,12 +136,19 @@ class IntakeService:
         recognition = incoming.recognition
         caption_links = extract_urls(incoming.caption)
 
+        one_product = len(caption_links) < 2
+
         def item_fields(item: PlannedItem) -> dict[str, Any]:
             link = item.link if item.link in caption_links else None
+            # «L 80», «42/265»: the usual and the Korean size (owner, 16.10.2026).
+            size, size_kr = order_sizes(
+                _no_links(item.size), strip_quantity(incoming.caption), from_caption=one_product
+            )
             return {
                 "brand": _safe(_clean_text, _no_links(item.brand), "Бренд", _MAX_SHORT_TEXT),
                 "model": _safe(_clean_text, _no_links(item.model), "Модель", _MAX_SHORT_TEXT),
-                "size": _safe(_clean_text, _no_links(item.size), "Размер", _MAX_SHORT_TEXT),
+                "size": _safe(_clean_text, size, "Размер", _MAX_SHORT_TEXT),
+                "size_kr": _safe(_clean_text, size_kr, "Корейский размер", _MAX_SHORT_TEXT),
                 "source_url": _safe(_clean_url, link, "Ссылка"),
             }
 

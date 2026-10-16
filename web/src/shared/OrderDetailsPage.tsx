@@ -10,7 +10,7 @@ import { Photo } from "../components/orders";
 import { Lightbox } from "../components/PhotoCarousel";
 import { StatusBadge, Stepper } from "../components/status";
 import { ErrorState, Loading, useToast } from "../components/ui";
-import { CATEGORY_LABEL, date, dateTime, items, krw, orderTitle } from "../lib/format";
+import { CATEGORY_LABEL, date, dateTime, items, krw, orderTitle, sizeText } from "../lib/format";
 
 export function CopyText({ text }: { text: string }) {
   const toast = useToast();
@@ -164,10 +164,7 @@ export function OrderDetailsPage({ adminPanel }: { adminPanel?: (order: Order) =
             </div>
             <dl className="kv">
               <dt>Размер</dt>
-              <dd>
-                {order.size ?? "—"}
-                {order.size_kr ? ` · KR ${order.size_kr}` : ""}
-              </dd>
+              <dd>{sizeText(order) ?? "—"}</dd>
               {order.category && (
                 <>
                   <dt>Категория</dt>

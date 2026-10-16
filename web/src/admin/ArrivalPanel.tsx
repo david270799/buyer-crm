@@ -1,4 +1,5 @@
 import { Camera, Copy, Loader2 } from "lucide-react";
+import { sizeText } from "../lib/format";
 import { useState } from "react";
 
 import { useArrival } from "../api/hooks";
@@ -10,7 +11,7 @@ export function arrivalLine(check: ArrivalCheck, order: Order): { text: string; 
   const seen = check.size_seen ?? "—";
   if (check.status === "match") return { text: `✅ Размер совпадает: ${seen}`, tone: "ok" };
   if (check.status === "mismatch")
-    return { text: `⚠️ Размер не тот: на фото ${seen}, заказан ${check.ordered_size ?? order.size ?? "—"}`, tone: "bad" };
+    return { text: `⚠️ Размер не тот: на фото ${seen}, заказан ${sizeText(order) ?? check.ordered_size ?? "—"}`, tone: "bad" };
   if (check.status === "unclear") return { text: `❓ Размер на фото не прочитан точно (видно: ${seen})`, tone: "muted" };
   if (order.category === "watch") return { text: "⌚ Часы — фото сохранено, проверка не нужна", tone: "muted" };
   if (check.error) return { text: `Проверка не выполнена: ${check.error}`, tone: "muted" };

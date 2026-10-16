@@ -9,7 +9,7 @@ import { Thumb } from "../components/orders";
 import { PhotoCarousel } from "../components/PhotoCarousel";
 import { StatusBadge } from "../components/status";
 import { Confirm, Empty, ErrorState, Loading, errorText, useToast } from "../components/ui";
-import { date, items, krw, orderTitle } from "../lib/format";
+import { date, items, krw, orderTitle, sizeText } from "../lib/format";
 import { CopyText } from "./OrderDetailsPage";
 
 export function ShipmentsPage({ action }: { action?: ReactNode }) {
@@ -145,7 +145,7 @@ export function ShipmentDetailsPage({
                   <div className="title">{orderTitle(order)}</div>
                   <div className="small muted">
                     {order.id}
-                    {order.size ? ` · ${order.size}` : ""}
+                    {sizeText(order) ? ` · ${sizeText(order)}` : ""}
                   </div>
                 </div>
                 <div className="stack" style={{ gap: 4, alignItems: "flex-end" }}>

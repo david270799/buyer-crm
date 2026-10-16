@@ -33,6 +33,7 @@ from crm.domain.events import Event, EventType
 from crm.domain.ids import make_order_id, normalize_order_id, order_number
 from crm.domain.models import Order, status_timestamp_field
 from crm.domain.money import MAX_AMOUNT_KRW, format_krw
+from crm.domain.size_label import size_text
 from crm.domain.timeutil import to_local
 from crm.repositories import (
     EventRepository,
@@ -1611,7 +1612,8 @@ def _ids(ids: Sequence[str], limit: int = 6) -> str:
 
 
 def _describe(order: Order) -> str:
-    parts = [order.title or "Заказ", f"размер {order.size}" if order.size else None]
+    sizes = size_text(order.size, order.size_kr)
+    parts = [order.title or "Заказ", f"размер {sizes}" if sizes else None]
     return " · ".join(p for p in parts if p)
 
 

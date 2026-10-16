@@ -29,7 +29,7 @@ import {
 import type { BulkResult, Category, LinkImport, Order, OrderStatus, PhotoRecognition, Shipment } from "../api/types";
 import { Thumb } from "../components/orders";
 import { Checkbox, Confirm, errorText, Field, MoneyInput, Sheet, Switch, useToast } from "../components/ui";
-import { krw, STATUS_LABEL, todayKey } from "../lib/format";
+import { STATUS_LABEL, krw, sizeText, todayKey } from "../lib/format";
 
 // --- helpers ------------------------------------------------------------------
 
@@ -73,11 +73,18 @@ export interface PhotoValue {
 }
 
 /** Fields Gemini is sure about, for filling a form; empty strings are left out. */
-export function recognizedFields(r: PhotoRecognition): { brand?: string; model?: string; size?: string; category?: Category } {
-  const fields: { brand?: string; model?: string; size?: string; category?: Category } = {};
+export function recognizedFields(r: PhotoRecognition): {
+  brand?: string;
+  model?: string;
+  size?: string;
+  size_kr?: string;
+  category?: Category;
+} {
+  const fields: { brand?: string; model?: string; size?: string; size_kr?: string; category?: Category } = {};
   if (r.brand) fields.brand = r.brand;
   if (r.model) fields.model = r.model;
   if (r.size) fields.size = r.size;
+  if (r.size_kr) fields.size_kr = r.size_kr;
   if (r.category_code) fields.category = r.category_code;
   return fields;
 }
@@ -1037,7 +1044,7 @@ export function NewShipmentFlow({ onClose }: { onClose: () => void }) {
                   </div>
                   <div className="small muted">
                     {o.status_label ?? ""}
-                    {o.size ? ` · размер ${o.size}` : ""}
+                    {sizeText(o) ? ` · размер ${sizeText(o)}` : ""}
                   </div>
                 </div>
               </div>

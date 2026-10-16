@@ -367,7 +367,7 @@ async def test_without_gemini_the_caption_is_used(db, env):
 
     [order_id] = db.list_ids("orders")
     order = db.get("orders", order_id)
-    assert order["size"] == "270" and order["brand"] is None
+    assert order["size_kr"] == "270" and order["brand"] is None
     assert order["source_url"] == "https://shop.example.kr/p"
     assert e["session"].to(GROUP) == []
     [question] = e["session"].to(ADMIN_TG)
