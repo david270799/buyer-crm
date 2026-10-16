@@ -3,7 +3,9 @@ from datetime import datetime
 
 from crm.domain.enums import LedgerType
 from crm.domain.errors import ConfigurationError
+from crm.domain.events import EventType
 from crm.domain.models import ClientInfo
+from crm.domain.money import format_krw
 from crm.repositories import ClientRepository, LedgerRepository
 from crm.services.common import Actor
 from crm.storage import Reader, Transaction
@@ -16,6 +18,23 @@ class BalanceChange:
     amount_krw: int
     balance_before: int
     balance_after: int
+
+
+DEBT_STEP_KRW = 1_000_000
+
+
+def debt_level(balance: int) -> int:
+    """How many whole millions of debt: -2,150,000 → 2; no debt → 0."""
+    return max(0, -balance) // DEBT_STEP_KRW
+
+
+def debt_warning_text(balance: int) -> tuple[str, str]:
+    """Title and body in Uzbek (the client's language, the owner's choice)."""
+    passed = debt_level(balance) * DEBT_STEP_KRW
+    return (
+        f"Qarzingiz {format_krw(passed)} dan oshdi",
+        f"Joriy balans: {format_krw(balance)}\nIltimos, balansni to‘ldiring.",
+    )
 
 
 def order_charge_entry_id(order_id: str) -> str:
@@ -35,9 +54,10 @@ class BalanceLedger:
     phase of their transaction and `apply` during the write phase.
     """
 
-    def __init__(self, clients: ClientRepository, ledger: LedgerRepository):
+    def __init__(self, clients: ClientRepository, ledger: LedgerRepository, events=None):
         self._clients = clients
         self._ledger = ledger
+        self._events = events  # EventRecorder: the debt warning (owner, 16.10.2026)
 
     def load_client(self, tx: Transaction) -> ClientInfo:
         client = self._clients.get_main(tx)
@@ -91,4 +111,8 @@ class BalanceLedger:
             },
         )
         client.balance = after
+        if self._events is not None and debt_level(after) > debt_level(before):
+            # One warning however many millions one operation passed.
+            title, body = debt_warning_text(after)
+            self._events.record(tx, actor, now, EventType.DEBT_WARNING, title, body=body)
         return BalanceChange(entry_id, type, amount_krw, before, after)

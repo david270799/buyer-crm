@@ -24,7 +24,7 @@ from aiogram.types import (
 )
 
 from crm.bot import formatting as fmt
-from crm.domain.events import Event
+from crm.domain.events import Event, EventType
 from crm.domain.notifications import DeliveryStatus
 from crm.services.notifications import NotificationService, SendOutcome
 
@@ -131,7 +131,8 @@ class TelegramNotifier:
         if not self._mini_app_url:
             return None
         button = InlineKeyboardButton(
-            text="Открыть в CRM", web_app=WebAppInfo(url=open_url(self._mini_app_url, event))
+            text="CRM’da ochish" if event.type is EventType.DEBT_WARNING else "Открыть в CRM",
+            web_app=WebAppInfo(url=open_url(self._mini_app_url, event)),
         )
         return InlineKeyboardMarkup(inline_keyboard=[[button]])
 

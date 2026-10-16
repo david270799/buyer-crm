@@ -402,6 +402,7 @@ EVENT_ICONS = {
     EventType.DEPOSIT: "💰",
     EventType.ADJUSTMENT: "⚖️",
     EventType.RATE: "💱",
+    EventType.DEBT_WARNING: "⚠️",
 }
 
 

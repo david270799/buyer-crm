@@ -75,10 +75,10 @@ def build_services(
     profit_repo = ProfitRepository()
 
     auditor = Auditor(db, AuditRepository())
-    ledger = BalanceLedger(clients_repo, ledger_repo)
     sequences = SequenceAllocator(db, CounterRepository())
     events_repo = EventRepository()
     recorder = EventRecorder(db, events_repo)
+    ledger = BalanceLedger(clients_repo, ledger_repo, recorder)
     roles = RoleResolver(db, clients_repo, admin_ids)
 
     return Services(
