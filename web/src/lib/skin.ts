@@ -59,3 +59,34 @@ export function saveThemeMode(mode: ThemeMode): void {
   }
   window.dispatchEvent(new Event(THEME_EVENT));
 }
+
+/** Animations on / off (on by default). Remembered on this phone. */
+const MOTION_KEY = "crm-motion";
+
+export function savedMotion(): boolean {
+  try {
+    return localStorage.getItem(MOTION_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export function applyMotion(on: boolean): void {
+  if (on) delete document.documentElement.dataset.motion;
+  else document.documentElement.dataset.motion = "off";
+}
+
+export function saveMotion(on: boolean): void {
+  try {
+    localStorage.setItem(MOTION_KEY, on ? "on" : "off");
+  } catch {
+    /* storage unavailable */
+  }
+  applyMotion(on);
+}
+
+/** Whether to animate now: the setting, and the phone's «reduce motion». */
+export function motionAllowed(): boolean {
+  if (document.documentElement.dataset.motion === "off") return false;
+  return !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+}

@@ -72,7 +72,11 @@ export function Shell({ nav, title, children }: { nav: NavItem[]; title: string;
             <BellButton />
           </header>
         )}
-        <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>
+        <ErrorBoundary resetKey={pathname}>
+          <div className="page-anim" key={pathname}>
+            {children}
+          </div>
+        </ErrorBoundary>
       </main>
       <nav
         className="tabbar"

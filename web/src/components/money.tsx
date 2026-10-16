@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import type { Balance, LedgerItem } from "../api/types";
 import { dayKey, date, krw, LEDGER_LABEL, shortDate, usd } from "../lib/format";
 import { Thumb } from "./orders";
-import { Empty } from "./ui";
+import { CountUp, Empty } from "./ui";
 
 export function BalanceCard({ balance, to, label = "Баланс" }: { balance: Balance; to?: string; label?: string }) {
   const debt = balance.krw < 0;
@@ -15,7 +15,9 @@ export function BalanceCard({ balance, to, label = "Баланс" }: { balance: 
         {label}
         {debt && <span className="debt-badge">долг</span>}
       </div>
-      <div className="krw num">{krw(balance.krw)}</div>
+      <div className="krw num">
+        <CountUp value={balance.krw} format={krw} />
+      </div>
       <div className="usd num">
         {balance.usd !== null ? usd(balance.usd) : "курс $ не задан"}
         {balance.krw_per_usd ? <span className="tiny"> · 1 $ = {balance.krw_per_usd.toLocaleString("en-US")} ₩</span> : null}

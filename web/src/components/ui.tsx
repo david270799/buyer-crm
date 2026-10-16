@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { formatAmountInput, parseAmount } from "../lib/format";
+import { motionAllowed } from "../lib/skin";
 import { haptic } from "../telegram";
 
 // --- states -----------------------------------------------------------------
@@ -321,4 +322,32 @@ export function useSelection() {
     }),
     [selected],
   );
+}
+
+/** A number that counts up to its value (and glides to a new one). */
+export function CountUp({ value, format }: { value: number; format: (n: number) => string }) {
+  const [shown, setShown] = useState(() => (motionAllowed() ? 0 : value));
+  const from = useRef(shown);
+  useEffect(() => {
+    if (!motionAllowed()) {
+      setShown(value);
+      from.current = value;
+      return;
+    }
+    const start = performance.now();
+    const begin = from.current;
+    const duration = 700;
+    let frame = 0;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const current = Math.round(begin + (value - begin) * eased);
+      from.current = current;
+      setShown(current);
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+  return <>{format(shown)}</>;
 }

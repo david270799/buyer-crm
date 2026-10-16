@@ -29,7 +29,13 @@ export function Photo({
 }
 
 export function Thumb({ src, alt }: { src: string | null | undefined; alt: string }) {
-  return <div className="thumb">{src ? <img src={src} alt={alt} loading="lazy" /> : null}</div>;
+  return (
+    <div className="thumb">
+      {src ? (
+        <img src={src} alt={alt} loading="lazy" className="img-in" onLoad={(e) => e.currentTarget.classList.add("loaded")} />
+      ) : null}
+    </div>
+  );
 }
 
 export function OrderCard({

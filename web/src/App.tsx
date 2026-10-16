@@ -8,7 +8,7 @@ import { ApiError, hasCredentials, setClientPreview, setDemoRole } from "./api/c
 import { useConfig, useMe } from "./api/hooks";
 import { ClientApp } from "./client/ClientApp";
 import { takeDeepLink } from "./lib/deeplink";
-import { applySkin, savedSkin, savedThemeMode, THEME_EVENT } from "./lib/skin";
+import { applyMotion, applySkin, savedMotion, savedSkin, savedThemeMode, THEME_EVENT } from "./lib/skin";
 import { colorScheme, setupTelegram, syncChrome } from "./telegram";
 
 function useTheme() {
@@ -93,6 +93,9 @@ export function App() {
   useEffect(() => {
     applySkin(ownLook ? savedSkin() : null);
   }, [ownLook]);
+  useEffect(() => {
+    applyMotion(savedMotion());
+  }, []);
 
   const pickDemo = (role: "admin" | "client") => {
     setDemoRole(role);
