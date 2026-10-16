@@ -14,6 +14,7 @@ from aiogram.client.session.base import BaseSession
 from aiogram.enums import ParseMode
 from aiogram.methods import DeleteMessage, GetFile, GetMe, LeaveChat, SendMessage, SendPhoto
 from aiogram.types import (
+    CallbackQuery,
     Chat,
     ChatMemberLeft,
     ChatMemberMember,
@@ -212,7 +213,23 @@ def env(db, clock):
             )
             await dp.feed_update(bot, Update(update_id=next(_ids), my_chat_member=event))
 
+        async def press(data, user_id=ADMIN_TG):
+            query = CallbackQuery(
+                id=str(next(_ids)),
+                from_user=User(id=user_id, is_bot=False, first_name="U"),
+                chat_instance="1",
+                data=data,
+                message=Message(
+                    message_id=next(_ids),
+                    date=datetime.now(timezone.utc),
+                    chat=Chat(id=user_id, type="private"),
+                    text="?",
+                ),
+            )
+            await dp.feed_update(bot, Update(update_id=next(_ids), callback_query=query))
+
         return {
+            "press": press,
             "services": services,
             "session": session,
             "blobs": blobs,
@@ -277,9 +294,11 @@ async def test_what_is_not_an_order(db, env):
 async def test_admin_in_private_gets_the_order_card(db, env):
     e = env(FakeGemini())
     await e["photo"]("43 https://shop.example.kr/x", user_id=ADMIN_TG, chat_id=ADMIN_TG)
+    assert db.list_ids("orders") == []  # the bot asks first (owner, 16.10)
+    await e["press"](_new_order_button(e))
 
     [order_id] = db.list_ids("orders")
-    [reply] = e["session"].to(ADMIN_TG)
+    reply = [t for t in e["session"].to(ADMIN_TG) if "принят" in t][0]
     assert f"Заказ {order_id} принят" in reply
     assert "🔒 Ссылка" in reply and "Gemini" in reply and "/buy" in reply
 
@@ -512,7 +531,32 @@ async def test_admin_photo_with_order_number_is_an_arrival(db, env):
     assert "Размер не тот" in edited.text and "<code>디자인이" in edited.text
 
 
-async def test_admin_photo_with_a_size_is_still_a_new_order(db, env):
+async def test_admin_photo_without_a_number_asks_which_order(db, env):
+    from crm.domain.enums import Role
+    from crm.services.common import Actor
+
     e = env(ArrivalGemini())
+    seed_order(db, "N5", size="270")
+    e["services"].orders.buy(Actor.telegram(ADMIN_TG, Role.ADMIN), "5", 100, 200)
+
     await e["photo"]("42", user_id=ADMIN_TG, chat_id=ADMIN_TG)
-    assert len(db.list_ids("orders")) == 1
+    assert db.list_ids("orders") == ["N5"]  # nothing created yet
+    markup = _last_markup(e)
+    pick = markup.inline_keyboard[0][0]
+    assert pick.text.startswith("N5") and pick.callback_data.endswith(":N5")
+    assert markup.inline_keyboard[-1][0].text == "➕ Это новый заказ"
+
+    await e["press"](pick.callback_data)
+    assert db.get("orders", "N5")["status"] == "warehouse"
+    assert db.list_ids("orders") == ["N5"]
+
+
+def _last_markup(e):
+    from aiogram.methods import SendMessage
+
+    asked = [m for m in e["session"].sent if isinstance(m, SendMessage) and m.reply_markup]
+    return asked[-1].reply_markup
+
+
+def _new_order_button(e) -> str:
+    return _last_markup(e).inline_keyboard[-1][0].callback_data

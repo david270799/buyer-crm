@@ -14,7 +14,7 @@ def build_router(services: Services, settings: Settings) -> Router:
         orders.build(),
         shipments.build(),
         finance.build(),
-        arrival.build(services),  # before the intake: «N5» photos are arrivals
+        arrival.build(services, settings),  # before the intake: «N5» photos are arrivals
         intake.build(services, settings),
         fallback.build(),
     )
