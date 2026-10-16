@@ -41,6 +41,11 @@ async def start(message: Message, role: Role | None, settings: Settings | None =
     private = message.chat.type == ChatType.PRIVATE
     keyboard = _open_app_keyboard(settings) if private else None
     if role is Role.ADMIN:
+        if private:
+            from crm.bot.handlers.arrival import ARRIVAL_BUTTON
+
+            rows = [[ARRIVAL_BUTTON], *(keyboard.inline_keyboard if keyboard else [])]
+            keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
         await message.answer(fmt.ADMIN_HELP, reply_markup=keyboard)
     elif role is Role.CLIENT:
         await message.answer(fmt.CLIENT_HELP, reply_markup=keyboard)

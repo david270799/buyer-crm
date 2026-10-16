@@ -478,3 +478,41 @@ async def test_redelivered_ta_photo_creates_nothing_more(db, env):
     first = await e["photo"]("42 2ta")
     await e["photo"]("42 2ta", message_id=first.message_id)
     assert sorted(db.list_ids("orders")) == ["N1", "N2"]
+
+
+class ArrivalGemini(FakeGemini):
+    def check_arrival(self, image, item, size):
+        return {
+            "size_seen": "265",
+            "matches": False,
+            "confidence": 0.9,
+            "note": None,
+            "review_ko": "디자인이 예쁘고 착용감이 좋아요",
+        }
+
+
+async def test_admin_photo_with_order_number_is_an_arrival(db, env):
+    from aiogram.methods import EditMessageText
+
+    from crm.domain.enums import Role
+    from crm.services.common import Actor
+
+    e = env(ArrivalGemini())
+    seed_order(db, "N5", size="270")
+    e["services"].orders.buy(Actor.telegram(ADMIN_TG, Role.ADMIN), "5", 100, 200)
+
+    await e["photo"]("N5", user_id=ADMIN_TG, chat_id=ADMIN_TG)
+
+    order = db.get("orders", "N5")
+    assert order["status"] == "warehouse"
+    assert order["arrival_check"]["status"] == "mismatch"
+    assert order["review_ko"] == "디자인이 예쁘고 착용감이 좋아요"
+    assert db.list_ids("orders") == ["N5"]  # not a new order
+    [edited] = [m for m in e["session"].sent if isinstance(m, EditMessageText)]
+    assert "Размер не тот" in edited.text and "<code>디자인이" in edited.text
+
+
+async def test_admin_photo_with_a_size_is_still_a_new_order(db, env):
+    e = env(ArrivalGemini())
+    await e["photo"]("42", user_id=ADMIN_TG, chat_id=ADMIN_TG)
+    assert len(db.list_ids("orders")) == 1

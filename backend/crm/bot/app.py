@@ -48,6 +48,7 @@ ADMIN_COMMANDS = [
     BotCommand(command="setgroup", description="Рабочая группа: /setgroup ID"),
     BotCommand(command="notify", description="Уведомления в личку"),
     BotCommand(command="backup", description="Прислать копию базы сейчас"),
+    BotCommand(command="arrived", description="Пришло на склад: фото → проверка размера"),
     BotCommand(command="pin", description="PIN для Mini App (/pin off — сбросить)"),
     BotCommand(command="help", description="Все команды"),
 ]
