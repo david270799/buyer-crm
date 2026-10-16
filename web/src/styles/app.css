@@ -2527,9 +2527,9 @@ table.orders .r {
 :root:not([data-motion="off"]) img.img-in { opacity: 0; transform: scale(1.04); transition: opacity 0.3s ease, transform 0.4s ease; }
 :root:not([data-motion="off"]) img.img-in.loaded { opacity: 1; transform: none; }
 
-/* The balance card gets a soft shine once when it appears. */
-:root:not([data-motion="off"]) .balance-card { position: relative; overflow: hidden; }
-:root:not([data-motion="off"]) .balance-card::after {
+/* The balance changed since last seen: a soft shine and «+₩ 50,000» that fades away. */
+:root:not([data-motion="off"]) .balance-card.changed { position: relative; overflow: hidden; }
+:root:not([data-motion="off"]) .balance-card.changed::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -2545,4 +2545,23 @@ table.orders .r {
 @media (prefers-reduced-motion: reduce) {
   :root *, :root *::after { animation: none !important; transition: none !important; }
   :root img.img-in { opacity: 1 !important; transform: none !important; }
+}
+
+.balance-delta {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  vertical-align: middle;
+  background: rgba(127, 127, 127, 0.22);
+  animation: delta-fade 4.5s ease forwards;
+}
+.balance-delta.up { color: #7ee2a8; }
+.balance-delta.down { color: #ff9a9a; }
+@keyframes delta-fade {
+  0% { opacity: 0; transform: translateY(6px); }
+  12%, 75% { opacity: 1; transform: none; }
+  100% { opacity: 0; }
 }

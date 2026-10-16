@@ -324,30 +324,66 @@ export function useSelection() {
   );
 }
 
-/** A number that counts up to its value (and glides to a new one). */
-export function CountUp({ value, format }: { value: number; format: (n: number) => string }) {
-  const [shown, setShown] = useState(() => (motionAllowed() ? 0 : value));
+const SEEN_KEY = "crm-seen-amounts";
+
+function readSeen(): Record<string, number> {
+  try {
+    return JSON.parse(localStorage.getItem(SEEN_KEY) ?? "{}") ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSeen(id: string, value: number): void {
+  try {
+    localStorage.setItem(SEEN_KEY, JSON.stringify({ ...readSeen(), [id]: value }));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+/** An amount that counts up only when it is news: the very first time on this
+ * phone, or when it changed since it was last seen (then from the old value).
+ * Otherwise it is shown at once — no animation every time the screen opens.
+ * `delta` is the change since last seen (0 when nothing changed). */
+export function useSeenAmount(id: string, value: number): { shown: number; delta: number } {
+  const [state] = useState(() => {
+    const last = readSeen()[id];
+    return { from: last ?? 0, first: last === undefined };
+  });
+  const animate = motionAllowed() && state.from !== value;
+  const [shown, setShown] = useState(animate ? state.from : value);
   const from = useRef(shown);
+  const mounted = useRef(false);
+  const [delta, setDelta] = useState(!state.first && animate ? value - state.from : 0);
   useEffect(() => {
-    if (!motionAllowed()) {
+    writeSeen(id, value);
+    const later = mounted.current;
+    mounted.current = true;
+    if (!motionAllowed() || from.current === value) {
       setShown(value);
       from.current = value;
       return;
     }
+    if (later) setDelta(value - from.current); // changed while the screen is open
     const start = performance.now();
     const begin = from.current;
     const duration = 700;
     let frame = 0;
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - t, 3);
-      const current = Math.round(begin + (value - begin) * eased);
+      const current = Math.round(begin + (value - begin) * (1 - Math.pow(1 - t, 3)));
       from.current = current;
       setShown(current);
       if (t < 1) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [value]);
+  }, [id, value]);
+  return { shown, delta };
+}
+
+export function CountUp({ id, value, format }: { id: string; value: number; format: (n: number) => string }) {
+  const { shown } = useSeenAmount(id, value);
   return <>{format(shown)}</>;
 }

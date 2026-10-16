@@ -5,18 +5,22 @@ import { Link } from "react-router-dom";
 import type { Balance, LedgerItem } from "../api/types";
 import { dayKey, date, krw, LEDGER_LABEL, shortDate, usd } from "../lib/format";
 import { Thumb } from "./orders";
-import { CountUp, Empty } from "./ui";
+import { Empty, useSeenAmount } from "./ui";
 
 export function BalanceCard({ balance, to, label = "Баланс" }: { balance: Balance; to?: string; label?: string }) {
   const debt = balance.krw < 0;
+  const { shown, delta } = useSeenAmount("balance", balance.krw);
   const content = (
     <>
       <div className="label">
         {label}
         {debt && <span className="debt-badge">долг</span>}
+        {delta !== 0 && (
+          <span key={`${delta}:${balance.krw}`} className={`balance-delta ${delta > 0 ? "up" : "down"}`}>{krw(delta, true)}</span>
+        )}
       </div>
       <div className="krw num">
-        <CountUp value={balance.krw} format={krw} />
+        {krw(shown)}
       </div>
       <div className="usd num">
         {balance.usd !== null ? usd(balance.usd) : "курс $ не задан"}
@@ -25,7 +29,7 @@ export function BalanceCard({ balance, to, label = "Баланс" }: { balance: 
       {to && <ChevronRight className="chev" size={20} />}
     </>
   );
-  const className = `balance-card ${debt ? "debt" : ""}`;
+  const className = `balance-card ${debt ? "debt" : ""} ${delta !== 0 ? "changed" : ""}`;
   return to ? (
     <Link to={to} className={className}>
       {content}
