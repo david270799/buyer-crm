@@ -92,6 +92,8 @@ const orderDeleted = (item: LedgerItem) => Boolean(item.order_id) && !item.order
 
 function entrySubtitle(item: LedgerItem): string | null {
   if (orderDeleted(item)) return item.comment || "Заказ удалён";
+  if (item.original_amount_krw !== undefined)
+    return `Перезаказ: ${krw(-item.original_amount_krw)} → ${krw(-item.amount_krw)}`;
   if (item.order_id || item.type === "shipping_charge") return null;
   return item.comment;
 }
@@ -121,6 +123,9 @@ export function History({ items }: { items: LedgerItem[] }) {
                     <div className="tiny faint num">после: {krw(item.balance_after)}</div>
                   </div>
                   <div className={`amount ${item.amount_krw > 0 ? "positive" : ""}`}>
+                    {item.original_amount_krw !== undefined && item.original_amount_krw !== item.amount_krw && (
+                      <s className="amount-was">{krw(item.original_amount_krw, true)}</s>
+                    )}
                     {krw(item.amount_krw, true)}
                   </div>
                 </>

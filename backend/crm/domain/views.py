@@ -8,7 +8,7 @@ cannot leak to the client.
 
 from typing import Any
 
-from crm.domain.enums import STATUS_FLOW, OrderStatus, Role
+from crm.domain.enums import STATUS_FLOW, LedgerType, OrderStatus, Role
 from crm.domain.models import LedgerEntry, Order, Shipment, status_timestamp_field
 
 CLIENT_ORDER_FIELDS = (
@@ -111,3 +111,41 @@ def ledger_view(entry: LedgerEntry, role: Role) -> dict[str, Any]:
         view["created_by"] = entry.created_by
         view["source"] = entry.source
     return view
+
+
+def ledger_rows(entries: list[LedgerEntry], role: Role) -> list[dict[str, Any]]:
+    """Balance history rows (newest first). A re-purchase is shown on its order's
+    charge line instead of a separate «+₩ 30,000» (the owner, 17.10.2026): one row
+    with the final amount, the first price crossed out. It stands where the last
+    re-purchase stands, so its «после» is that entry's balance. The ledger itself
+    is untouched — append-only, every entry kept."""
+    by_order: dict[str, list[LedgerEntry]] = {}
+    for entry in entries:
+        if entry.order_id and entry.type in (LedgerType.ORDER_CHARGE, LedgerType.ORDER_REBUY):
+            by_order.setdefault(entry.order_id, []).append(entry)
+    merged: dict[str, dict[str, Any]] = {}  # id of the newest re-purchase → merged row
+    hidden: set[str] = set()
+    for group in by_order.values():
+        charges = [e for e in group if e.type is LedgerType.ORDER_CHARGE]
+        rebuys = [e for e in group if e.type is LedgerType.ORDER_REBUY]
+        if len(charges) != 1 or not rebuys:
+            continue  # the charge is older than this page: rows stay as they are
+        charge, newest = charges[0], rebuys[0]  # entries come newest first
+        row = ledger_view(charge, role)
+        row.update(
+            amount_krw=charge.amount_krw + sum(e.amount_krw for e in rebuys),
+            original_amount_krw=charge.amount_krw,
+            rebuy_count=len(rebuys),
+            balance_after=newest.balance_after,
+            created_at=newest.created_at,
+            bought_at=charge.created_at,
+        )
+        merged[newest.id] = row
+        hidden.update(e.id for e in group)
+    rows = []
+    for entry in entries:
+        if entry.id in merged:
+            rows.append(merged[entry.id])
+        elif entry.id not in hidden:
+            rows.append(ledger_view(entry, role))
+    return rows

@@ -484,6 +484,25 @@ def test_rebuy_endpoint_and_history(db, api):
     )
 
 
+def test_rebuy_is_one_balance_row_with_the_old_price_crossed(db, api):
+    seed_order(db, "N5", brand="Nike")
+    seed_order(db, "N6", brand="On")
+    api("POST", "/api/orders/5/buy", json={"purchase_price": 1, "client_price": 169_000})
+    api("POST", "/api/orders/6/buy", json={"purchase_price": 1, "client_price": 240_000})
+    api("POST", "/api/orders/5/rebuy", json={"purchase_price": 1, "client_price": 139_000})
+
+    for who in (ADMIN_TG, CLIENT_TG):  # «Финансы» and the client's «Баланс»
+        rows = api("GET", "/api/transactions", who=who).json()["items"]
+        n5 = [r for r in rows if r["order_id"] == "N5"]
+        assert len(n5) == 1
+        [row] = n5
+        assert row["type"] == "order_charge"
+        assert row["amount_krw"] == -139_000 and row["original_amount_krw"] == -169_000
+        assert row["balance_after"] == balance(db)  # stands where the re-purchase stands
+        assert rows[0]["order_id"] == "N5"  # newest first
+        assert sum(r["amount_krw"] for r in rows) == balance(db) - START_BALANCE
+
+
 def test_notifications_feed_and_read_state(db, api):
     seed_order(db, "N5")
     api("POST", "/api/orders/5/buy", json={"purchase_price": 1, "client_price": 10})

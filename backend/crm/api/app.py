@@ -45,7 +45,7 @@ from crm.domain.events import Event
 from crm.domain.models import LedgerEntry, Order, ProfitEntry
 from crm.domain.notifications import NotificationSettings
 from crm.domain.timeutil import BUSINESS_TZ
-from crm.domain.views import ledger_view, order_view, shipment_view
+from crm.domain.views import ledger_rows, ledger_view, order_view, shipment_view
 from crm.services.common import Actor
 from crm.services.container import Services
 from crm.services.ledger import BalanceChange
@@ -952,15 +952,13 @@ def _ledger_items(
             "tracking_code": found.tracking_code,
             "thumbnail_url": found.thumbnail_url or found.photo_url,
         }
-    items = []
-    for entry in entries:
-        view = ledger_view(entry, p.role)
-        order = orders.get(entry.order_id) if entry.order_id else None
+    items = ledger_rows(entries, p.role)  # a re-purchase is merged into its charge line
+    for view in items:
+        order = orders.get(view["order_id"]) if view["order_id"] else None
         view["order"] = (
             {"id": order.id, "title": order.title, "thumbnail_url": order.thumbnail_url}
             if order
             else None
         )
-        view["shipment"] = shipments.get(entry.shipment_id) if entry.shipment_id else None
-        items.append(view)
+        view["shipment"] = shipments.get(view["shipment_id"]) if view["shipment_id"] else None
     return items

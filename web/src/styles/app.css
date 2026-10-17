@@ -2674,3 +2674,12 @@ table.orders .r {
 .photo-dots { display: flex; justify-content: center; gap: 6px; margin-top: 8px; }
 .photo-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--border); transition: width 0.2s ease, background 0.2s ease; }
 .photo-dots i.active { width: 16px; border-radius: 3px; background: var(--text); }
+
+/* A re-purchased order in the balance history: the first price crossed out above the final one. */
+.amount-was {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+  text-align: right;
+}
