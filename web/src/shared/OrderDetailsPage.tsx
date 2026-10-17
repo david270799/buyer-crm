@@ -31,7 +31,7 @@ export function CopyText({ text }: { text: string }) {
 }
 
 /** The order photo; a tap opens it full screen (pinch to zoom). When the
- * warehouse photo exists (admin only), a swipe shows it next (owner, 16.10). */
+ * warehouse photo exists, a swipe shows it next — admin and client (owner, 16–17.10). */
 function OrderPhoto({ order }: { order: Order }) {
   const [open, setOpen] = useState<number | null>(null);
   const [index, setIndex] = useState(0);

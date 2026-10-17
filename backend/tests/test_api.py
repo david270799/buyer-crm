@@ -604,7 +604,8 @@ def test_arrival_photo_from_the_mini_app(db, api, blobs):
     assert body["moved_to_warehouse"] and body["order"]["status"] == "warehouse"
     assert body["status"] == "skipped"  # no Gemini in tests
     client_view = api("GET", "/api/orders/N5", who=CLIENT_TG).json()["order"]
-    assert "arrival_photo_url" not in client_view and "review_ko" not in client_view
+    assert client_view["arrival_photo_url"] == upload["photo_url"]  # the client sees the photo
+    assert "review_ko" not in client_view and "arrival_check" not in client_view
     assert (
         api(
             "POST",
