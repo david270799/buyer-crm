@@ -17,7 +17,7 @@ import type { Category, ShowcaseItem, ShowcaseSize } from "../api/types";
 import { PageHead } from "../components/Layout";
 import { Empty, ErrorState, Field, Loading, MoneyInput, errorText, useToast } from "../components/ui";
 import { CATEGORY_LABEL, krw, plural } from "../lib/format";
-import { downloadFile } from "../telegram";
+import { downloadFiles } from "../telegram";
 
 // «Витрина» (the owner, 20.10.2026). Test mode: only the admin sees it; he
 // walks the client's path himself (♥, size, cart, «Заказать») before it opens.
@@ -248,27 +248,24 @@ export function ShowcaseItemPage() {
   return (
     <>
       <div className="sc-detail">
-        <div className="sc-photo big">
-          {item.photo_url ? <img src={item.photo_url} alt="" /> : null}
-          {item.shop && <span className="sc-shop">{item.shop}</span>}
-          <LikeButton item={item} />
-        </div>
+        <ShowcasePhotos item={item} />
         <div className="sc-brand" style={{ marginTop: 14 }}>
           {item.brand}
           {item.category ? ` · ${CATEGORY_LABEL[item.category]}` : ""}
         </div>
         <h2 className="sc-title">{item.model ?? item.title_line}</h2>
         <Price item={item} big />
-        {item.photo_url && (
+        {item.photos.length > 0 && (
           <button
             className="btn sc-download"
             onClick={() => {
-              const name = `${(item.brand ?? "photo").replace(/\W+/g, "_")}_${(item.model ?? item.id).replace(/\W+/g, "_")}.jpg`;
-              downloadFile(item.photo_url!, name);
-              toast("Фото сохраняется в галерею");
+              const base = `${item.brand ?? "photo"}_${item.model ?? item.id}`.replace(/\W+/g, "_");
+              void downloadFiles(
+                item.photos.map((p, i) => ({ url: p.photo_url, name: `${base}_${i + 1}.jpg` })),
+              );
             }}
           >
-            <Download size={18} /> Скачать фото
+            <Download size={18} /> {item.photos.length > 1 ? `Скачать все фото · ${item.photos.length}` : "Скачать фото"}
           </button>
         )}
         <div className="row between" style={{ margin: "16px 0 8px" }}>
@@ -321,6 +318,35 @@ export function ShowcaseItemPage() {
         </button>
       </div>
     </>
+  );
+}
+
+/** Big photo; several photos swipe sideways with dots below. */
+function ShowcasePhotos({ item }: { item: ShowcaseItem }) {
+  const [index, setIndex] = useState(0);
+  const photos = item.photos;
+  return (
+    <div>
+      <div className="sc-photo big">
+        <div
+          className="sc-swipe"
+          onScroll={(e) => setIndex(Math.round(e.currentTarget.scrollLeft / Math.max(1, e.currentTarget.clientWidth)))}
+        >
+          {photos.map((p, i) => (
+            <img key={`${i}-${p.photo_url}`} src={p.photo_url} alt="" loading={i ? "lazy" : "eager"} />
+          ))}
+        </div>
+        {item.shop && <span className="sc-shop">{item.shop}</span>}
+        <LikeButton item={item} />
+      </div>
+      {photos.length > 1 && (
+        <div className="photo-dots" aria-hidden>
+          {photos.map((p, i) => (
+            <i key={`${i}-${p.photo_url}`} className={i === index ? "active" : ""} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

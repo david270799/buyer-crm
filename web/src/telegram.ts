@@ -102,3 +102,36 @@ export function downloadFile(url: string, fileName: string): void {
   link.click();
   link.remove();
 }
+
+/** Save several photos (the «Витрина», the owner: «не одну, а все»). One share
+ * sheet with all files where the phone offers it («Сохранить N фото» on iPhone);
+ * else Telegram downloads them one after another; else plain downloads. */
+export async function downloadFiles(files: { url: string; name: string }[]): Promise<void> {
+  const absolute = files.map((f) => ({ url: new URL(f.url, window.location.href).toString(), name: f.name }));
+  try {
+    if (navigator.canShare) {
+      const blobs = await Promise.all(absolute.map((f) => fetch(f.url).then((r) => r.blob())));
+      const shared = blobs.map((b, i) => new File([b], absolute[i].name, { type: b.type || "image/jpeg" }));
+      if (navigator.canShare({ files: shared })) {
+        await navigator.share({ files: shared });
+        return;
+      }
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return; // closed the sheet
+  }
+  const app = webApp();
+  if (app?.downloadFile && app.isVersionAtLeast("8.0") && absolute.every((f) => f.url.startsWith("https://"))) {
+    for (const file of absolute) {
+      const accepted = await new Promise<boolean>((resolve) =>
+        app.downloadFile!({ url: file.url, file_name: file.name }, (ok) => resolve(ok)),
+      );
+      if (!accepted) return;
+    }
+    return;
+  }
+  for (const file of absolute) {
+    downloadFile(file.url, file.name);
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+}

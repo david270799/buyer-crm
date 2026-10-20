@@ -27,7 +27,7 @@ from crm.services.link_import import (
     has_hangul,
     parse_page,
 )
-from crm.services.offers import Offer, better_image_url, parse_offer
+from crm.services.offers import MAX_PHOTOS, Offer, parse_offer, photo_candidates
 from crm.services.order_service import NewOrder, OrderService, clean_shop
 from crm.services.recognition import MIN_CONFIDENCE, RecognitionError
 from crm.services.sizes import order_sizes
@@ -125,22 +125,34 @@ class ShowcaseService:
             notes.append("цена не найдена")
         if not offer.sizes:
             notes.append("размеры не найдены")
-        image = None
-        image_url = better_image_url(page.image_url)
-        if image_url:
+        image, photos = None, []
+        for photo_url in photo_candidates(html, final, page.image_url):
+            if len(photos) >= MAX_PHOTOS:
+                break
             try:
-                original = self._fetcher.image(image_url)
-                image, _, _ = process_image(original)  # small WebP for Gemini
+                original = self._fetcher.image(photo_url)
+            except (LinkError, ValidationError):
+                if photos and "image.hmall.com" in photo_url:
+                    break  # Hmall numbers photos in a row: the first gap is the end
+                continue
+            try:
+                if image is None:
+                    image, _, _ = process_image(original)  # small WebP for Gemini
                 if self._images is not None:
                     main, thumb, size = process_showcase_image(original)
                     stored = self._images.store_processed(
                         main, thumb, size, folder=SHOWCASE_PHOTOS_FOLDER, jpeg=True
                     )
-                    fields["photo_url"] = stored.photo_url
-                    fields["thumbnail_url"] = stored.thumbnail_url
-            except (LinkError, ValidationError) as exc:
+                    photos.append(
+                        {"photo_url": stored.photo_url, "thumbnail_url": stored.thumbnail_url}
+                    )
+            except ValidationError as exc:
                 notes.append(f"фото: {exc}")
-        else:
+        if photos:
+            fields["photos"] = photos
+            fields["photo_url"] = photos[0]["photo_url"]
+            fields["thumbnail_url"] = photos[0]["thumbnail_url"]
+        elif image is None:
             notes.append("нет фото")
         brand = page.brand if not has_hangul(page.brand) else None
         model = page.title if not has_hangul(page.title) else None

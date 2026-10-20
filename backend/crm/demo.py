@@ -286,6 +286,13 @@ def create_demo_database(
     for item_id, order_id, status, shop, price, official, markup, sizes, category in showcase:
         order = db.get("orders", order_id) or {}
         now = clock.now()
+        # The first card shows several photos (swipe + «Скачать все фото»).
+        extra = ["N1", "N2"] if item_id == "sc_demo1" else []
+        photos = [
+            {"photo_url": o.get("photo_url"), "thumbnail_url": o.get("thumbnail_url")}
+            for o in [order, *(db.get("orders", n) or {} for n in extra)]
+            if o.get("photo_url")
+        ]
         db.seed(
             "showcase",
             item_id,
@@ -298,6 +305,7 @@ def create_demo_database(
                 "category": category,
                 "photo_url": order.get("photo_url"),
                 "thumbnail_url": order.get("thumbnail_url"),
+                "photos": photos,
                 "shop_price_krw": price,
                 "official_price_krw": official,
                 "markup_type": "krw",

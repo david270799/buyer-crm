@@ -340,6 +340,12 @@ def showcase_json(
         "category": item.category,
         "photo_url": item.photo_url,
         "thumbnail_url": item.thumbnail_url,
+        "photos": item.photos
+        or (
+            [{"photo_url": item.photo_url, "thumbnail_url": item.thumbnail_url}]
+            if item.photo_url
+            else []
+        ),
         "shop_price_krw": item.shop_price_krw,
         "official_price_krw": item.official_price_krw,
         "official_url": item.official_url,

@@ -365,6 +365,7 @@ class ShowcaseItem:
     title: str | None = None  # the shop's own name (often Korean)
     photo_url: str | None = None
     thumbnail_url: str | None = None
+    photos: list[Doc] = field(default_factory=list)  # all photos {photo_url, thumbnail_url}
     shop_price_krw: int | None = None
     official_price_krw: int | None = None  # crossed out for the client when higher
     official_url: str | None = None
@@ -415,6 +416,7 @@ class ShowcaseItem:
             title=_str_or_none(data.get("title")),
             photo_url=_str_or_none(data.get("photo_url")),
             thumbnail_url=_str_or_none(data.get("thumbnail_url")),
+            photos=[dict(p) for p in data.get("photos") or [] if isinstance(p, dict)],
             shop_price_krw=_int_or_none(data.get("shop_price_krw")),
             official_price_krw=_int_or_none(data.get("official_price_krw")),
             official_url=_str_or_none(data.get("official_url")),

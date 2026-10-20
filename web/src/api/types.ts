@@ -317,6 +317,7 @@ export interface ShowcaseItem {
   category: Category | null;
   photo_url: string | null;
   thumbnail_url: string | null;
+  photos: { photo_url: string; thumbnail_url: string | null }[];
   shop_price_krw: number | null;
   official_price_krw: number | null;
   official_url: string | null;

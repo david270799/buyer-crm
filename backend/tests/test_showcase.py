@@ -31,7 +31,11 @@ class FakeFetcher:
         return self.page_html, url
 
     def image(self, url):
+        from crm.services.link_import import LinkError
+
         self.images.append(url)
+        if "_3.jpg" in url:  # this product has 3 photos: _0, _1, _2
+            raise LinkError("Сайт ответил ошибкой (HTTP 404).")
         return _jpeg()
 
 
@@ -169,3 +173,10 @@ def test_statistics_count_opens_likes_and_orders(showcase, admin):
     [row] = showcase.statistics(admin)
     assert (row["cards_opened"], row["opens"], row["likes"], row["orders"]) == (1, 3, 1, 1)
     assert row["top"][0] == {"id": item.id, "title": item.title_line, "opens": 3, "liked": True}
+
+
+def test_all_product_photos_are_kept_up_to_the_first_gap(showcase, admin):
+    item = showcase.add(admin, URL)
+    assert len(item.photos) == 3
+    assert item.photo_url == item.photos[0]["photo_url"]
+    assert not any("_4.jpg" in u for u in showcase.fetcher.images)  # stopped at the gap

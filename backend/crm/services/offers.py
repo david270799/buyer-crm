@@ -139,3 +139,47 @@ def better_image_url(url: str | None) -> str | None:
     if url and "image.hmall.com" in url:
         return re.sub(r"RS=\d+x\d+", "RS=1000x1000", url)
     return url
+
+
+MAX_PHOTOS = 6
+_OG_IMAGE = re.compile(
+    r'<meta[^>]+(?:property|name)=["\'](?:og:image|og:image:url|twitter:image)["\'][^>]*>', re.I
+)
+_CONTENT = re.compile(r'content=["\']([^"\']+)["\']', re.I)
+_HMALL_IMAGE = re.compile(r"(https?://image\.hmall\.com/.+?/\d+_)(\d+)(\.jpg)", re.I)
+
+
+def photo_candidates(html: str, base_url: str, first: str | None) -> list[str]:
+    """Product photo URLs in order, best size first; the caller downloads what exists.
+
+    Hmall numbers its photos `…_0.jpg`, `…_1.jpg`… (the page lists only the
+    first); other shops give several og:image tags or a JSON-LD image list."""
+    from urllib.parse import urljoin
+
+    found: list[str] = []
+
+    def add(url: str | None) -> None:
+        if url and url.startswith(("http://", "https://", "//", "/")):
+            url = better_image_url(urljoin(base_url, url.replace("&amp;", "&")))
+            if url and url not in found:
+                found.append(url)
+
+    add(first)
+    hmall = _HMALL_IMAGE.match(first or "")
+    if hmall:
+        prefix, _, ext = hmall.groups()
+        for n in range(1, 10):
+            add(f"{prefix}{n}{ext}?RS=1000x1000")
+        return found
+    for tag in _OG_IMAGE.findall(html):
+        content = _CONTENT.search(tag)
+        add(content.group(1) if content else None)
+    parser = _MetaParser()
+    try:
+        parser.feed(html)
+    except Exception:  # noqa: BLE001
+        pass
+    images = _ld_product(parser.ld_json).get("image")
+    for image in images if isinstance(images, list) else [images]:
+        add(image.get("url") if isinstance(image, dict) else image)
+    return found
