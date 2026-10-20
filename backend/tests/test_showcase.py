@@ -180,3 +180,31 @@ def test_all_product_photos_are_kept_up_to_the_first_gap(showcase, admin):
     assert len(item.photos) == 3
     assert item.photo_url == item.photos[0]["photo_url"]
     assert not any("_4.jpg" in u for u in showcase.fetcher.images)  # stopped at the gap
+
+
+def test_a_burst_of_links_reads_at_most_two_pages_at_once(showcase, admin):
+    import threading
+    import time
+
+    from crm.services.showcase_service import READ_PARALLEL
+
+    lock, state = threading.Lock(), {"now": 0, "peak": 0}
+    page = showcase.fetcher.html
+
+    def slow_html(url):
+        with lock:
+            state["now"] += 1
+            state["peak"] = max(state["peak"], state["now"])
+        time.sleep(0.05)
+        with lock:
+            state["now"] -= 1
+        return page(url)
+
+    showcase.fetcher.html = slow_html
+    threads = [threading.Thread(target=showcase.add, args=(admin, URL)) for _ in range(6)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert state["peak"] == READ_PARALLEL == 2
+    assert len(showcase.items(admin, "draft")) == 6

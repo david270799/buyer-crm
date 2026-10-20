@@ -8,6 +8,7 @@ filled in). No money moves: the order is bought out as usual with /buy.
 """
 
 import logging
+import threading
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -84,6 +85,12 @@ class CartLine:
     size: str | None
 
 
+# Shop pages read at the same time (each one downloads up to MAX_PHOTOS photos
+# and resizes them): the server has 1 GB RAM, so a burst of links waits here
+# in turn instead of decoding dozens of photos at once.
+READ_PARALLEL = 2
+
+
 class ShowcaseService:
     def __init__(
         self,
@@ -104,11 +111,16 @@ class ShowcaseService:
         self._images = images
         self._recognizer = recognizer
         self._fetcher = fetcher or PageFetcher()
+        self._reading = threading.BoundedSemaphore(READ_PARALLEL)
 
     # --- reading the shop page -----------------------------------------------
 
     def _read(self, url: str) -> tuple[dict[str, Any], list[str]]:
         """Fields from the shop page and what could not be read."""
+        with self._reading:
+            return self._read_page(url)
+
+    def _read_page(self, url: str) -> tuple[dict[str, Any], list[str]]:
         try:
             html, final = self._fetcher.html(url)
         except LinkError as exc:
