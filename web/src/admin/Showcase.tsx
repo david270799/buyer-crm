@@ -212,7 +212,7 @@ export function ShowcasePage() {
       ) : !items.length ? (
         <Empty
           title={data.items.length ? "Ничего не найдено" : "На витрине пока пусто"}
-          hint={data.items.length ? undefined : "Пришлите боту ссылку на товар, проверьте её в «Подготовке» и опубликуйте."}
+          hint={data.items.length ? undefined : "Пришлите боту ссылку на товар, проверьте её в «Одобрении» и опубликуйте."}
           icon={<ShoppingBag size={22} />}
         />
       ) : (
@@ -465,7 +465,7 @@ export function PrepPage() {
     });
   return (
     <>
-      <PageHead title="Подготовка" sub="Витрина · только вы" />
+      <PageHead title="Одобрение" sub="Черновики витрины · только вы" />
       <div className="row" style={{ gap: 8 }}>
         <input
           className="input"

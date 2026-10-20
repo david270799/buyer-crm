@@ -1703,6 +1703,11 @@ table.orders .r {
   letter-spacing: 0.02em;
 }
 
+/* «CRM | Витрина» on top of the two home pages (the owner, 20.10). */
+.mode-switch { display: inline-flex; margin-right: auto; padding: 3px; gap: 2px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); }
+.mode-switch button { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--text-2); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; transition: background 0.2s ease, color 0.2s ease; }
+.mode-switch button.active { background: var(--text); color: var(--bg); }
+
 @media (min-width: 960px) {
   .topbar {
     justify-content: flex-end;
@@ -2721,7 +2726,12 @@ table.orders .r {
 .sc-size.sel { background: var(--text); color: var(--bg); border-color: var(--text); }
 .sc-size.sel i { color: inherit; opacity: 0.7; }
 .sc-detail { padding-bottom: 90px; }
-.sc-cta { position: sticky; bottom: calc(86px + var(--safe-bottom, 0px)); display: flex; gap: 8px; margin-top: 16px; z-index: 5; }
+/* A solid strip under the bottom buttons (the owner, 20.10): the page no
+ * longer shows through them; it fades out just above the strip. */
+.sc-cta { position: sticky; bottom: calc(var(--nav-height) + var(--nav-gap, 0px) + var(--safe-bottom, 0px)); display: flex; gap: 8px; margin: 16px -16px 0; padding: 10px 16px; background: var(--bg); z-index: 5; }
+.sc-cta::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 18px; background: linear-gradient(to bottom, transparent, var(--bg)); pointer-events: none; }
+.sc-cta .btn:disabled { opacity: 1; background: var(--surface-3); color: var(--text-3, var(--text-2)); }
+@media (min-width: 960px) { .sc-cta { bottom: 0; } }
 .sc-cta .btn { flex: 1; min-height: 48px; }
 .sc-cta .btn.danger { flex: none; width: 52px; }
 .sc-count { margin-left: 4px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--negative); color: #fff; font-size: 11px; font-weight: 800; }

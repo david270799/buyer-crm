@@ -10,13 +10,10 @@ export interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
-  /** Other sections shown as this tab (e.g. «Ещё» → /shipments, /settings). */
-  also?: string[];
 }
 
 function isActive(item: NavItem, pathname: string): boolean {
-  if (item.to === "/") return pathname === "/";
-  return [item.to, ...(item.also ?? [])].some((p) => pathname.startsWith(p));
+  return item.to === "/" ? pathname === "/" : pathname.startsWith(item.to);
 }
 
 /** Last query of each list page (filters like ?status=new), so coming back to
@@ -32,14 +29,27 @@ function useTelegramBack() {
   }, [pathname, search]);
   useEffect(() => {
     const parts = pathname.split("/").filter(Boolean);
-    const top = ["/balance", "/notifications", "/profit", "/shipments", "/settings", "/prep"].includes(pathname);
+    const top = ["/balance", "/notifications", "/profit"].includes(pathname);
     const nested = parts.length > 1 || top;
     const parent = parts.length > 1 ? `/${parts.slice(0, -1).join("/")}` : "/";
     return backButton(nested, () => navigate(parent + (lastSearch.get(parent) ?? "")));
   }, [pathname, navigate]);
 }
 
-export function Shell({ nav, title, children }: { nav: NavItem[]; title: string; children: ReactNode }) {
+export function Shell({
+  nav,
+  title,
+  children,
+  homes = ["/"],
+  switcher,
+}: {
+  nav: NavItem[];
+  title: string;
+  children: ReactNode;
+  /** Pages with the top bar (bell and the mode switch). */
+  homes?: string[];
+  switcher?: ReactNode;
+}) {
   const { pathname } = useLocation();
   useTelegramBack();
   // Braces matter: an effect may return only a cleanup function. Telegram's
@@ -69,9 +79,9 @@ export function Shell({ nav, title, children }: { nav: NavItem[]; title: string;
       </aside>
       <main className="main">
         {/* Only on the home page (owner, 11.10): elsewhere it took room. */}
-        {pathname === "/" && (
+        {homes.includes(pathname) && (
           <header className="topbar">
-            <span className="topbar-title">{title}</span>
+            {switcher ?? <span className="topbar-title">{title}</span>}
             <BellButton />
           </header>
         )}

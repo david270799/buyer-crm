@@ -36,7 +36,7 @@ def draft_text(item: ShowcaseItem) -> str:
         lines.append("В наличии: " + fmt.e(", ".join(sizes)))
     if item.note:
         lines.append(f"⚠️ {fmt.e(item.note)}")
-    lines.append("Проверьте цену и опубликуйте в «Подготовке».")
+    lines.append("Проверьте цену и опубликуйте в «Одобрении».")
     return "\n".join(lines)
 
 
@@ -49,7 +49,7 @@ def build(services: Services, settings: Settings) -> Router:
         parts = urlsplit(settings.mini_app_url)
         query = "&".join(q for q in (parts.query, urlencode({"open": f"prep:{item.id}"})) if q)
         url = urlunsplit((parts.scheme, parts.netloc, parts.path or "/", query, ""))
-        button = InlineKeyboardButton(text="Открыть в «Подготовке»", web_app=WebAppInfo(url=url))
+        button = InlineKeyboardButton(text="Открыть в «Одобрении»", web_app=WebAppInfo(url=url))
         return InlineKeyboardMarkup(inline_keyboard=[[button]])
 
     async def on_link(message: Message, bot: Bot, actor: Actor | None) -> None:
