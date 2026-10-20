@@ -421,3 +421,68 @@ def test_ssg_share_link_opens_the_product_page(showcase, admin):
 def test_pagefile_is_admin_only(showcase, client_actor):
     with pytest.raises(PermissionDeniedError):
         showcase.page_source(client_actor, URL)
+
+
+SSG_HTML = (Path(__file__).parent / "fixtures" / "ssg_item.html").read_text()
+
+
+def test_ssg_page_gives_best_price_sizes_and_large_photos():
+    # A real SSG page (20.10.2026): Nike Club Fleece IB3304-063.
+    from crm.services.link_import import parse_page
+    from crm.services.offers import photo_candidates
+
+    offer = parse_offer(SSG_HTML)
+    assert offer.price_krw == 39_025  # «최적가» after discounts, not the 49,840 list price
+    assert [(s.name, s.stock, s.available, s.color) for s in offer.sizes] == [
+        ("085", 0, False, None),
+        ("090", 0, False, None),
+        ("095", 0, False, None),
+        ("100", 25, True, None),
+        ("105", 16, True, None),
+        ("110", 0, False, None),
+    ]
+    url = "https://m.ssg.com/item/itemView.ssg?itemId=1000736994607"
+    photos = photo_candidates(SSG_HTML, url, parse_page(SSG_HTML, url).image_url)
+    assert photos[0] == "https://sitem.ssgcdn.com/07/46/99/item/1000736994607_i1_1200.jpg"
+    assert len(photos) == 5 and all(p.endswith("_1200.jpg") for p in photos)
+
+
+def test_ssg_colour_and_size_options():
+    block = (
+        "uitemObj = {{uitemId:'{id}', uitemOptnNm1:'{a}', uitemOptnNm2:'{b}', "
+        "uitemOptnTypeNm1:'색상', uitemOptnTypeNm2:'사이즈', usablInvQty:'{q}', "
+        "bestAmt:'59000'}};\n uitemObjArr.push(uitemObj);"
+    )
+    options = (("00000", "", "", "9"), ("00001", "블랙", "270", "3"), ("00002", "블랙", "280", "0"))
+    html = "var uitemObjArr = [];\n" + "\n".join(
+        block.format(id=i, a=a, b=b, q=q) for i, a, b, q in options
+    )
+    offer = parse_offer(html)
+    assert offer.price_krw == 59_000
+    assert [(s.color, s.name, s.available) for s in offer.sizes] == [
+        ("블랙", "270", True),
+        ("블랙", "280", False),
+    ]
+
+
+def test_a_refused_plain_request_is_tried_as_a_browser(monkeypatch):
+    from crm.services import link_import
+
+    def refused(client, url, limit):
+        raise link_import.LinkError("Сайт ответил ошибкой (HTTP 403).")
+
+    monkeypatch.setattr(link_import, "_get", refused)
+    monkeypatch.setattr(
+        link_import, "_browser_get", lambda url, limit: (b"<html>ok</html>", "text/html", url)
+    )
+    assert link_import.PageFetcher().html("https://m.ssg.com/item/1") == (
+        "<html>ok</html>",
+        "https://m.ssg.com/item/1",
+    )
+
+    def missing(client, url, limit):
+        raise link_import.LinkError("Сайт ответил ошибкой (HTTP 404).")
+
+    monkeypatch.setattr(link_import, "_get", missing)  # other errors: no second try
+    with pytest.raises(link_import.LinkError, match="404"):
+        link_import.PageFetcher().html("https://m.ssg.com/item/1")

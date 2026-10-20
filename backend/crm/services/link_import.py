@@ -14,6 +14,7 @@ Nothing is saved: the result goes back to the form, the admin saves it.
 import ipaddress
 import json
 import logging
+import os
 import re
 import socket
 from dataclasses import dataclass
@@ -41,6 +42,12 @@ _HEADERS = {
         "(KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
     ),
     "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+    # SSG answers 403 unless the request looks like a browser opening a page
+    # (checked 20.10.2026: the User-Agent alone is not enough).
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
 }
 
 
@@ -205,9 +212,70 @@ def parse_page(html: str, base_url: str) -> PageInfo:
         ),
         description=_first_text(product.get("description"), meta.get("og:description")),
         brand=_first_text(product.get("brand"), meta.get("product:brand")),
-        image_url=urljoin(base_url, image) if image else None,
+        image_url=absolute_url(base_url, image) if image else None,
         site=_first_text(meta.get("og:site_name")) or urlsplit(base_url).hostname,
     )
+
+
+def absolute_url(base_url: str, url: str) -> str:
+    """Like urljoin, but «sitem.ssgcdn.com/…» (a host without https://, as SSG
+    writes its JSON-LD photos) is another site, not a path on this one."""
+    if re.match(r"^[\w-]+(\.[\w-]+)+/", url) and not url.startswith(("http", "/")):
+        return "https://" + url
+    return urljoin(base_url, url)
+
+
+def _browser_get(url: str, limit: int) -> tuple[bytes, str, str]:
+    """`_get` again, the request made like Safari on an iPhone down to the
+    connection itself (curl_cffi). Bot guards such as SSG's (Akamai) refuse
+    plain clients by that alone: checked 20.10.2026, also from the owner's
+    Korean server. Same rules: public addresses, checked redirects, size cap."""
+    try:
+        from curl_cffi import requests as browser
+    except ImportError:  # not installed: the shop's refusal stands
+        raise LinkError("Сайт ответил ошибкой (HTTP 403).") from None
+    verify = os.environ.get("CURL_CA_BUNDLE") or os.environ.get("SSL_CERT_FILE") or True
+    for _ in range(MAX_REDIRECTS + 1):
+        _check_public(url)
+        try:
+            response = browser.get(
+                url,
+                impersonate="safari_ios",
+                headers={"Accept-Language": _HEADERS["Accept-Language"]},
+                allow_redirects=False,
+                timeout=TIMEOUT_SECONDS,
+                verify=verify,
+                stream=True,
+            )
+        except Exception as exc:  # noqa: BLE001 - curl errors: the site did not open
+            raise LinkError(f"Сайт не открылся ({type(exc).__name__}).") from None
+        try:
+            location = response.headers.get("location")
+            if response.status_code in (301, 302, 303, 307, 308) and location:
+                url = urljoin(url, location)
+                continue
+            if response.status_code != 200:
+                raise LinkError(f"Сайт ответил ошибкой (HTTP {response.status_code}).")
+            body = bytearray()
+            for chunk in response.iter_content():
+                body.extend(chunk)
+                if len(body) > limit:
+                    raise LinkError("Страница слишком большая.")
+            return bytes(body), response.headers.get("content-type", ""), url
+        finally:
+            response.close()
+    raise LinkError("Слишком много переадресаций.")
+
+
+def _fetch(client: httpx.Client, url: str, limit: int) -> tuple[bytes, str, str]:
+    """A plain request first; a shop that refuses it (403) gets the browser-like one."""
+    try:
+        return _get(client, url, limit)
+    except LinkError as exc:
+        if "HTTP 403" not in str(exc):
+            raise
+    logger.info("403 from %s: trying as a browser", urlsplit(url).hostname)
+    return _browser_get(url, limit)
 
 
 class PageFetcher:
@@ -217,7 +285,7 @@ class PageFetcher:
     def html(self, url: str) -> tuple[str, str]:
         """The page's HTML and its final URL (after redirects)."""
         try:
-            body, kind, final = _get(self._client, url, MAX_PAGE_BYTES)
+            body, kind, final = _fetch(self._client, url, MAX_PAGE_BYTES)
         except httpx.HTTPError as exc:
             raise LinkError(f"Сайт не открылся ({type(exc).__name__}).") from None
         if "html" not in kind and not body.lstrip()[:20].lower().startswith(
@@ -233,7 +301,7 @@ class PageFetcher:
     def json(self, url: str) -> Any:
         """A shop's own JSON answer (Hmall colour / size stock)."""
         try:
-            body, _, _ = _get(self._client, url, MAX_PAGE_BYTES)
+            body, _, _ = _fetch(self._client, url, MAX_PAGE_BYTES)
         except httpx.HTTPError as exc:
             raise LinkError(f"Сайт не открылся ({type(exc).__name__}).") from None
         try:
@@ -243,7 +311,7 @@ class PageFetcher:
 
     def image(self, url: str) -> bytes:
         try:
-            body, _, _ = _get(self._client, url, MAX_IMAGE_BYTES)
+            body, _, _ = _fetch(self._client, url, MAX_IMAGE_BYTES)
         except httpx.HTTPError as exc:
             raise LinkError(f"Фото с сайта не загрузилось ({type(exc).__name__}).") from None
         return body

@@ -48,7 +48,8 @@ B2B-клиента**. Участников только два:
 ## 3. Стек
 
 * **Backend:** Python 3.11+ (в Docker 3.12), aiogram 3, FastAPI + uvicorn, Pillow (фото), httpx (Gemini),
-  python-dotenv, tzdata; `firebase-admin` — только для необязательного режима Firestore.
+  python-dotenv, tzdata; `firebase-admin` — только для необязательного режима Firestore;
+  `curl_cffi` (20.10) — повтор запроса к магазину «как Safari», когда защита (SSG/Akamai) отвечает 403.
 * **Хранилище:** SQLite (по умолчанию) через собственный document-store поверх in-memory движка;
   Firestore — опционально (`STORAGE=firestore`).
 * **Frontend:** React 18, TypeScript 5.6, Vite 5, TanStack Query 5, react-router-dom 6 (`HashRouter`),

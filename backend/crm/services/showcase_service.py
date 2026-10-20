@@ -59,6 +59,7 @@ _SHOP_NAMES = {
     "adidas.co.kr": "Adidas",
     "on.com": "On",
     "ssg.com": "SSG.com",
+    "ssg.li": "SSG.com",  # SSG's share links
     "gmarket.co.kr": "G-Market",
     "coupang.com": "Coupang",
     "lotteimall.com": "Lotte Home Shopping",

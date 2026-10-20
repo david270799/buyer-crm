@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from crm.services.link_import import _ld_product, _MetaParser
+from crm.services.link_import import _ld_product, _MetaParser, absolute_url
 
 _NEXT_DATA = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
 _SIZE_NAME = re.compile(r"^(?:XXS|XS|S|M|L|XL|XXL|XXXL|[2-5]XL|F|FREE|\d{2,3}(?:[.,]5)?)$", re.I)
@@ -199,9 +199,50 @@ def _json_ld(html: str) -> Offer | None:
     return offer if offer.price_krw or offer.sizes else None
 
 
+_SSG_BLOCK = re.compile(r"uitemObj\s*=\s*\{(.*?)\};\s*uitemObjArr\.push", re.S)
+_SSG_FIELD = re.compile(r"(\w+)\s*:\s*(?:parseInt\(\s*)?'([^']*)'")
+_COLOR_TYPES = ("색상", "컬러", "color", "colour")
+
+
+def _ssg(html: str) -> Offer | None:
+    """SSG (the owner, 20.10.2026): each option is a JS object `uitemObj = {…}`
+    pushed to `uitemObjArr` — `uitemOptnNm1/2` with their types (사이즈 /
+    색상), `usablInvQty` in stock, `bestAmt` the price after discounts.
+    `uitemId 00000` is the product itself, not an option."""
+    if "uitemObjArr" not in html:
+        return None
+    rows = [dict(_SSG_FIELD.findall(block)) for block in _SSG_BLOCK.findall(html)]
+    if not rows:
+        return None
+    offer = Offer()
+    head = next((r for r in rows if r.get("uitemId") == "00000"), rows[0])
+    offer.price_krw = _int(head.get("bestAmt")) or _int(head.get("sellprc"))
+    options = sorted(
+        (r for r in rows if r.get("uitemId") != "00000"), key=lambda r: r.get("uitemId", "")
+    )
+    for row in options:
+        names = [row.get(f"uitemOptnNm{i}", "").strip() for i in (1, 2)]
+        kinds = [row.get(f"uitemOptnTypeNm{i}", "").strip().lower() for i in (1, 2)]
+        if not names[0]:
+            continue
+        color = None
+        if names[1] and kinds[0] in _COLOR_TYPES:
+            color, size = names
+        elif names[1] and kinds[1] in _COLOR_TYPES:
+            size, color = names
+        else:
+            size = " ".join(n for n in names if n)
+        try:
+            stock = max(0, int(row.get("usablInvQty", "")))
+        except ValueError:
+            stock = None
+        offer.sizes.append(SizeStock(_clean_size(size), stock, (stock or 0) > 0, color))
+    return offer if offer.price_krw or offer.sizes else None
+
+
 def parse_offer(html: str) -> Offer:
     """Price (KRW) and sizes from a shop page; empty fields when not found."""
-    for reader in (_hmall, _json_ld):
+    for reader in (_hmall, _ssg, _json_ld):
         found = reader(html)
         if found is not None:
             found.sizes = found.sizes[:MAX_SIZES]
@@ -213,6 +254,8 @@ def better_image_url(url: str | None) -> str | None:
     """Shops often give a small preview: ask Hmall for the large picture."""
     if url and "image.hmall.com" in url:
         return re.sub(r"RS=\d+x\d+", "RS=1000x1000", url)
+    if url and "ssgcdn.com" in url:  # «…_i1_250.jpg» → the 1200 px one
+        return re.sub(r"(_i\d+)_\d+(\.\w+)$", r"\1_1200\2", url)
     return url
 
 
@@ -234,6 +277,8 @@ def photo_candidates(html: str, base_url: str, first: str | None) -> list[str]:
     found: list[str] = []
 
     def add(url: str | None) -> None:
+        if url and re.match(r"^[\w-]+(\.[\w-]+)+/", url):  # SSG: «sitem.ssgcdn.com/…»
+            url = absolute_url(base_url, url)
         if url and url.startswith(("http://", "https://", "//", "/")):
             url = better_image_url(urljoin(base_url, url.replace("&amp;", "&")))
             if url and url not in found:
