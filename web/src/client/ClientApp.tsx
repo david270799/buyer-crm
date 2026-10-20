@@ -1,4 +1,4 @@
-import { AlertTriangle, Home, Package, Settings, Truck, Wallet } from "lucide-react";
+import { AlertTriangle, Home, Package, Settings, ShoppingBag, Truck, Wallet } from "lucide-react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 
 import { useOrders, useOverview } from "../api/hooks";
@@ -26,10 +26,13 @@ import {
 import { NotificationsPage } from "../shared/NotificationsPage";
 import { OrderDetailsPage } from "../shared/OrderDetailsPage";
 import { ShipmentDetailsPage, ShipmentsPage } from "../shared/ShipmentsPages";
+import { ShowcaseCartPage, ShowcaseClientMode, ShowcaseItemPage, ShowcasePage } from "../admin/Showcase";
 
 const NAV: NavItem[] = [
   { to: "/", label: "Главная", icon: Home },
   { to: "/orders", label: "Заказы", icon: Package },
+  // «Витрина» for the client (the owner, 20.10.2026: out of test mode).
+  { to: "/showcase", label: "Витрина", icon: ShoppingBag },
   { to: "/shipments", label: "Отправки", icon: Truck },
   { to: "/balance", label: "Баланс", icon: Wallet },
   { to: "/settings", label: "Настройки", icon: Settings },
@@ -133,6 +136,7 @@ function ClientOrders() {
 export function ClientApp() {
   return (
     <Shell nav={NAV} title="Мои заказы">
+      <ShowcaseClientMode value={true}>
       <Routes>
         <Route path="/" element={<ClientHome />} />
         <Route path="/orders" element={<ClientOrders />} />
@@ -142,8 +146,12 @@ export function ClientApp() {
         <Route path="/shipments/:id" element={<ShipmentDetailsPage />} />
         <Route path="/balance" element={<BalancePage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/showcase" element={<ShowcasePage />} />
+        <Route path="/showcase/cart" element={<ShowcaseCartPage />} />
+        <Route path="/showcase/:id" element={<ShowcaseItemPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </ShowcaseClientMode>
     </Shell>
   );
 }

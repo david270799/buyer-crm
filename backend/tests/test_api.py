@@ -646,9 +646,64 @@ def _jpeg_bytes() -> bytes:
     return buffer.getvalue()
 
 
-def test_showcase_is_admin_only_in_test_mode(api):
-    assert api("GET", "/api/showcase", who=CLIENT_TG).status_code == 403
-    assert api("GET", "/api/showcase").json() == {"items": []}
+def _seed_cards(db):
+    from conftest import seed
+
+    base = {
+        "url": "https://www.hmall.com/md/pda/itemPtc?slitmCd=1",
+        "shop": "Hmall",
+        "brand": "Nike",
+        "model": "Air Max 95",
+        "shop_price_krw": 100_000,
+        "official_price_krw": 150_000,
+        "markup_type": "krw",
+        "markup_value": 20_000,
+        "note": "цена не найдена",
+        "sizes": [{"name": "270", "stock": 3, "available": True}],
+    }
+    seed(db, "showcase", "sc1", {**base, "status": "published"})
+    seed(db, "showcase", "sc2", {**base, "status": "draft"})
+
+
+def test_client_sees_published_cards_without_shop_details(db, api):
+    # The owner, 20.10.2026: the showcase is out of test mode, open to the client.
+    _seed_cards(db)
+    assert [i["id"] for i in api("GET", "/api/showcase").json()["items"]] == ["sc1", "sc2"]
+    [card] = api("GET", "/api/showcase", who=CLIENT_TG).json()["items"]
+    assert card["id"] == "sc1" and card["client_price_krw"] == 120_000
+    assert card["official_price_krw"] == 150_000  # crossed out on the card
+    for hidden in ("url", "shop", "shop_price_krw", "markup_value", "note"):
+        assert card[hidden] is None
+    assert api("GET", "/api/showcase/sc2", who=CLIENT_TG).status_code == 404  # a draft
+    assert api("POST", "/api/showcase/sc1/refresh", who=CLIENT_TG).status_code == 403
+    assert api("POST", "/api/showcase/sc1/status/hidden", who=CLIENT_TG).status_code == 403
+    assert api("GET", "/api/showcase-stats", who=CLIENT_TG).status_code == 403
+    assert api("GET", "/api/showcase", who=777).status_code == 403  # a helper: no access
+
+
+def test_client_orders_from_the_showcase_without_money(db, api):
+    _seed_cards(db)
+    before = balance(db)
+    assert api("POST", "/api/showcase/sc1/like", who=CLIENT_TG).json() == {"liked": True}
+    r = api(
+        "POST",
+        "/api/showcase/order",
+        who=CLIENT_TG,
+        json={"items": [{"item_id": "sc1", "size": "270"}]},
+    )
+    [order] = r.json()["items"]
+    assert order["status"] == "new" and order["client_price"] == 120_000
+    assert "source_url" not in order and "internal_comment" not in order
+    assert balance(db) == before
+    bad = api(
+        "POST",
+        "/api/showcase/order",
+        who=CLIENT_TG,
+        json={"items": [{"item_id": "sc2", "size": "270"}]},
+    )
+    assert bad.status_code == 404
+    preview = {"X-View-As": "client"}
+    assert api("POST", "/api/showcase/sc1/like", headers=preview).status_code == 403
 
 
 def test_showcase_stats_shape(api):

@@ -155,8 +155,11 @@ def test_refresh_likes_delete_and_admin_only(db, showcase, admin, client_actor):
     assert {s["name"]: s["available"] for s in refreshed.sizes}["L"] is False
     assert showcase.toggle_like(admin, item.id) == [item.id]
     assert showcase.toggle_like(admin, item.id) == []
+    assert showcase.items(client_actor) == []  # a draft: not on the client's showcase
     with pytest.raises(PermissionDeniedError):
-        showcase.items(client_actor)
+        showcase.refresh(client_actor, item.id)
+    with pytest.raises(PermissionDeniedError):
+        showcase.delete(client_actor, item.id)
     showcase.delete(admin, item.id)
     assert showcase.items(admin) == []
 

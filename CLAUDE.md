@@ -175,7 +175,7 @@ web/
 | `shipments/SHP-YYYY-NNN` | физическая отправка: `shipment_number` («Отправка #18»), трек, коробка, вес, `shipping_cost_krw`, `shipping_charged_krw`, фото, `order_ids[]`, `split_from` (если отделена «Разделить»; деньги при разделении не двигаются); часы (12.10): `watch_count`, `watch_price_usd` ($10), `watch_krw_per_usd` (курс фиксируется при первом списании), `watch_charged_krw`, `watch_charge_seq` |
 | `transactions/{id}` | ledger баланса, только добавление: `type` (`order_charge`, `order_refund`, `order_rebuy`, `order_discount`, `deposit`, `adjustment`, `shipping_charge`, `watch_charge` — доставка часов, ID `watch_charge_{отправка}_{n}`, на 1 мкс позже строки доставки), `amount_krw` со знаком, `balance_before/after`, связи. ID детерминированные → идемпотентность |
 | `profit_entries/{id}` | доп. прибыль админа (`/profit`, «Моя прибыль» в «Финансах»): `amount_krw`, `comment`; только админ, баланс клиента не меняет, входит в прибыль сводки |
-| `showcase/{id}`, `showcase_likes/tg:{id}`, `showcase_stats/tg:{id}` (сколько раз открыта каждая карточка и когда последний раз), `showcase_log/{id}` (история: каждое открытие и ♥ со временем — `viewer`, `item_id`, `kind` view/like/unlike, `at`; экран «Статистика» в режиме «Витрина») | «Витрина» (20.10, тест — только админ, `services/showcase_service.py`, `services/offers.py`): карточка по ссылке магазина — `url`, `shop`, бренд/модель, фото, `shop_price_krw`, `official_price_krw` (зачёркивается, если выше), наценка `markup_type`/`markup_value` или `client_price_override`, `sizes[]` {name, stock, available}, `status` draft/published/hidden; «Заказать» → обычный заказ `new` с `showcase_id`, `source_url`, `shop` (без списания) |
+| `showcase/{id}`, `showcase_likes/tg:{id}`, `showcase_stats/tg:{id}` (сколько раз открыта каждая карточка и когда последний раз), `showcase_log/{id}` (история: каждое открытие и ♥ со временем — `viewer`, `item_id`, `kind` view/like/unlike, `at`; экран «Статистика» в режиме «Витрина») | «Витрина» (20.10, открыта клиенту — вкладка «Витрина» в его меню; `services/showcase_service.py`, `services/offers.py`; клиент видит только `published`, без `url`/`shop`/`shop_price_krw`/наценки/`note` — `domain/views.py` `showcase_view`): карточка по ссылке магазина — `url`, `shop`, бренд/модель, фото, `shop_price_krw`, `official_price_krw` (зачёркивается, если выше), наценка `markup_type`/`markup_value` или `client_price_override`, `sizes[]` {name, stock, available}, `status` draft/published/hidden; «Заказать» → обычный заказ `new` с `showcase_id`, `source_url`, `shop` (без списания) |
 | `settings/general` | `krw_per_usd` |
 | `settings/shops` | `names[]` — пузырьки «Магазин» в форме выкупа (16.10); нет документа → список по умолчанию (`DEFAULT_SHOPS`) |
 | `settings/security` | PIN админа для Mini App: `pin_hash` (PBKDF2, соль), `pin_length`; сам код не хранится. Экран PIN — только для админа, сброс `/pin off` |
@@ -237,9 +237,11 @@ web/
 * **Вход:** каждый запрос — `Authorization: tma <initData>`; сервер проверяет HMAC по токену бота и
   свежесть (`INIT_DATA_MAX_AGE_HOURS`, 24 ч). `initDataUnsafe` не используется. Демо-вход
   (`Authorization: demo admin|client`) работает **только** в `--demo`.
-* **Клиент — только чтение.** Все `POST/PATCH/PUT` требуют админа (единственное исключение, 16.10:
+* **Клиент — только чтение.** Все `POST/PATCH/PUT` требуют админа (исключения: 16.10 —
   кнопка «Доставлено» у отправки — `POST /api/shipments/{id}/delivered`, только «Отправлен» → «Доставлен»
-  для заказов этой отправки, деньги не двигаются; в режиме «Как видит клиент» запрещено); ответы строятся только через
+  для заказов этой отправки, деньги не двигаются; 20.10 — витрина: `POST /api/showcase/{id}/view`,
+  `/like`, `/api/showcase/order` → обычный заказ `new` по цене карточки, без списания,
+  `OrderService.create_showcase_order`; в режиме «Как видит клиент» всё это запрещено); ответы строятся только через
   `domain/views.py`. Клиент никогда не видит: закупочную цену, прибыль, `internal_comment`,
   ссылки на магазины (`source_url`, `purchases[]`), данные распознавания.
 * Админ: сводка, заказы (карточки на телефоне, таблица на компьютере, фильтры, массовые действия),

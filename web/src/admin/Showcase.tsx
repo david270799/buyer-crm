@@ -1,5 +1,5 @@
 import { Check, Download, ExternalLink, Eye, Heart, LayoutGrid, Loader2, RefreshCw, Search, ShoppingBag, ShoppingCart, Trash2, Undo2, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -22,6 +22,12 @@ import { downloadFiles, overrideBack } from "../telegram";
 
 // «Витрина» (the owner, 20.10.2026). Test mode: only the admin sees it; he
 // walks the client's path himself (♥, size, cart, «Заказать») before it opens.
+
+/** The client's Mini App shows the same pages (out of test mode, 20.10.2026)
+ * without the admin's buttons; the server hides the shop fields anyway. */
+const ClientMode = createContext(false);
+export const ShowcaseClientMode = ClientMode.Provider;
+const useClientMode = () => useContext(ClientMode);
 
 /* ---------------------------------------------------------------- the cart */
 
@@ -204,6 +210,7 @@ const FILTERS: { id: "all" | "liked" | Category; label: string }[] = [
 ];
 
 export function ShowcasePage() {
+  const client = useClientMode();
   const { data, error, isLoading, refetch } = useShowcase("published");
   const cart = useCart();
   const [q, setQ] = useState("");
@@ -221,7 +228,7 @@ export function ShowcasePage() {
     <>
       <PageHead
         title="Витрина"
-        sub={<span className="sc-test">тест · видите только вы</span>}
+        sub={client ? "Товары из Кореи — выберите размер и закажите" : undefined}
         action={<CartButton count={cart.lines.length} />}
       />
       <label className="search sc-search">
@@ -242,7 +249,13 @@ export function ShowcasePage() {
       ) : !items.length ? (
         <Empty
           title={data.items.length ? "Ничего не найдено" : "На витрине пока пусто"}
-          hint={data.items.length ? undefined : "Пришлите боту ссылку на товар, проверьте её в «Одобрении» и опубликуйте."}
+          hint={
+            data.items.length
+              ? undefined
+              : client
+                ? "Скоро здесь появятся товары."
+                : "Пришлите боту ссылку на товар, проверьте её в «Одобрении» и опубликуйте."
+          }
           icon={<ShoppingBag size={22} />}
         />
       ) : (
@@ -275,6 +288,7 @@ const PREVIEW_HINT = "Это предпросмотр: заказать можн
  * the owner 20.10.2026): the same card with unsaved prices; ♥, cart and
  * «Заказать» only explain, nothing is counted or ordered. */
 function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boolean }) {
+  const client = useClientMode();
   const toast = useToast();
   const navigate = useNavigate();
   const action = useShowcaseAction(item.id);
@@ -293,7 +307,7 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
         {/* The owner (20.10.2026): a published card goes back to «Одобрение»
             to fix the price; hidden from the showcase until approved again.
             Admin-only, like the whole showcase while it is in test mode. */}
-        {!preview && item.status === "published" && (
+        {!preview && !client && item.status === "published" && (
           <button
             className="btn small sc-back-to-prep"
             disabled={action.isPending}
@@ -332,6 +346,7 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
         )}
         <div className="row between" style={{ margin: "16px 0 8px" }}>
           <span className="small muted">{colors.length ? "Цвет" : "Размер"}</span>
+          {!client && (
           <button
             className="btn small"
             disabled={action.isPending}
@@ -345,6 +360,7 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
             {action.isPending ? <Loader2 className="spin" size={14} /> : <RefreshCw size={14} />} Обновить
             {item.refreshed_at ? ` · ${ago(item.refreshed_at)}` : ""}
           </button>
+          )}
         </div>
         {colors.length > 0 && (
           <>
@@ -390,7 +406,11 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
               ? toast(PREVIEW_HINT)
               : order.mutate([{ item_id: item.id, size, color }], {
               onSuccess: (r) => {
-                toast(`Заказ ${r.items.map((o) => o.id).join(", ")} создан — в «Новых»`);
+                toast(
+                  client
+                    ? `Заказ ${r.items[0].id} отправлен байеру`
+                    : `Заказ ${r.items.map((o) => o.id).join(", ")} создан — в «Новых»`,
+                );
                 navigate(`/orders/${r.items[0].id}`);
               },
               onError: (e) => toast(errorText(e), "error"),
@@ -478,6 +498,7 @@ function ago(value: string): string {
 /* ------------------------------------------------------------------ cart */
 
 export function ShowcaseCartPage() {
+  const client = useClientMode();
   const toast = useToast();
   const navigate = useNavigate();
   const cart = useCart();
@@ -529,7 +550,9 @@ export function ShowcaseCartPage() {
               </b>
             </div>
             <div className="tiny faint" style={{ marginTop: 8 }}>
-              Деньги сейчас не списываются. Заказы появятся в «Новых» с пометкой «Из витрины».
+              {client
+                ? "Деньги сейчас не списываются — только когда байер выкупит товар."
+                : "Деньги сейчас не списываются. Заказы появятся в «Новых» с пометкой «Из витрины»."}
             </div>
           </div>
           <div className="sc-cta">
@@ -540,8 +563,8 @@ export function ShowcaseCartPage() {
                 order.mutate(valid, {
                   onSuccess: (r) => {
                     cart.clear();
-                    toast(`Создано: ${r.items.map((o) => o.id).join(", ")}`);
-                    navigate("/orders?status=new");
+                    toast(`${client ? "Заказы отправлены байеру" : "Создано"}: ${r.items.map((o) => o.id).join(", ")}`);
+                    navigate(client ? "/orders" : "/orders?status=new");
                   },
                   onError: (e) => toast(errorText(e), "error"),
                 })

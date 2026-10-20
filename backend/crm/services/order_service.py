@@ -28,7 +28,7 @@ from crm.domain.enums import (
     OrderStatus,
     Role,
 )
-from crm.domain.errors import ConflictError, NotFoundError, ValidationError
+from crm.domain.errors import ConflictError, NotFoundError, PermissionDeniedError, ValidationError
 from crm.domain.events import Event, EventType
 from crm.domain.ids import make_order_id, normalize_order_id, order_number
 from crm.domain.models import Order, status_timestamp_field
@@ -696,6 +696,19 @@ class OrderService:
 
     def create_order(self, actor: Actor, new: NewOrder) -> Order:
         require_admin(actor)
+        return self._create(actor, new)
+
+    def create_showcase_order(self, actor: Actor, new: NewOrder) -> Order:
+        """«Заказать» on the «Витрина» (open to the client since 20.10.2026): a
+        plain new order, nothing is charged; the price is the card's, set by the
+        admin (ShowcaseService checks the card)."""
+        if actor.role not in (Role.ADMIN, Role.CLIENT):
+            raise PermissionDeniedError("Заказывать могут только клиент и администратор.")
+        if not new.showcase_id or new.purchase_price is not None:
+            raise ValidationError("Заказ из витрины — только по карточке.")
+        return self._create(actor, new)
+
+    def _create(self, actor: Actor, new: NewOrder) -> Order:
         _check_price(new.purchase_price, "Закупочная цена", allow_zero=True)
         _check_price(new.client_price, "Цена для клиента", allow_zero=True)
         fields = {

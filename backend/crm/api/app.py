@@ -45,7 +45,7 @@ from crm.domain.events import Event
 from crm.domain.models import LedgerEntry, Order, ProfitEntry, ShowcaseItem
 from crm.domain.notifications import NotificationSettings
 from crm.domain.timeutil import BUSINESS_TZ
-from crm.domain.views import ledger_rows, ledger_view, order_view, shipment_view
+from crm.domain.views import ledger_rows, ledger_view, order_view, shipment_view, showcase_view
 from crm.services.common import Actor
 from crm.services.container import Services
 from crm.services.ledger import BalanceChange
@@ -326,9 +326,15 @@ def _local_midnight(value: date | None) -> datetime | None:
 
 
 def showcase_json(
-    item: ShowcaseItem, liked: set[str] | frozenset[str] = frozenset()
+    item: ShowcaseItem,
+    liked: set[str] | frozenset[str] = frozenset(),
+    role: Role = Role.ADMIN,
 ) -> dict[str, Any]:
-    """Admin view of a «Витрина» card (test mode: the client does not see it yet)."""
+    """A «Витрина» card; the client's copy goes through domain/views.py."""
+    return showcase_view(_showcase_card(item, liked), role)
+
+
+def _showcase_card(item: ShowcaseItem, liked: set[str] | frozenset[str]) -> dict[str, Any]:
     return {
         "id": item.id,
         "url": item.url,
@@ -785,19 +791,19 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         return services.showcase
 
     @app.get("/api/showcase")
-    def showcase_list(p: Admin, status: str | None = None) -> dict[str, Any]:
+    def showcase_list(p: Any_, status: str | None = None) -> dict[str, Any]:
         liked = set(_showcase().liked(p.actor))
         items = _showcase().items(p.actor, status)
-        return {"items": [showcase_json(i, liked) for i in items]}
+        return {"items": [showcase_json(i, liked, p.role) for i in items]}
 
     @app.post("/api/showcase")
     def showcase_add(body: ShowcaseAddIn, p: Admin) -> dict[str, Any]:
         return {"item": showcase_json(_showcase().add(p.actor, body.url))}
 
     @app.get("/api/showcase/{item_id}")
-    def showcase_get(item_id: str, p: Admin) -> dict[str, Any]:
+    def showcase_get(item_id: str, p: Any_) -> dict[str, Any]:
         liked = set(_showcase().liked(p.actor))
-        return {"item": showcase_json(_showcase().get(p.actor, item_id), liked)}
+        return {"item": showcase_json(_showcase().get(p.actor, item_id), liked, p.role)}
 
     @app.patch("/api/showcase/{item_id}")
     def showcase_patch(item_id: str, body: ShowcasePatchIn, p: Admin) -> dict[str, Any]:
@@ -809,8 +815,10 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         liked = set(_showcase().liked(p.actor))
         return {"item": showcase_json(_showcase().refresh(p.actor, item_id), liked)}
 
+    # The client's showcase writes (20.10.2026): opened a card, ♥, «Заказать».
+    # Nothing here moves money; the preview «Как видит клиент» writes nothing.
     @app.post("/api/showcase/{item_id}/view")
-    def showcase_view(item_id: str, p: Admin) -> dict[str, bool]:
+    def showcase_viewed(item_id: str, p: Any_) -> dict[str, bool]:
         if not p.preview:
             _showcase().viewed(p.actor, item_id)
         return {"ok": True}
@@ -840,11 +848,15 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         return {"ok": True}
 
     @app.post("/api/showcase/{item_id}/like")
-    def showcase_like(item_id: str, p: Admin) -> dict[str, Any]:
+    def showcase_like(item_id: str, p: Any_) -> dict[str, Any]:
+        if p.preview:
+            raise ApiError(403, "forbidden", "В режиме «Как видит клиент» ничего не меняется.")
         return {"liked": item_id in _showcase().toggle_like(p.actor, item_id)}
 
     @app.post("/api/showcase/order")
-    def showcase_order(body: ShowcaseOrderIn, p: Admin) -> dict[str, Any]:
+    def showcase_order(body: ShowcaseOrderIn, p: Any_) -> dict[str, Any]:
+        if p.preview:
+            raise ApiError(403, "forbidden", "В режиме «Как видит клиент» ничего не меняется.")
         lines = [CartLine(line.item_id, line.size, line.color) for line in body.items]
         orders = _showcase().order(p.actor, lines)
         return {"items": [order_json(o, p.role) for o in orders]}

@@ -15,7 +15,8 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from crm.domain.categories import CATEGORIES, category_from_text
-from crm.domain.errors import ConflictError, NotFoundError, ValidationError
+from crm.domain.enums import Role
+from crm.domain.errors import ConflictError, NotFoundError, PermissionDeniedError, ValidationError
 from crm.domain.models import ShowcaseItem
 from crm.repositories import ShowcaseRepository
 from crm.services.common import Actor, Auditor, Clock, require_admin
@@ -77,6 +78,12 @@ NAVER_BLOCKED = (
 def _is_naver(url: str) -> bool:
     host = (urlsplit(url).hostname or "").lower()
     return host == "naver.me" or host.endswith((".naver.com", ".naver.me")) or host == "naver.com"
+
+
+def _require_viewer(actor: Actor) -> None:
+    """The showcase is for the admin and the client (not the client's helpers)."""
+    if actor.role not in (Role.ADMIN, Role.CLIENT):
+        raise PermissionDeniedError("Витрина доступна только клиенту.")
 
 
 def shop_name(url: str) -> str | None:
@@ -307,6 +314,7 @@ class ShowcaseService:
     def find_official(self, actor: Actor, item_id: str) -> ShowcaseItem:
         """Look for the brand's own store price (Gemini + Google Search). Taken
         only when the page is on a domain carrying the brand's name."""
+        require_admin(actor)
         item = self.get(actor, item_id)
         price, url, note = self._official(item.brand, item.model or item.title)
         fields: dict[str, Any] = {"note": note} if note else {}
@@ -335,14 +343,17 @@ class ShowcaseService:
         return price, url, None
 
     def get(self, actor: Actor, item_id: str) -> ShowcaseItem:
-        require_admin(actor)
+        """Any card for the admin; the client sees only published ones."""
+        _require_viewer(actor)
         item = self._repo.get(self._db, item_id)
-        if item is None:
+        if item is None or (actor.role is not Role.ADMIN and item.status != "published"):
             raise NotFoundError("Карточка не найдена.")
         return item
 
     def items(self, actor: Actor, status: str | None = None) -> list[ShowcaseItem]:
-        require_admin(actor)
+        _require_viewer(actor)
+        if actor.role is not Role.ADMIN:
+            status = "published"
         items = self._repo.list_all(self._db)
         if status:
             items = [i for i in items if i.status == status]
@@ -391,6 +402,7 @@ class ShowcaseService:
 
     def refresh(self, actor: Actor, item_id: str) -> ShowcaseItem:
         """Read the shop page again: the price and the sizes in stock now."""
+        require_admin(actor)
         item = self.get(actor, item_id)
         try:
             html, _ = self._fetcher.html(item.url)
@@ -414,6 +426,7 @@ class ShowcaseService:
     def set_status(self, actor: Actor, item_id: str, status: str) -> ShowcaseItem:
         if status not in ("draft", "published", "hidden"):
             raise ValidationError("Неизвестный статус карточки.")
+        require_admin(actor)
         item = self.get(actor, item_id)
         if status == "published" and not item.client_price_krw:
             raise ConflictError("Сначала укажите цену: в магазине или для клиента.")
@@ -423,6 +436,7 @@ class ShowcaseService:
         return self._write(actor, item_id, fields, f"showcase.{status}")
 
     def delete(self, actor: Actor, item_id: str) -> None:
+        require_admin(actor)
         self.get(actor, item_id)
 
         def fn(tx: Transaction) -> None:
@@ -558,7 +572,7 @@ class ShowcaseService:
     # --- likes and orders -----------------------------------------------------
 
     def liked(self, actor: Actor) -> list[str]:
-        require_admin(actor)
+        _require_viewer(actor)
         return self._repo.liked(self._db, actor.id)
 
     def toggle_like(self, actor: Actor, item_id: str) -> list[str]:
@@ -576,7 +590,7 @@ class ShowcaseService:
 
     def order(self, actor: Actor, lines: list[CartLine]):
         """«Заказать»: one new order per cart line (no money moves)."""
-        require_admin(actor)
+        _require_viewer(actor)
         if not lines:
             raise ValidationError("Корзина пуста.")
         if len(lines) > MAX_CART:
@@ -600,7 +614,7 @@ class ShowcaseService:
             item = items[line.item_id]
             size, size_kr = order_sizes(line.size, None, from_caption=False)
             created.append(
-                self._orders.create_order(
+                self._orders.create_showcase_order(
                     actor,
                     NewOrder(
                         brand=item.brand,

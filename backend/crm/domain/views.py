@@ -151,3 +151,24 @@ def ledger_rows(entries: list[LedgerEntry], role: Role) -> list[dict[str, Any]]:
         elif entry.id not in hidden:
             rows.append(ledger_view(entry, role))
     return rows
+
+
+# «Витрина» card fields hidden from the client (open to the client since
+# 20.10.2026): where and for how much the admin buys it, and drafts' notes.
+ADMIN_ONLY_SHOWCASE_FIELDS = (
+    "url",
+    "shop",
+    "shop_price_krw",
+    "official_url",
+    "markup_type",
+    "markup_value",
+    "client_price_override",
+    "note",
+)
+
+
+def showcase_view(card: dict[str, Any], role: Role) -> dict[str, Any]:
+    """A showcase card (as built by the API) without the admin-only fields."""
+    if role is Role.ADMIN:
+        return card
+    return {k: (None if k in ADMIN_ONLY_SHOWCASE_FIELDS else v) for k, v in card.items()}
