@@ -105,6 +105,7 @@ class NewOrder:
     source_chat_id: int | None = None
     source_message_id: int | None = None
     attention_required: bool = False
+    showcase_id: str | None = None  # ordered from the «Витрина» card
 
 
 @dataclass(frozen=True)
@@ -731,6 +732,7 @@ class OrderService:
                 "cargo_code": None,
                 "shipment_id": None,
                 "source_chat_id": new.source_chat_id,
+                "showcase_id": new.showcase_id,
                 "source_message_id": new.source_message_id,
                 "attention_required": new.attention_required,
                 "created_at": now,

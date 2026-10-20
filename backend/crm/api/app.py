@@ -42,7 +42,7 @@ from crm.domain.errors import (
     ValidationError,
 )
 from crm.domain.events import Event
-from crm.domain.models import LedgerEntry, Order, ProfitEntry
+from crm.domain.models import LedgerEntry, Order, ProfitEntry, ShowcaseItem
 from crm.domain.notifications import NotificationSettings
 from crm.domain.timeutil import BUSINESS_TZ
 from crm.domain.views import ledger_rows, ledger_view, order_view, shipment_view
@@ -51,6 +51,7 @@ from crm.services.container import Services
 from crm.services.ledger import BalanceChange
 from crm.services.order_service import BulkUpdate, NewOrder, OrderQuery, OrderUpdate
 from crm.services.shipment_service import ShipmentDetails, ShipmentUpdate
+from crm.services.showcase_service import CartLine
 from crm.services.sizes import order_sizes
 from crm.storage import TransactionContentionError
 
@@ -119,6 +120,31 @@ class BuyIn(BaseModel):
 class ArrivalIn(BaseModel):
     photo_url: str = Field(max_length=500)
     thumbnail_url: str | None = Field(default=None, max_length=500)
+
+
+class ShowcaseAddIn(BaseModel):
+    url: str = Field(min_length=8, max_length=2000)
+
+
+class ShowcasePatchIn(BaseModel):
+    shop_price_krw: int | None = None
+    official_price_krw: int | None = None
+    client_price_override: int | None = None
+    markup_type: Literal["krw", "pct"] | None = None
+    markup_value: int | None = None
+    brand: str | None = Field(default=None, max_length=60)
+    model: str | None = Field(default=None, max_length=120)
+    shop: str | None = Field(default=None, max_length=60)
+    category: str | None = None
+
+
+class CartLineIn(BaseModel):
+    item_id: str = Field(max_length=80)
+    size: str | None = Field(default=None, max_length=40)
+
+
+class ShowcaseOrderIn(BaseModel):
+    items: list[CartLineIn] = Field(min_length=1, max_length=20)
 
 
 class ShopsIn(BaseModel):
@@ -296,6 +322,38 @@ def change_json(change: BalanceChange | None) -> dict[str, Any] | None:
 
 def _local_midnight(value: date | None) -> datetime | None:
     return datetime.combine(value, dtime(0, 0), tzinfo=BUSINESS_TZ) if value else None
+
+
+def showcase_json(
+    item: ShowcaseItem, liked: set[str] | frozenset[str] = frozenset()
+) -> dict[str, Any]:
+    """Admin view of a «Витрина» card (test mode: the client does not see it yet)."""
+    return {
+        "id": item.id,
+        "url": item.url,
+        "status": item.status,
+        "shop": item.shop,
+        "brand": item.brand,
+        "model": item.model,
+        "title": item.title,
+        "title_line": item.title_line,
+        "category": item.category,
+        "photo_url": item.photo_url,
+        "thumbnail_url": item.thumbnail_url,
+        "shop_price_krw": item.shop_price_krw,
+        "official_price_krw": item.official_price_krw,
+        "official_url": item.official_url,
+        "markup_type": item.markup_type,
+        "markup_value": item.markup_value,
+        "client_price_override": item.client_price_override,
+        "client_price_krw": item.client_price_krw,
+        "sizes": item.sizes,
+        "note": item.note,
+        "liked": item.id in (liked or set()),
+        "refreshed_at": item.refreshed_at,
+        "created_at": item.created_at,
+        "published_at": item.published_at,
+    }
 
 
 def _rate(value: Decimal | None) -> float | None:
@@ -711,6 +769,57 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "moved_to_warehouse": result.moved_to_warehouse,
             "error": result.error,
         }
+
+    # --- «Витрина» (test mode: admin only) ----------------------------------
+
+    def _showcase():
+        if services.showcase is None:
+            raise ConfigurationError("Витрина не подключена.")
+        return services.showcase
+
+    @app.get("/api/showcase")
+    def showcase_list(p: Admin, status: str | None = None) -> dict[str, Any]:
+        liked = set(_showcase().liked(p.actor))
+        items = _showcase().items(p.actor, status)
+        return {"items": [showcase_json(i, liked) for i in items]}
+
+    @app.post("/api/showcase")
+    def showcase_add(body: ShowcaseAddIn, p: Admin) -> dict[str, Any]:
+        return {"item": showcase_json(_showcase().add(p.actor, body.url))}
+
+    @app.get("/api/showcase/{item_id}")
+    def showcase_get(item_id: str, p: Admin) -> dict[str, Any]:
+        liked = set(_showcase().liked(p.actor))
+        return {"item": showcase_json(_showcase().get(p.actor, item_id), liked)}
+
+    @app.patch("/api/showcase/{item_id}")
+    def showcase_patch(item_id: str, body: ShowcasePatchIn, p: Admin) -> dict[str, Any]:
+        item = _showcase().update(p.actor, item_id, body.model_dump(exclude_unset=True))
+        return {"item": showcase_json(item)}
+
+    @app.post("/api/showcase/{item_id}/refresh")
+    def showcase_refresh(item_id: str, p: Admin) -> dict[str, Any]:
+        liked = set(_showcase().liked(p.actor))
+        return {"item": showcase_json(_showcase().refresh(p.actor, item_id), liked)}
+
+    @app.post("/api/showcase/{item_id}/status/{status}")
+    def showcase_status(item_id: str, status: str, p: Admin) -> dict[str, Any]:
+        return {"item": showcase_json(_showcase().set_status(p.actor, item_id, status))}
+
+    @app.post("/api/showcase/{item_id}/delete")
+    def showcase_delete(item_id: str, p: Admin) -> dict[str, bool]:
+        _showcase().delete(p.actor, item_id)
+        return {"ok": True}
+
+    @app.post("/api/showcase/{item_id}/like")
+    def showcase_like(item_id: str, p: Admin) -> dict[str, Any]:
+        return {"liked": item_id in _showcase().toggle_like(p.actor, item_id)}
+
+    @app.post("/api/showcase/order")
+    def showcase_order(body: ShowcaseOrderIn, p: Admin) -> dict[str, Any]:
+        lines = [CartLine(line.item_id, line.size) for line in body.items]
+        orders = _showcase().order(p.actor, lines)
+        return {"items": [order_json(o, p.role) for o in orders]}
 
     @app.get("/api/settings/shops")
     def get_shops(p: Admin) -> dict[str, Any]:

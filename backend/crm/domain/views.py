@@ -19,6 +19,7 @@ CLIENT_ORDER_FIELDS = (
     "size",
     "size_kr",
     "category",
+    "showcase_id",
     "client_price",
     "cargo_code",
     "shipment_id",

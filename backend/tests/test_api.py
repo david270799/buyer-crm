@@ -644,3 +644,8 @@ def _jpeg_bytes() -> bytes:
     buffer = io.BytesIO()
     Image.new("RGB", (64, 48), (200, 30, 30)).save(buffer, format="JPEG")
     return buffer.getvalue()
+
+
+def test_showcase_is_admin_only_in_test_mode(api):
+    assert api("GET", "/api/showcase", who=CLIENT_TG).status_code == 403
+    assert api("GET", "/api/showcase").json() == {"items": []}

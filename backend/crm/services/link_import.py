@@ -214,7 +214,8 @@ class PageFetcher:
     def __init__(self, client: httpx.Client | None = None):
         self._client = client or httpx.Client(timeout=TIMEOUT_SECONDS, follow_redirects=False)
 
-    def page(self, url: str) -> PageInfo:
+    def html(self, url: str) -> tuple[str, str]:
+        """The page's HTML and its final URL (after redirects)."""
         try:
             body, kind, final = _get(self._client, url, MAX_PAGE_BYTES)
         except httpx.HTTPError as exc:
@@ -223,7 +224,11 @@ class PageFetcher:
             (b"<!doctype", b"<html")
         ):
             raise LinkError("По ссылке не страница магазина.")
-        return parse_page(body.decode("utf-8", errors="replace"), final)
+        return body.decode("utf-8", errors="replace"), final
+
+    def page(self, url: str) -> PageInfo:
+        html, final = self.html(url)
+        return parse_page(html, final)
 
     def image(self, url: str) -> bytes:
         try:

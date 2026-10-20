@@ -73,6 +73,7 @@ class Order:
     source_url: str | None = None
     shop: str | None = None  # admin only: the shop it was bought in (16.10.2026)
     category: str | None = None  # crm.domain.categories code
+    showcase_id: str | None = None  # ordered from the «Витрина» (20.10.2026)
     # Admin only (services/arrival): the warehouse photo, the size check, a Korean review.
     arrival_photo_url: str | None = None
     arrival_thumbnail_url: str | None = None
@@ -132,6 +133,7 @@ class Order:
             source_url=_str_or_none(data.get("source_url")),
             shop=_str_or_none(data.get("shop")),
             category=_str_or_none(data.get("category")),
+            showcase_id=_str_or_none(data.get("showcase_id")),
             arrival_photo_url=_str_or_none(data.get("arrival_photo_url")),
             arrival_thumbnail_url=_str_or_none(data.get("arrival_thumbnail_url")),
             arrival_check=dict(data["arrival_check"])
@@ -342,4 +344,87 @@ class GeneralSettings:
             krw_per_usd=_rate_or_none(data.get("krw_per_usd")),
             updated_at=_dt(data.get("updated_at")),
             updated_by=_str_or_none(data.get("updated_by")),
+        )
+
+
+SHOWCASE_STATUSES = ("draft", "published", "hidden")
+
+
+@dataclass
+class ShowcaseItem:
+    """A product card of the «Витрина» (20.10.2026): made from a shop link,
+    checked and priced by the admin on «Подготовка», then published."""
+
+    id: str
+    url: str
+    status: str = "draft"
+    shop: str | None = None
+    brand: str | None = None
+    model: str | None = None
+    category: str | None = None
+    title: str | None = None  # the shop's own name (often Korean)
+    photo_url: str | None = None
+    thumbnail_url: str | None = None
+    shop_price_krw: int | None = None
+    official_price_krw: int | None = None  # crossed out for the client when higher
+    official_url: str | None = None
+    markup_type: str = "krw"  # "krw" (+ ₩) or "pct" (+ %)
+    markup_value: int = 0
+    client_price_override: int | None = None
+    sizes: list[Doc] = field(default_factory=list)  # {name, stock, available}
+    note: str | None = None  # what could not be read
+    refreshed_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    published_at: datetime | None = None
+
+    @property
+    def client_price_krw(self) -> int | None:
+        """Shop price + markup, rounded up to ₩ 100 — unless set by hand."""
+        if self.client_price_override:
+            return self.client_price_override
+        if not self.shop_price_krw:
+            return None
+        if self.markup_type == "pct":
+            raw = self.shop_price_krw * (100 + self.markup_value) / 100
+        else:
+            raw = self.shop_price_krw + self.markup_value
+        return int(-(-raw // 100) * 100)
+
+    @property
+    def title_line(self) -> str:
+        return " ".join(p for p in (self.brand, self.model) if p) or self.title or "Товар"
+
+    @classmethod
+    def from_doc(cls, doc_id: str, data: Doc) -> "ShowcaseItem":
+        status = data.get("status")
+        markup = data.get("markup_type")
+
+        def when(name: str) -> datetime | None:
+            value = data.get(name)
+            return value if isinstance(value, datetime) else None
+
+        return cls(
+            id=doc_id,
+            url=str(data.get("url") or ""),
+            status=status if status in SHOWCASE_STATUSES else "draft",
+            shop=_str_or_none(data.get("shop")),
+            brand=_str_or_none(data.get("brand")),
+            model=_str_or_none(data.get("model")),
+            category=_str_or_none(data.get("category")),
+            title=_str_or_none(data.get("title")),
+            photo_url=_str_or_none(data.get("photo_url")),
+            thumbnail_url=_str_or_none(data.get("thumbnail_url")),
+            shop_price_krw=_int_or_none(data.get("shop_price_krw")),
+            official_price_krw=_int_or_none(data.get("official_price_krw")),
+            official_url=_str_or_none(data.get("official_url")),
+            markup_type=markup if markup in ("krw", "pct") else "krw",
+            markup_value=_int_or_none(data.get("markup_value")) or 0,
+            client_price_override=_int_or_none(data.get("client_price_override")),
+            sizes=[dict(s) for s in data.get("sizes") or [] if isinstance(s, dict)],
+            note=_str_or_none(data.get("note")),
+            refreshed_at=when("refreshed_at"),
+            created_at=when("created_at"),
+            updated_at=when("updated_at"),
+            published_at=when("published_at"),
         )

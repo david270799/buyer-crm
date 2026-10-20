@@ -12,6 +12,7 @@ from crm.repositories import (
     ProfitRepository,
     SettingsRepository,
     ShipmentRepository,
+    ShowcaseRepository,
 )
 from crm.services.arrival import ArrivalService
 from crm.services.auth import RoleResolver
@@ -33,6 +34,7 @@ from crm.services.recognition import Recognizer
 from crm.services.security_service import SecurityService
 from crm.services.sequences import SequenceAllocator
 from crm.services.shipment_service import ShipmentService
+from crm.services.showcase_service import ShowcaseService
 from crm.storage import Database
 from crm.storage.blobs import BlobStorage
 
@@ -58,6 +60,7 @@ class Services:
     security: SecurityService | None = None
     groups: GroupService | None = None
     arrival: ArrivalService | None = None
+    showcase: ShowcaseService | None = None
 
 
 def build_services(
@@ -132,4 +135,13 @@ def build_services(
         security=SecurityService(db, clock, auditor),
         groups=GroupService(db, clock, auditor, allowed_chat_ids),
         arrival=ArrivalService(db, clock, orders_repo, order_service, auditor, recognizer),
+        showcase=ShowcaseService(
+            db,
+            clock,
+            ShowcaseRepository(),
+            order_service,
+            auditor,
+            ImageService(blob_storage, clock) if blob_storage is not None else None,
+            recognizer,
+        ),
     )
