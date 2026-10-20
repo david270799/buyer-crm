@@ -284,3 +284,20 @@ def test_naver_blocking_programs_gets_a_plain_message(showcase, admin):
         showcase.add(admin, "https://naver.me/5T0YL3Hn")
     with pytest.raises(ValidationError, match="Проверьте ссылку"):
         showcase.add(admin, URL)  # other shops: the usual message
+
+
+def test_page_with_colour_and_size_rows_splits_them():
+    # The owner, 20.10.2026: «블랙A 85(XS)» showed as one size.
+    import json
+
+    rows = [
+        {"uitm1AttrNm": "블랙A", "uitm2AttrNm": "85(XS)", "sumUitmAttrNmStockCnt": 14},
+        {"uitm1AttrNm": "그레이시카키B", "uitm2AttrNm": "90(S)", "sumUitmAttrNmStockCnt": 0},
+    ]
+    data = {"props": {"pageProps": {"itemPtc": {"sellPrc": 129800, "stockList": rows}}}}
+    html = f'<script id="__NEXT_DATA__" type="application/json">{json.dumps(data)}</script>'
+    offer = parse_offer(html)
+    assert [(s.color, s.name, s.stock, s.available) for s in offer.sizes] == [
+        ("블랙A", "85(XS)", 14, True),
+        ("그레이시카키B", "90(S)", 0, False),
+    ]

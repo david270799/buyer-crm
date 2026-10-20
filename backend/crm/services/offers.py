@@ -92,10 +92,12 @@ def _hmall(html: str) -> Offer | None:
             continue
         stock = row.get("sumUitmAttrNmStockCnt")
         stock = stock if isinstance(stock, int) and not isinstance(stock, bool) else None
-        name = _clean_size(row["uitm1AttrNm"])
-        if row.get("uitm2AttrNm"):
-            name = f"{name} {_clean_size(row['uitm2AttrNm'])}"
-        offer.sizes.append(SizeStock(name, stock, (stock or 0) > 0))
+        first = " ".join(str(row["uitm1AttrNm"]).split())
+        if row.get("uitm2AttrNm"):  # colour, then size (20.10.2026: «블랙A», «85(XS)»)
+            name, color = _clean_size(row["uitm2AttrNm"]), first
+        else:
+            name, color = _clean_size(first), None
+        offer.sizes.append(SizeStock(name, stock, (stock or 0) > 0, color))
     return offer if offer.price_krw or offer.sizes else None
 
 
