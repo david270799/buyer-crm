@@ -1,4 +1,4 @@
-import { Check, Download, ExternalLink, Eye, Heart, LayoutGrid, Loader2, RefreshCw, Search, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react";
+import { Check, Download, ExternalLink, Eye, Heart, LayoutGrid, Loader2, RefreshCw, Search, ShoppingBag, ShoppingCart, Trash2, Undo2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -290,6 +290,26 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
   return (
     <>
       <div className="sc-detail">
+        {/* The owner (20.10.2026): a published card goes back to «Одобрение»
+            to fix the price; hidden from the showcase until approved again.
+            Admin-only, like the whole showcase while it is in test mode. */}
+        {!preview && item.status === "published" && (
+          <button
+            className="btn small sc-back-to-prep"
+            disabled={action.isPending}
+            onClick={() =>
+              action.mutate("status/draft", {
+                onSuccess: () => {
+                  toast("Карточка снята с витрины и вернулась на одобрение");
+                  navigate(`/prep/${item.id}`);
+                },
+                onError: (e) => toast(errorText(e), "error"),
+              })
+            }
+          >
+            <Undo2 size={15} /> Вернуть на одобрение
+          </button>
+        )}
         <ShowcasePhotos item={item} preview={preview} />
         <div className="sc-brand" style={{ marginTop: 14 }}>
           {item.brand}
