@@ -1,4 +1,4 @@
-import { Check, Download, Eye, Heart, LayoutGrid, Loader2, RefreshCw, Search, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react";
+import { Check, Download, ExternalLink, Eye, Heart, LayoutGrid, Loader2, RefreshCw, Search, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -694,6 +694,10 @@ function PrepEditor({
         sub={<span className={`badge ${item.status === "published" ? "s-delivered" : "warn"}`}>{STATUS_LABEL[item.status]}</span>}
       />
       {item.note && <div className="banner info small" style={{ marginBottom: 12 }}>⚠️ Не удалось: {item.note}</div>}
+      {/* The owner (20.10.2026): check the price on the shop page itself. */}
+      <a className="btn sc-shop-link" href={item.url} target="_blank" rel="noopener noreferrer">
+        <ExternalLink size={16} /> Открыть в магазине{item.shop ? ` · ${item.shop}` : ""}
+      </a>
       <div className="card pad stack">
         <div className="form-grid two">
           <Field label="Бренд">

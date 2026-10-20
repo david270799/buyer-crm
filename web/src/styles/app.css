@@ -2745,6 +2745,7 @@ table.orders .r {
 .badge.sc-bad { background: var(--negative); color: #fff; }
 .badge.sc-from { background: #2b1f4d; color: #c9b8ff; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
 :root[data-theme="light"] .badge.sc-from { background: #ece6ff; color: #5b3fd6; }
+.btn.sc-shop-link { width: 100%; margin-bottom: 12px; text-decoration: none; }
 .btn.sc-download { width: 100%; min-height: 50px; margin-top: 14px; font-size: 16px; font-weight: 800; background: var(--text); color: var(--bg); border: 0; }
 .sc-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .sc-stats button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; text-align: center; cursor: pointer; transition: background 0.2s ease, color 0.2s ease; }
