@@ -158,6 +158,28 @@ class ShowcaseService:
                 offer.sizes = pairs
         return offer
 
+    def _translate(self, rows: list[dict[str, Any]], known: dict[str, str]) -> None:
+        """Korean colour / size names get an English name in front, the shop's
+        own word kept in brackets: «Black A (블랙A)» (the owner, 20.10.2026).
+        `known`: names already translated on this card (no new Gemini call)."""
+        korean = sorted(
+            {r[k] for r in rows for k in ("color", "name") if has_hangul(r.get(k))} - set(known)
+        )
+        found = dict(known)
+        can = self._recognizer is not None and hasattr(self._recognizer, "translate_labels")
+        if korean and can:
+            try:
+                for ko, en in zip(korean, self._recognizer.translate_labels(korean), strict=True):
+                    if en:
+                        found[ko] = f"{en} ({ko})"
+            except RecognitionError as exc:
+                logger.info("Option names not translated: %s", exc)
+        for row in rows:
+            for key in ("color", "name"):
+                if row.get(key) in found:
+                    row[f"{key}_ko"] = row[key]
+                    row[key] = found[row[key]]
+
     def _read(self, url: str) -> tuple[dict[str, Any], list[str]]:
         """Fields from the shop page and what could not be read."""
         with self._reading:
@@ -178,6 +200,7 @@ class ShowcaseService:
             "shop_price_krw": offer.price_krw,
             "sizes": _sizes(offer),
         }
+        self._translate(fields["sizes"], {})
         if not offer.price_krw:
             notes.append("цена не найдена")
         if not offer.sizes:
@@ -376,7 +399,14 @@ class ShowcaseService:
         offer = self._offer(html)
         fields: dict[str, Any] = {"refreshed_at": self._clock.now()}
         if offer.sizes:
+            known = {
+                r[f"{k}_ko"]: r[k]
+                for r in item.sizes
+                for k in ("color", "name")
+                if r.get(f"{k}_ko")
+            }
             fields["sizes"] = _sizes(offer)
+            self._translate(fields["sizes"], known)
         if offer.price_krw:
             fields["shop_price_krw"] = offer.price_krw
         return self._write(actor, item_id, fields, "showcase.refresh")

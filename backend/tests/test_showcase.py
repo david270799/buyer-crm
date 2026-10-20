@@ -51,6 +51,13 @@ class FakeFetcher:
 
 class FakeGemini:
     engine = "fake"
+    words = {"블랙A": "Black A", "그레이시카키B": "Grayish Khaki B"}
+    translated = 0  # how many names were sent
+
+    def translate_labels(self, labels):
+        self.translated += len(labels)
+        return [self.words.get(label) for label in labels]
+
     official = {"price_krw": 79_000, "url": "https://www.adidas.co.kr/kf8282.html"}
 
     def find_official_price(self, product):
@@ -301,3 +308,29 @@ def test_page_with_colour_and_size_rows_splits_them():
         ("블랙A", "85(XS)", 14, True),
         ("그레이시카키B", "90(S)", 0, False),
     ]
+
+
+def test_korean_colour_names_are_translated_once(showcase, admin):
+    import json
+
+    rows = [
+        {"uitm1AttrNm": "블랙A", "uitm2AttrNm": "85(XS)", "sumUitmAttrNmStockCnt": 14},
+        {"uitm1AttrNm": "그레이시카키B", "uitm2AttrNm": "90(S)", "sumUitmAttrNmStockCnt": 3},
+        {"uitm1AttrNm": "모름", "uitm2AttrNm": "95(M)", "sumUitmAttrNmStockCnt": 1},
+    ]
+    data = {"props": {"pageProps": {"itemPtc": {"sellPrc": 129800, "stockList": rows}}}}
+    showcase.fetcher.page_html = (
+        f'<script id="__NEXT_DATA__" type="application/json">{json.dumps(data)}</script>'
+    )
+    gemini = showcase._recognizer
+    item = showcase.add(admin, URL)
+    assert [s["color"] for s in item.sizes] == [
+        "Black A (블랙A)",
+        "Grayish Khaki B (그레이시카키B)",
+        "모름",  # Gemini unsure: the shop's word stays
+    ]
+    assert item.sizes[0]["color_ko"] == "블랙A" and "name_ko" not in item.sizes[0]
+    sent = gemini.translated
+    again = showcase.refresh(admin, item.id)
+    assert again.sizes[0]["color"] == "Black A (블랙A)"
+    assert gemini.translated == sent + 1  # only the untranslated «모름» is asked again

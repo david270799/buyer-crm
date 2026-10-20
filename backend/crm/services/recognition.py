@@ -242,6 +242,20 @@ LISTING_SCHEMA: dict[str, Any] = {
     "required": ["confidence"],
 }
 
+TRANSLATE_PROMPT = """\
+You get option names from a Korean shop (colours and sizes of one product). Translate each \
+into short English, the way an international shop would write it. Keep Latin letters, digits, \
+size marks and codes exactly as they are: "블랙A" → "Black A", \
+"그레이시카키B" → "Grayish Khaki B", "아이보리" → "Ivory", "프리" → "Free". \
+Return the translations in the same order, one per input; \
+when unsure, give an empty string for that item (never a guess)."""
+
+TRANSLATE_SCHEMA: dict[str, Any] = {
+    "type": "OBJECT",
+    "properties": {"labels": {"type": "ARRAY", "items": {"type": "STRING"}}},
+    "required": ["labels"],
+}
+
 ARRIVAL_PROMPT = """\
 A buyer photographed an item that arrived at the warehouse: usually the box label, the size \
 tag or the item itself. You get the ordered item (brand, model) and the ordered size; the size \
@@ -473,6 +487,29 @@ class GeminiRecognizer:
             "note": _text(answer.get("note"), "note"),
             "review_ko": _text(answer.get("review_ko"), "review"),
         }
+
+    def translate_labels(self, labels: list[str]) -> list[str | None]:
+        """English names of Korean colour / size options («Витрина», 20.10.2026);
+        None where Gemini gave nothing usable."""
+        config = self._generation_config()
+        config["responseSchema"] = TRANSLATE_SCHEMA
+        body = {
+            "systemInstruction": {"parts": [{"text": TRANSLATE_PROMPT}]},
+            "contents": [
+                {"role": "user", "parts": [{"text": json.dumps(labels, ensure_ascii=False)}]}
+            ],
+            "generationConfig": config,
+        }
+        answer = _answer_json(self._call(body))
+        got = answer.get("labels") if isinstance(answer, dict) else None
+        if not isinstance(got, list) or len(got) != len(labels):
+            raise RecognitionError("Gemini вернул не тот список переводов")
+        result: list[str | None] = []
+        for value in got:
+            text = " ".join(value.split()) if isinstance(value, str) else ""
+            ok = text and len(text) <= 60 and not re.search(r"[\uac00-\ud7a3\u3131-\u318e]", text)
+            result.append(text if ok else None)
+        return result
 
     def find_official_price(self, product: str) -> dict[str, Any]:
         """The brand's own store price via Google Search grounding («Витрина»).
