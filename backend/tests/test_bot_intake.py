@@ -690,5 +690,10 @@ async def test_admin_link_in_private_becomes_a_showcase_draft(db, env):
     assert item[1]["url"] == "https://shop.example.kr/item/9" and item[1]["status"] == "draft"
     [edited] = [m for m in e["session"].sent if isinstance(m, EditMessageText)]
     assert "Черновик витрины" in edited.text
+    # No price on that page: the bot sends the page as a file by itself.
+    from aiogram.methods import SendDocument
+
+    [page] = [m for m in e["session"].sent if isinstance(m, SendDocument)]
+    assert "пока прочитать не может" in page.caption
     await e["text"]("https://shop.example.kr/item/9", user_id=CLIENT_TG, chat_id=CLIENT_TG)
     assert len(db.query("showcase")) == 1  # the client cannot add cards
