@@ -639,3 +639,26 @@ async def test_album_without_number_asks_once(db, env):
     assert len([t for t in e["session"].to(ADMIN_TG) if "Какой это заказ" in t]) == 1
     await e["press"](_last_markup(e).inline_keyboard[0][0].callback_data)
     assert len(db.get("orders", "N5")["arrival_photos"]) == 2
+
+
+async def test_admin_link_in_private_becomes_a_showcase_draft(db, env):
+    from aiogram.methods import EditMessageText
+
+    e = env(FakeGemini())
+
+    class Fetcher:
+        def html(self, url):
+            return "<html><head><title>Item</title></head></html>", url
+
+        def image(self, url):
+            return _jpeg()
+
+    e["services"].showcase._fetcher = Fetcher()
+    await e["text"]("вот https://shop.example.kr/item/9", user_id=ADMIN_TG, chat_id=ADMIN_TG)
+
+    [item] = db.query("showcase")
+    assert item[1]["url"] == "https://shop.example.kr/item/9" and item[1]["status"] == "draft"
+    [edited] = [m for m in e["session"].sent if isinstance(m, EditMessageText)]
+    assert "Черновик витрины" in edited.text
+    await e["text"]("https://shop.example.kr/item/9", user_id=CLIENT_TG, chat_id=CLIENT_TG)
+    assert len(db.query("showcase")) == 1  # the client cannot add cards
