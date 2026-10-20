@@ -14,6 +14,7 @@ import itertools
 import logging
 import re
 import time
+from dataclasses import dataclass, field
 
 from aiogram import Bot, F, Router
 from aiogram.enums import ChatType
@@ -39,6 +40,7 @@ PICK = "arr:"
 PHOTO_PICK = "arp:"  # «this photo is order N5»: arp:{token}:{order}
 PHOTO_NEW = "arn:"  # «this photo is a new order»
 WAIT_SECONDS = 15 * 60
+SERIES_SECONDS = 30
 # «N5», «n 5», «#5», «№5», Cyrillic «Н5»: a bare «42» stays a size of a new order.
 _ORDER_CAPTION = re.compile(r"^\s*[NnНн#№]\s*(\d{1,6})\s*$")
 
@@ -81,8 +83,12 @@ def result_text(result: ArrivalResult) -> str:
 def build(services: Services, settings: Settings) -> Router:
     router = Router(name="arrival")
     waiting_for: dict[int, tuple[str, float]] = {}  # admin id → (order id, since)
-    # A photo the admin sent without saying which order: token → (message, since).
-    asked: dict[str, tuple[Message, float]] = {}
+    # Photos the admin sent without saying which order: token → (messages, last photo at).
+    asked: dict[str, tuple[list[Message], float]] = {}
+    asked_by: dict[int, str] = {}  # admin id → their open question
+    # Photos within SERIES_SECONDS of the last one belong to the same order: the
+    # first is checked by Gemini, the rest only go to the card (owner, 20.10.2026).
+    series: dict[int, _Series] = {}
     tokens = itertools.count(1)
     new_orders = PhotoIntake(services, settings)
 
@@ -130,7 +136,9 @@ def build(services: Services, settings: Settings) -> Router:
             if now - since > WAIT_SECONDS:
                 del asked[key]
         token = str(next(tokens))
-        asked[token] = (message, now)
+        asked[token] = ([message], now)
+        if message.from_user is not None:
+            asked_by[message.from_user.id] = token
         orders = (
             await asyncio.to_thread(services.arrival.waiting, actor) if services.arrival else []
         )
@@ -145,20 +153,49 @@ def build(services: Services, settings: Settings) -> Router:
             reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
         )
 
-    async def check(bot: Bot, message: Message, actor: Actor, order_id: str) -> None:
+    async def store(bot: Bot, message: Message):
+        buffer = await bot.download(_file_id(message))
+        main, thumb, size = await asyncio.to_thread(process_image, buffer.read() if buffer else b"")
+        photo = None
+        if services.images is not None:
+            photo = await asyncio.to_thread(
+                services.images.store_processed, main, thumb, size, folder=ORDER_PHOTOS_FOLDER
+            )
+        return main, photo
+
+    async def add_extras(bot: Bot, actor: Actor, run: _Series, messages: list[Message]) -> int:
+        """Store more photos of the series and put them on the card; → how many in total."""
+        photos = []
+        for message in messages:
+            try:
+                _, photo = await store(bot, message)
+            except Exception:  # noqa: BLE001 - one bad photo must not lose the others
+                logger.warning("Could not store an extra warehouse photo", exc_info=True)
+                continue
+            if photo is not None:
+                photos.append({"photo_url": photo.photo_url, "thumbnail_url": photo.thumbnail_url})
+        if not photos or services.arrival is None:
+            return 0
+        order = await asyncio.to_thread(services.arrival.add_photos, actor, run.order_id, photos)
+        return len(order.arrival_photos)
+
+    def start_series(user_id: int, order_id: str) -> _Series:
+        run = _Series(order_id=order_id, last=time.monotonic())
+        series[user_id] = run
+        return run
+
+    async def check(
+        bot: Bot,
+        message: Message,
+        actor: Actor,
+        order_id: str,
+        run: _Series,
+    ) -> None:
         if services.arrival is None:
             return
         wait = await message.answer(f"Проверяю {fmt.e(order_id)}…")
         try:
-            buffer = await bot.download(_file_id(message))
-            main, thumb, size = await asyncio.to_thread(
-                process_image, buffer.read() if buffer else b""
-            )
-            photo = None
-            if services.images is not None:
-                photo = await asyncio.to_thread(
-                    services.images.store_processed, main, thumb, size, folder=ORDER_PHOTOS_FOLDER
-                )
+            main, photo = await store(bot, message)
             result = await asyncio.to_thread(
                 services.arrival.record,
                 actor,
@@ -168,12 +205,19 @@ def build(services: Services, settings: Settings) -> Router:
                 photo.thumbnail_url if photo else None,
             )
         except CRMError as exc:
+            run.failed = True
             await bot.edit_message_text(
                 fmt.e(exc.user_message), chat_id=wait.chat.id, message_id=wait.message_id
             )
             return
+        run.done = True  # photos arriving from now on go straight to the card
+        waiting, run.pending = run.pending, []
+        extra = await add_extras(bot, actor, run, waiting) if waiting else 0
+        text = result_text(result)
+        if extra:
+            text += f"\n📷 Ещё фото в карточке: {extra}"
         await bot.edit_message_text(
-            result_text(result),
+            text,
             chat_id=wait.chat.id,
             message_id=wait.message_id,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[[ARRIVAL_BUTTON]]),
@@ -209,7 +253,10 @@ def build(services: Services, settings: Settings) -> Router:
         if found is None:
             await query.message.answer("Фото устарело — пришлите его ещё раз.")
             return
-        await check(bot, found[0], actor, normalize_order_id(order_id))
+        first, *rest = found[0]
+        run = start_series(query.from_user.id, normalize_order_id(order_id))
+        run.pending.extend(rest)
+        await check(bot, first, actor, run.order_id, run)
 
     async def on_photo_new(query: CallbackQuery, bot: Bot, actor: Actor | None) -> None:
         found = asked.pop((query.data or "")[len(PHOTO_NEW) :], None)
@@ -221,17 +268,39 @@ def build(services: Services, settings: Settings) -> Router:
         if found is None:
             await query.message.answer("Фото устарело — пришлите его ещё раз.")
             return
-        await new_orders.handle(bot, found[0], actor)
+        for message in found[0]:  # each photo of the series is its own new order
+            await new_orders.handle(bot, message, actor)
 
     async def on_photo(message: Message, bot: Bot, actor: Actor | None) -> None:
         if actor is None or message.from_user is None:
             return
-        order_id = caption_order(message.caption) or pending(message.from_user.id)
+        user_id, now = message.from_user.id, time.monotonic()
+        order_id = caption_order(message.caption)
+        if order_id is None:
+            run = series.get(user_id)
+            if run is not None and not run.failed and now - run.last < SERIES_SECONDS:
+                run.last = now  # one more photo of the same parcel
+                if not run.done:
+                    run.pending.append(message)  # added right after the check
+                    return
+                total = await add_extras(bot, actor, run, [message])
+                if total:
+                    await message.reply(
+                        f"📷 Фото добавлено к {fmt.e(run.order_id)} (ещё фото: {total})"
+                    )
+                return
+            token = asked_by.get(user_id)
+            open_question = asked.get(token) if token else None
+            if open_question and now - open_question[1] < SERIES_SECONDS:
+                open_question[0].append(message)  # the same question covers it
+                asked[token] = (open_question[0], now)
+                return
+            order_id = pending(user_id)
         if order_id is None:
             await ask_which(message, actor)
             return
-        waiting_for.pop(message.from_user.id, None)
-        await check(bot, message, actor, order_id)
+        waiting_for.pop(user_id, None)
+        await check(bot, message, actor, order_id, start_series(user_id, order_id))
 
     router.message.register(on_command, Command("arrived"), HasRole(Role.ADMIN))
     router.callback_query.register(on_list, F.data == LIST, HasRole(Role.ADMIN))
@@ -242,6 +311,15 @@ def build(services: Services, settings: Settings) -> Router:
     router.callback_query.register(on_pick, F.data.startswith(PICK), HasRole(Role.ADMIN))
     router.message.register(on_photo, _ArrivalFilter(is_admin_photo))
     return router
+
+
+@dataclass
+class _Series:
+    order_id: str
+    last: float
+    done: bool = False  # the first photo is checked and saved
+    failed: bool = False
+    pending: list[Message] = field(default_factory=list)
 
 
 class _ArrivalFilter(Filter):

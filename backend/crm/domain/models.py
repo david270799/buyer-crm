@@ -77,6 +77,7 @@ class Order:
     arrival_photo_url: str | None = None
     arrival_thumbnail_url: str | None = None
     arrival_check: Doc | None = None
+    arrival_photos: list[Doc] = field(default_factory=list)  # more warehouse photos
     review_ko: str | None = None
     source_chat_id: int | None = None
     source_message_id: int | None = None
@@ -137,6 +138,9 @@ class Order:
             if isinstance(data.get("arrival_check"), dict)
             else None,
             review_ko=_str_or_none(data.get("review_ko")),
+            arrival_photos=[
+                dict(p) for p in data.get("arrival_photos") or [] if isinstance(p, dict)
+            ],
             source_chat_id=_int_or_none(data.get("source_chat_id")),
             source_message_id=_int_or_none(data.get("source_message_id")),
             client_comment=_str_or_none(data.get("client_comment")),

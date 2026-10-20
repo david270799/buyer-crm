@@ -120,6 +120,11 @@ class ArrivalService:
         self._auditor = auditor
         self._recognizer = recognizer
 
+    def add_photos(self, actor: Actor, order_id: str, photos: list[dict[str, str | None]]) -> Order:
+        return add_photos(
+            self._db, self._clock, self._orders, self._auditor, actor, order_id, photos
+        )
+
     def _recent_reviews(self, limit: int = 8) -> list[str]:
         """The latest reviews: Gemini is told not to repeat their wording."""
         orders = [o for o in self._orders.list_all(self._db) if o.review_ko]
@@ -199,6 +204,7 @@ class ArrivalService:
             fields: dict[str, Any] = {
                 "arrival_photo_url": photo_url,
                 "arrival_thumbnail_url": thumbnail_url,
+                "arrival_photos": [],  # a new first photo starts a new set (add_photos)
                 "arrival_check": check,
                 "updated_at": now,
                 "updated_by": actor.id,
@@ -228,3 +234,46 @@ class ArrivalService:
             moved_to_warehouse=moved,
             error=error,
         )
+
+
+MAX_EXTRA_PHOTOS = 10
+
+
+def add_photos(
+    db: Database,
+    clock: Clock,
+    orders: OrderRepository,
+    auditor: Auditor,
+    actor: Actor,
+    order_id: str,
+    photos: list[dict[str, str | None]],
+) -> Order:
+    """More warehouse photos of an order (the owner, 20.10.2026: 2–3 photos sent
+    within 30 s all go to the card; only the first one is checked by Gemini)."""
+    require_admin(actor)
+    order_id = normalize_order_id(order_id)
+
+    def fn(tx: Transaction) -> None:
+        order = orders.get(tx, order_id)
+        if order is None:
+            raise NotFoundError(f"Заказ {order_id} не найден.")
+        kept = [*order.arrival_photos, *photos][-MAX_EXTRA_PHOTOS:]
+        now = clock.now()
+        orders.update(
+            tx, order_id, {"arrival_photos": kept, "updated_at": now, "updated_by": actor.id}
+        )
+        auditor.record(
+            tx,
+            actor,
+            now,
+            action="order.arrival_photos",
+            entity_type="order",
+            entity_id=order_id,
+            before={"count": len(order.arrival_photos)},
+            after={"count": len(kept)},
+        )
+
+    db.run_transaction(fn)
+    found = orders.get(db, order_id)
+    assert found is not None
+    return found

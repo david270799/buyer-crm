@@ -560,3 +560,43 @@ def _last_markup(e):
 
 def _new_order_button(e) -> str:
     return _last_markup(e).inline_keyboard[-1][0].callback_data
+
+
+async def test_photo_series_first_is_checked_rest_go_to_the_card(db, env):
+    from crm.domain.enums import Role
+    from crm.services.common import Actor
+
+    gemini = ArrivalGemini()
+    calls = []
+    original = gemini.check_arrival
+    gemini.check_arrival = lambda image, **kw: calls.append(1) or original(image, **kw)
+    e = env(gemini)
+    seed_order(db, "N5", size="270")
+    e["services"].orders.buy(Actor.telegram(ADMIN_TG, Role.ADMIN), "5", 100, 200)
+
+    await e["photo"]("N5", user_id=ADMIN_TG, chat_id=ADMIN_TG)
+    await e["photo"](None, user_id=ADMIN_TG, chat_id=ADMIN_TG)
+    await e["photo"](None, user_id=ADMIN_TG, chat_id=ADMIN_TG)
+
+    order = db.get("orders", "N5")
+    assert len(calls) == 1  # only the first photo goes to Gemini
+    assert order["arrival_photo_url"] and len(order["arrival_photos"]) == 2
+    assert db.list_ids("orders") == ["N5"]
+
+
+async def test_photo_series_without_number_asks_once(db, env):
+    from crm.domain.enums import Role
+    from crm.services.common import Actor
+
+    e = env(ArrivalGemini())
+    seed_order(db, "N5", size="270")
+    e["services"].orders.buy(Actor.telegram(ADMIN_TG, Role.ADMIN), "5", 100, 200)
+
+    for _ in range(3):
+        await e["photo"](None, user_id=ADMIN_TG, chat_id=ADMIN_TG)
+    questions = [t for t in e["session"].to(ADMIN_TG) if "Какой это заказ" in t]
+    assert len(questions) == 1
+
+    await e["press"](_last_markup(e).inline_keyboard[0][0].callback_data)
+    order = db.get("orders", "N5")
+    assert order["status"] == "warehouse" and len(order["arrival_photos"]) == 2

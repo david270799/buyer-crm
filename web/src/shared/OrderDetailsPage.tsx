@@ -40,6 +40,11 @@ function OrderPhoto({ order }: { order: Order }) {
   const slides = [
     main ? { photo_url: main, thumbnail_url: order.thumbnail_url ?? null, label: "Фото заказа" } : null,
     arrival ? { photo_url: arrival, thumbnail_url: order.arrival_thumbnail_url ?? null, label: "Пришло на склад" } : null,
+    ...(order.arrival_photos ?? []).map((p) => ({
+      photo_url: p.photo_url,
+      thumbnail_url: p.thumbnail_url ?? null,
+      label: "Пришло на склад",
+    })),
   ].filter((s): s is { photo_url: string; thumbnail_url: string | null; label: string } => s !== null);
   if (slides.length < 2) {
     return (
@@ -63,7 +68,7 @@ function OrderPhoto({ order }: { order: Order }) {
         }}
       >
         {slides.map((slide, i) => (
-          <button key={slide.photo_url} type="button" className="photo-button" onClick={() => setOpen(i)} aria-label={slide.label}>
+          <button key={`${i}-${slide.photo_url}`} type="button" className="photo-button" onClick={() => setOpen(i)} aria-label={slide.label}>
             <Photo src={slide.photo_url} alt={slide.label} className="large contain" />
             <span className="photo-swipe-label">{slide.label}</span>
           </button>
@@ -71,7 +76,7 @@ function OrderPhoto({ order }: { order: Order }) {
       </div>
       <div className="photo-dots" aria-hidden>
         {slides.map((slide, i) => (
-          <i key={slide.photo_url} className={i === index ? "active" : ""} />
+          <i key={`${i}-${slide.photo_url}`} className={i === index ? "active" : ""} />
         ))}
       </div>
       {open !== null && <Lightbox photos={slides} start={open} onClose={() => setOpen(null)} />}

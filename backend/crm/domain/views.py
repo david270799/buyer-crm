@@ -29,6 +29,7 @@ CLIENT_ORDER_FIELDS = (
     # The warehouse photo (16.10.2026: the client sees it too, swiped after the main photo).
     "arrival_photo_url",
     "arrival_thumbnail_url",
+    "arrival_photos",
 )
 
 ADMIN_ONLY_ORDER_FIELDS = (

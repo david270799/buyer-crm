@@ -27,6 +27,8 @@ export interface Order {
   stuck_days?: number | null;
   arrival_photo_url?: string | null;
   arrival_thumbnail_url?: string | null;
+  /** More warehouse photos sent in the same series (only the first is checked). */
+  arrival_photos?: { photo_url: string; thumbnail_url: string | null }[];
   arrival_check?: ArrivalCheck | null;
   /** Short Korean review for the shop's review points (Gemini). */
   review_ko?: string | null;

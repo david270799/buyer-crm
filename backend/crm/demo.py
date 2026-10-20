@@ -191,6 +191,9 @@ def create_demo_database(
                     "at": clock.now(),
                 },
                 "review_ko": "디자인이 고급스럽고 마감이 깔끔해요. 배송도 빨라서 만족스럽습니다.",
+                "arrival_photos": [
+                    {"photo_url": n6.get("photo_url"), "thumbnail_url": n6.get("thumbnail_url")}
+                ],
             },
         )
     )
