@@ -18,7 +18,7 @@ from crm.domain.errors import ConflictError, NotFoundError, ValidationError
 from crm.domain.models import ShowcaseItem
 from crm.repositories import ShowcaseRepository
 from crm.services.common import Actor, Auditor, Clock, require_admin
-from crm.services.image_service import ImageService, process_image
+from crm.services.image_service import ImageService, process_image, process_showcase_image
 from crm.services.link_import import (
     _TRANSLATE_AGAIN,
     LinkError,
@@ -129,11 +129,12 @@ class ShowcaseService:
         image_url = better_image_url(page.image_url)
         if image_url:
             try:
-                main, thumb, size = process_image(self._fetcher.image(image_url))
-                image = main
+                original = self._fetcher.image(image_url)
+                image, _, _ = process_image(original)  # small WebP for Gemini
                 if self._images is not None:
+                    main, thumb, size = process_showcase_image(original)
                     stored = self._images.store_processed(
-                        main, thumb, size, folder=SHOWCASE_PHOTOS_FOLDER
+                        main, thumb, size, folder=SHOWCASE_PHOTOS_FOLDER, jpeg=True
                     )
                     fields["photo_url"] = stored.photo_url
                     fields["thumbnail_url"] = stored.thumbnail_url
@@ -365,6 +366,69 @@ class ShowcaseService:
 
         self._db.run_transaction(fn)
         return self.get(actor, item_id)
+
+    # --- interest («Статистика» in «Настройки», the owner, 20.10.2026) -------------
+
+    def viewed(self, actor: Actor, item_id: str) -> None:
+        """The viewer opened a card: counted per card for the statistics."""
+        self.get(actor, item_id)
+
+        def fn(tx: Transaction) -> None:
+            stats = self._repo.get_stats(tx, actor.id)
+            views = dict(stats.get("views") or {})
+            views[item_id] = int(views.get(item_id, 0)) + 1
+            now = self._clock.now()
+            self._repo.set_stats(
+                tx,
+                actor.id,
+                {"views": views, "last_at": now, "first_at": stats.get("first_at") or now},
+            )
+
+        self._db.run_transaction(fn)
+
+    def statistics(self, actor: Actor) -> list[dict[str, Any]]:
+        """Per viewer: cards opened, opens, likes, orders, the most opened cards."""
+        require_admin(actor)
+        items = {i.id: i for i in self._repo.list_all(self._db)}
+        likes = {viewer: data.get("ids") or [] for viewer, data in self._repo.all_likes(self._db)}
+        stats = dict(self._repo.all_stats(self._db))
+        orders: dict[str, int] = {}
+        for order in self._orders.showcase_orders(actor):
+            orders[order.created_by or ""] = orders.get(order.created_by or "", 0) + 1
+        result = []
+        for viewer in sorted(set(stats) | set(likes)):
+            views = {k: int(v) for k, v in (stats.get(viewer, {}).get("views") or {}).items()}
+            liked = [i for i in likes.get(viewer, []) if i in items]
+            top = sorted(views.items(), key=lambda kv: kv[1], reverse=True)[:5]
+            result.append(
+                {
+                    "viewer": viewer,
+                    "cards_opened": len(views),
+                    "opens": sum(views.values()),
+                    "likes": len(liked),
+                    "orders": orders.get(viewer, 0),
+                    "last_at": stats.get(viewer, {}).get("last_at"),
+                    "top": [
+                        {
+                            "id": item_id,
+                            "title": items[item_id].title_line if item_id in items else "удалена",
+                            "opens": count,
+                            "liked": item_id in liked,
+                        }
+                        for item_id, count in top
+                    ],
+                    "liked": [
+                        {
+                            "id": i,
+                            "title": items[i].title_line,
+                            "opens": views.get(i, 0),
+                            "liked": True,
+                        }
+                        for i in liked[:10]
+                    ],
+                }
+            )
+        return result
 
     # --- likes and orders -----------------------------------------------------
 

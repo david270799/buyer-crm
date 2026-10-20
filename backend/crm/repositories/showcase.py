@@ -7,6 +7,7 @@ class ShowcaseRepository:
 
     collection = "showcase"
     likes = "showcase_likes"
+    stats = "showcase_stats"  # per viewer: how often each card was opened
 
     def get(self, reader: Reader, item_id: str) -> ShowcaseItem | None:
         data = reader.get(self.collection, item_id)
@@ -31,3 +32,15 @@ class ShowcaseRepository:
 
     def set_liked(self, tx: Transaction, actor_id: str, ids: list[str]) -> None:
         tx.set(self.likes, actor_id, {"ids": ids}, merge=True)
+
+    def get_stats(self, reader: Reader, actor_id: str) -> Doc:
+        return reader.get(self.stats, actor_id) or {}
+
+    def set_stats(self, tx: Transaction, actor_id: str, data: Doc) -> None:
+        tx.set(self.stats, actor_id, data, merge=True)
+
+    def all_stats(self, db: Database) -> list[tuple[str, Doc]]:
+        return db.scan(self.stats)
+
+    def all_likes(self, db: Database) -> list[tuple[str, Doc]]:
+        return db.scan(self.likes)

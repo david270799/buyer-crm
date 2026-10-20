@@ -152,3 +152,23 @@ def test_local_storage_reads_and_deletes_only_its_own_files(tmp_path):
     assert storage.delete_url(url) is True
     assert storage.read_url(url) is None
     assert (tmp_path / "secret.txt").exists()
+
+
+def test_showcase_photo_is_a_sharp_jpeg_up_to_1mb():
+    import random
+
+    from PIL import Image
+
+    from crm.services.image_service import process_showcase_image
+
+    rng = random.Random(1)
+    noisy = Image.new("RGB", (2400, 1800))
+    noisy.putdata(
+        [(rng.randrange(256), rng.randrange(256), rng.randrange(256)) for _ in range(2400 * 1800)]
+    )
+    buffer = io.BytesIO()
+    noisy.save(buffer, format="PNG")
+    main, thumb, size = process_showcase_image(buffer.getvalue())
+    assert main[:3] == b"\xff\xd8\xff"  # JPEG: any gallery takes it
+    assert len(main) <= 1_000_000 and size[0] == size[1] and size[0] >= 1000
+    assert thumb[:4] == b"RIFF"

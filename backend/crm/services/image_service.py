@@ -110,6 +110,39 @@ def _encode(image: Image.Image, max_side: int, target_bytes: int) -> tuple[bytes
         current = _fit(current, max(_MIN_SIDE_WHEN_SHRINKING, int(max(current.size) * 0.8)))
 
 
+# «Витрина» photos are shown to others and saved to the phone's gallery (the
+# owner, 20.10.2026): a sharp JPEG up to ~1 MB (any gallery or chat takes it).
+SHOWCASE_MAX_SIDE = 2000
+SHOWCASE_TARGET_BYTES = 1_000_000
+_JPEG_MIN, _JPEG_MAX = 70, 92
+
+
+def _jpeg(image: Image.Image, quality: int) -> bytes:
+    buffer = io.BytesIO()
+    image.convert("RGB").save(
+        buffer, format="JPEG", quality=quality, optimize=True, progressive=True
+    )
+    return buffer.getvalue()
+
+
+def process_showcase_image(data: bytes) -> tuple[bytes, bytes, tuple[int, int]]:
+    """(JPEG ≤ ~1 MB at the best quality that fits, WebP thumbnail, size)."""
+    current = _fit(_square(_open(data)), SHOWCASE_MAX_SIDE)
+    while True:
+        best = None
+        for quality in range(_JPEG_MAX, _JPEG_MIN - 1, -4):
+            candidate = _jpeg(current, quality)
+            if len(candidate) <= SHOWCASE_TARGET_BYTES:
+                best = candidate
+                break
+        if best is not None or max(current.size) <= 1000:
+            main = best or _jpeg(current, _JPEG_MIN)
+            break
+        current = _fit(current, int(max(current.size) * 0.85))
+    thumb, _ = _encode(current, THUMB_MAX_SIDE, THUMB_TARGET_BYTES)
+    return main, thumb, current.size
+
+
 def process_image(data: bytes) -> tuple[bytes, bytes, tuple[int, int]]:
     image = _square(_open(data))
     main, main_image = _encode(image, MAIN_MAX_SIDE, MAIN_TARGET_BYTES)
@@ -135,13 +168,23 @@ class ImageService:
         return self.store_processed(*process_image(data), folder=folder)
 
     def store_processed(
-        self, main: bytes, thumb: bytes, size: tuple[int, int], *, folder: str
+        self,
+        main: bytes,
+        thumb: bytes,
+        size: tuple[int, int],
+        *,
+        folder: str,
+        jpeg: bool = False,
     ) -> StoredImage:
-        """Upload an already processed pair (see `process_image`)."""
+        """Upload an already processed pair (see `process_image`; `jpeg` for
+        `process_showcase_image`)."""
         width, height = size
         month = self._clock.now().strftime("%Y/%m")
         name = uuid.uuid4().hex
         base = f"{folder}/{month}/{name}"
-        photo_url = self._storage.put(f"{base}.webp", main, "image/webp")
+        if jpeg:
+            photo_url = self._storage.put(f"{base}.jpg", main, "image/jpeg")
+        else:
+            photo_url = self._storage.put(f"{base}.webp", main, "image/webp")
         thumbnail_url = self._storage.put(f"{base}_thumb.webp", thumb, "image/webp")
         return StoredImage(photo_url, thumbnail_url, len(main), len(thumb), width, height)

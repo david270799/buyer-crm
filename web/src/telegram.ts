@@ -12,6 +12,7 @@ interface TelegramWebApp {
   setHeaderColor(color: string): void;
   setBackgroundColor(color: string): void;
   disableVerticalSwipes?(): void;
+  downloadFile?(params: { url: string; file_name: string }, callback?: (accepted: boolean) => void): void;
   onEvent(event: string, handler: () => void): void;
   BackButton: { show(): void; hide(): void; onClick(cb: () => void): void; offClick(cb: () => void): void };
   HapticFeedback?: {
@@ -82,4 +83,22 @@ export function backButton(visible: boolean, onClick: () => void): () => void {
     app.BackButton.hide();
   }
   return () => app.BackButton.offClick(onClick);
+}
+
+/** Save a file to the phone: Telegram's own download (Bot API 8.0+, it asks
+ * where to save and puts photos in the gallery), else a normal browser download. */
+export function downloadFile(url: string, fileName: string): void {
+  const absolute = new URL(url, window.location.href).toString();
+  const app = webApp();
+  if (app?.downloadFile && app.isVersionAtLeast("8.0") && absolute.startsWith("https://")) {
+    app.downloadFile({ url: absolute, file_name: fileName });
+    return;
+  }
+  const link = document.createElement("a");
+  link.href = absolute;
+  link.download = fileName;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }

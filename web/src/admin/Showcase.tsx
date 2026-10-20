@@ -1,8 +1,9 @@
-import { Check, Heart, Loader2, RefreshCw, Search, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Check, Download, Heart, Loader2, RefreshCw, Search, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
+  markShowcaseViewed,
   type ShowcasePatch,
   useShowcase,
   useShowcaseAction,
@@ -10,11 +11,13 @@ import {
   useShowcaseItem,
   useShowcaseOrder,
   useShowcasePatch,
+  useShowcaseStats,
 } from "../api/hooks";
 import type { Category, ShowcaseItem, ShowcaseSize } from "../api/types";
 import { PageHead } from "../components/Layout";
 import { Empty, ErrorState, Field, Loading, MoneyInput, errorText, useToast } from "../components/ui";
 import { CATEGORY_LABEL, krw, plural } from "../lib/format";
+import { downloadFile } from "../telegram";
 
 // «Витрина» (the owner, 20.10.2026). Test mode: only the admin sees it; he
 // walks the client's path himself (♥, size, cart, «Заказать») before it opens.
@@ -234,6 +237,9 @@ export function ShowcaseItemPage() {
   const order = useShowcaseOrder();
   const cart = useCart();
   const [size, setSize] = useState<string | null>(null);
+  useEffect(() => {
+    if (id) markShowcaseViewed(id);
+  }, [id]);
   if (isLoading) return <Loading rows={3} height={140} />;
   if (error || !data) return <ErrorState error={error} onRetry={refetch} />;
   const item = data.item;
@@ -253,6 +259,18 @@ export function ShowcaseItemPage() {
         </div>
         <h2 className="sc-title">{item.model ?? item.title_line}</h2>
         <Price item={item} big />
+        {item.photo_url && (
+          <button
+            className="btn sc-download"
+            onClick={() => {
+              const name = `${(item.brand ?? "photo").replace(/\W+/g, "_")}_${(item.model ?? item.id).replace(/\W+/g, "_")}.jpg`;
+              downloadFile(item.photo_url!, name);
+              toast("Фото сохраняется в галерею");
+            }}
+          >
+            <Download size={18} /> Скачать фото
+          </button>
+        )}
         <div className="row between" style={{ margin: "16px 0 8px" }}>
           <span className="small muted">Размер</span>
           <button
@@ -659,3 +677,70 @@ const STATUS_LABEL: Record<ShowcaseItem["status"], string> = {
   published: "Опубликовано",
   hidden: "Скрыто",
 };
+
+/* ------------------------------------------------- statistics («Настройки») */
+
+export function ShowcaseStatsCard() {
+  const { data } = useShowcaseStats();
+  const viewers = data?.viewers ?? [];
+  return (
+    <div className="card pad stack">
+      <h3>Статистика витрины</h3>
+      {!viewers.length ? (
+        <div className="small muted">Пока никто не открывал карточки.</div>
+      ) : (
+        viewers.map((v) => (
+          <div key={v.viewer} className="stack" style={{ gap: 8 }}>
+            <div className="row between">
+              <b>{v.label}</b>
+              <span className="tiny faint">{v.last_at ? `был ${new Date(v.last_at).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}</span>
+            </div>
+            <div className="sc-stats">
+              <div>
+                <b>{v.cards_opened}</b>
+                <span>карточек открыл</span>
+              </div>
+              <div>
+                <b>{v.opens}</b>
+                <span>просмотров</span>
+              </div>
+              <div>
+                <b>{v.likes}</b>
+                <span>♥ лайков</span>
+              </div>
+              <div>
+                <b>{v.orders}</b>
+                <span>заказов</span>
+              </div>
+            </div>
+            {v.top.length > 0 && (
+              <div className="small">
+                <div className="tiny faint" style={{ marginBottom: 4 }}>Чаще всего смотрел</div>
+                {v.top.map((t) => (
+                  <Link key={t.id} to={`/showcase/${t.id}`} className="row between sc-stat-row">
+                    <span>
+                      {t.liked ? "♥ " : ""}
+                      {t.title}
+                    </span>
+                    <span className="num faint">{t.opens}×</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+            {v.liked.length > 0 && (
+              <div className="small">
+                <div className="tiny faint" style={{ marginBottom: 4 }}>Лайкнул</div>
+                {v.liked.map((t) => (
+                  <Link key={t.id} to={`/showcase/${t.id}`} className="row between sc-stat-row">
+                    <span>♥ {t.title}</span>
+                    <span className="num faint">{t.opens}×</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}

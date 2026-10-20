@@ -53,7 +53,7 @@ class FakeGemini:
 
 
 class FakeImages:
-    def store_processed(self, main, thumb, size, *, folder):
+    def store_processed(self, main, thumb, size, *, folder, jpeg=False):
         from crm.services.image_service import StoredImage
 
         return StoredImage(f"/media/{folder}/p.webp", f"/media/{folder}/t.webp", 1, 1, 1, 1)
@@ -156,3 +156,16 @@ def test_official_price_is_taken_only_from_the_brand_site(showcase, admin):
     again = showcase.find_official(admin, item.id)
     assert again.official_price_krw == 79_000  # a reseller page is not «official»
     assert "не найдена" in again.note
+
+
+def test_statistics_count_opens_likes_and_orders(showcase, admin):
+    item = showcase.add(admin, URL)
+    showcase.set_status(admin, item.id, "published")
+    for _ in range(3):
+        showcase.viewed(admin, item.id)
+    showcase.toggle_like(admin, item.id)
+    showcase.order(admin, [CartLine(item.id, "S")])
+
+    [row] = showcase.statistics(admin)
+    assert (row["cards_opened"], row["opens"], row["likes"], row["orders"]) == (1, 3, 1, 1)
+    assert row["top"][0] == {"id": item.id, "title": item.title_line, "opens": 3, "liked": True}

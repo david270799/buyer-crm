@@ -802,6 +802,23 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         liked = set(_showcase().liked(p.actor))
         return {"item": showcase_json(_showcase().refresh(p.actor, item_id), liked)}
 
+    @app.post("/api/showcase/{item_id}/view")
+    def showcase_view(item_id: str, p: Admin) -> dict[str, bool]:
+        if not p.preview:
+            _showcase().viewed(p.actor, item_id)
+        return {"ok": True}
+
+    @app.get("/api/showcase-stats")
+    def showcase_stats(p: Admin) -> dict[str, Any]:
+        client = (
+            services.clients.get_main(p.actor) if hasattr(services.clients, "get_main") else None
+        )
+        client_id = f"tg:{client.telegram_id}" if client and client.telegram_id else None
+        rows = _showcase().statistics(p.actor)
+        for row in rows:
+            row["label"] = "Клиент" if row["viewer"] == client_id else "Вы (тест)"
+        return {"viewers": rows}
+
     @app.post("/api/showcase/{item_id}/official")
     def showcase_official(item_id: str, p: Admin) -> dict[str, Any]:
         return {"item": showcase_json(_showcase().find_official(p.actor, item_id))}

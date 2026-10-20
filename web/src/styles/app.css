@@ -2726,3 +2726,10 @@ table.orders .r {
 .badge.sc-bad { background: var(--negative); color: #fff; }
 .badge.sc-from { background: #2b1f4d; color: #c9b8ff; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
 :root[data-theme="light"] .badge.sc-from { background: #ece6ff; color: #5b3fd6; }
+.btn.sc-download { width: 100%; min-height: 50px; margin-top: 14px; font-size: 16px; font-weight: 800; background: var(--text); color: var(--bg); border: 0; }
+.sc-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.sc-stats div { display: flex; flex-direction: column; align-items: center; padding: 10px 4px; border: 1px solid var(--border); border-radius: var(--radius); text-align: center; }
+.sc-stats b { font-size: 20px; }
+.sc-stats span { font-size: 11px; color: var(--text-3); }
+.sc-stat-row { padding: 6px 0; border-bottom: 1px solid var(--border); color: inherit; text-decoration: none; gap: 8px; }
+.sc-stat-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

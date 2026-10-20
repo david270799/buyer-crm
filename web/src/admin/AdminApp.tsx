@@ -1,5 +1,12 @@
 import { Eye, LayoutGrid, Menu, Package, Plus, Settings, ShoppingBag, Truck, Wallet } from "lucide-react";
-import { PrepItemPage, PrepPage, ShowcaseCartPage, ShowcaseItemPage, ShowcasePage } from "./Showcase";
+import {
+  PrepItemPage,
+  PrepPage,
+  ShowcaseCartPage,
+  ShowcaseItemPage,
+  ShowcasePage,
+  ShowcaseStatsCard,
+} from "./Showcase";
 import { CategoryPicker } from "../shared/CategoryPicker";
 import { ShopPicker } from "./ShopPicker";
 import { useState } from "react";
@@ -409,6 +416,7 @@ function SettingsPage({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
       <PageHead title="Настройки" />
       <div className="stack">
         <AppearanceSettings />
+        <ShowcaseStatsCard />
         <div className="card pad stack">
           <h3>Как видит клиент</h3>
           <button className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setClientPreview(true)}>

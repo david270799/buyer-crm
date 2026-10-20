@@ -519,3 +519,26 @@ export const useShowcaseOrder = () => {
     onSuccess: refresh,
   });
 };
+
+export interface ShowcaseViewerStats {
+  viewer: string;
+  label: string;
+  cards_opened: number;
+  opens: number;
+  likes: number;
+  orders: number;
+  last_at: string | null;
+  top: { id: string; title: string; opens: number; liked: boolean }[];
+  liked: { id: string; title: string; opens: number; liked: boolean }[];
+}
+
+export const useShowcaseStats = () =>
+  useQuery({
+    queryKey: [...showcaseKey, "stats"],
+    queryFn: () => get<{ viewers: ShowcaseViewerStats[] }>("/api/showcase-stats"),
+  });
+
+/** A card was opened (counted for «Статистика»). */
+export function markShowcaseViewed(id: string): void {
+  post(`/api/showcase/${id}/view`).catch(() => undefined);
+}

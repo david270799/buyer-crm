@@ -453,6 +453,11 @@ class OrderService:
         offset = max(0, query.offset)
         return OrderPage(items=orders[offset : offset + limit], total=len(orders))
 
+    def showcase_orders(self, actor: Actor) -> list[Order]:
+        """Orders made from the «Витрина» (for its statistics)."""
+        require_admin(actor)
+        return [o for o in self._orders.list_all(self._db) if o.showcase_id]
+
     def stuck_days(self, order: Order) -> int | None:
         """Days since the buy-out when the order is still «Выкуплен» after
         STUCK_AFTER (the owner, 16.10.2026: 4 days for every shop); else None."""
