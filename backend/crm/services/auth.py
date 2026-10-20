@@ -1,7 +1,8 @@
 """Role resolution shared by the bot and (later) the Mini App / dashboard API.
 
 ADMIN IDs come from configuration (environment), never from the database.
-The CLIENT is whoever `client_info/main_client.telegram_id` points to.
+The CLIENT is whoever `client_info/main_client.telegram_id` points to, and the
+second person on the same account (`second_telegram_id`, /setclient2).
 For the Mini App the Telegram user ID must come from server-side validated
 `initData`, never from `initDataUnsafe`.
 """
@@ -30,7 +31,7 @@ class RoleResolver:
         self._ttl = cache_ttl_seconds
         self._monotonic = monotonic
         self._lock = threading.Lock()
-        self._client_id: int | None = None
+        self._client_ids: frozenset[int] = frozenset()
         self._loaded_at: float | None = None
 
     @property
@@ -40,8 +41,7 @@ class RoleResolver:
     def resolve(self, telegram_user_id: int) -> Role | None:
         if telegram_user_id in self._admin_ids:
             return Role.ADMIN
-        client_id = self._client_telegram_id()
-        if client_id is not None and telegram_user_id == client_id:
+        if telegram_user_id in self._client_telegram_ids():
             return Role.CLIENT
         return None
 
@@ -49,11 +49,11 @@ class RoleResolver:
         with self._lock:
             self._loaded_at = None
 
-    def _client_telegram_id(self) -> int | None:
+    def _client_telegram_ids(self) -> frozenset[int]:
         with self._lock:
             now = self._monotonic()
             if self._loaded_at is None or now - self._loaded_at > self._ttl:
                 client = self._clients.get_main(self._db)
-                self._client_id = client.telegram_id if client else None
+                self._client_ids = frozenset(client.telegram_ids) if client else frozenset()
                 self._loaded_at = now
-            return self._client_id
+            return self._client_ids

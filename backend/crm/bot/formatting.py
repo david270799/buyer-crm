@@ -13,7 +13,7 @@ from crm.domain.enums import (
     Role,
 )
 from crm.domain.events import Event, EventType
-from crm.domain.models import LedgerEntry, Order, Shipment
+from crm.domain.models import ClientInfo, LedgerEntry, Order, Shipment
 from crm.domain.money import format_krw, format_usd
 from crm.domain.notifications import (
     LEVEL_LABELS,
@@ -440,6 +440,19 @@ def notify_settings(settings: NotificationSettings, client_has_telegram: bool) -
     return "\n".join(lines)
 
 
+def second_client_set(client: ClientInfo) -> str:
+    if client.second_telegram_id is None:
+        return "✅ Второй человек клиента убран: в CRM снова входит только основной клиент."
+    who = f"<code>{client.second_telegram_id}</code>"
+    if client.second_name:
+        who = f"{e(client.second_name)} ({who})"
+    return (
+        f"✅ Второй человек клиента: {who}\n"
+        "Видит то же, что клиент: заказы, баланс, отправки, витрину; получает те же уведомления. "
+        "Чтобы открыть CRM, ему нужно написать боту /start."
+    )
+
+
 def client_set(change: ClientChange) -> str:
     after = change.after
     who = (
@@ -571,6 +584,7 @@ ADMIN_HELP = """<b>Команды администратора</b>
 /pin — PIN-код для Mini App; /pin off — сбросить забытый
 /add — ответом на фото: принять его как заказ
 /setclient — ответом на сообщение клиента: указать, кто клиент
+/setclient2 ID [имя] — второй человек клиента (тот же баланс и заказы); /setclient2 off — убрать
 Фото в личку боту — бот спросит, какой это заказ (сверит размер со складом), или «➕ новый заказ»
 /arrived или кнопка «📦 Пришло на склад»; фото с подписью «N5» — сразу проверка N5: размер, \
 «На складе», отзыв на корейском

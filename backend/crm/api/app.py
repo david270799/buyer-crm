@@ -828,13 +828,15 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
 
     @app.get("/api/showcase-stats")
     def showcase_stats(p: Admin) -> dict[str, Any]:
-        client = (
-            services.clients.get_main(p.actor) if hasattr(services.clients, "get_main") else None
-        )
-        client_id = f"tg:{client.telegram_id}" if client and client.telegram_id else None
+        client = services.clients.get(p.actor)
+        names: dict[str, str] = {}
+        if client is not None and client.telegram_id is not None:
+            names[f"tg:{client.telegram_id}"] = client.name or "Клиент"
+        if client is not None and client.second_telegram_id is not None:
+            names[f"tg:{client.second_telegram_id}"] = client.second_name or "Клиент 2"
         stats = _showcase().statistics(p.actor)
         viewers = {row["viewer"] for row in stats["cards"] + stats["history"] if row.get("viewer")}
-        labels = {v: "Клиент" if v == client_id else "Вы (тест)" for v in viewers}
+        labels = {v: names.get(v, "Вы") for v in viewers}
         return {**stats, "viewers": [{"viewer": v, "label": labels[v]} for v in sorted(viewers)]}
 
     @app.post("/api/showcase/{item_id}/official")

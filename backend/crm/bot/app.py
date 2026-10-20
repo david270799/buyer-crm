@@ -45,6 +45,7 @@ ADMIN_COMMANDS = [
     BotCommand(command="rate", description="Курс KRW/USD"),
     BotCommand(command="add", description="Принять фото как заказ (ответом на фото)"),
     BotCommand(command="setclient", description="Указать клиента (ответом на его сообщение)"),
+    BotCommand(command="setclient2", description="Второй человек клиента: /setclient2 ID"),
     BotCommand(command="setgroup", description="Рабочая группа: /setgroup ID"),
     BotCommand(command="notify", description="Уведомления в личку"),
     BotCommand(command="backup", description="Прислать копию базы сейчас"),

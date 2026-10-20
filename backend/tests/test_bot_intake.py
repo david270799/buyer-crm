@@ -30,6 +30,7 @@ from PIL import Image
 
 from crm.bot.app import create_dispatcher
 from crm.config import Settings
+from crm.domain.enums import Role
 from crm.services.container import build_services
 from crm.services.recognition import Recognition, fallback
 from crm.storage.blobs import MemoryBlobStorage
@@ -437,6 +438,35 @@ async def test_setclient_rules(db, env):
     assert "Ответьте командой /setclient" in e["session"].to(ADMIN_TG)[-1]
     assert db.get("client_info", "main_client")["telegram_id"] == CLIENT_TG
     assert e["session"].to(GROUP) == []
+
+
+async def test_setclient2_adds_a_second_person_on_the_same_account(db, env):
+    # The owner, 20.10.2026: a second person sees the same orders and balance.
+    e = env(FakeGemini())
+    roles = e["services"].roles
+    assert roles.resolve(4004) is None
+    await e["text"]("/setclient2 4004 Мин")
+    assert "Второй человек клиента: Мин" in e["session"].to(ADMIN_TG)[-1]
+    stored = db.get("client_info", "main_client")
+    assert stored["telegram_id"] == CLIENT_TG and stored["second_telegram_id"] == 4004
+    assert roles.resolve(4004) is Role.CLIENT and roles.resolve(CLIENT_TG) is Role.CLIENT
+    await e["text"](f"/setclient2 {CLIENT_TG}")
+    assert "основного клиента" in e["session"].to(ADMIN_TG)[-1]
+    await e["text"]("/setclient2 5005", user_id=CLIENT_TG)  # the client cannot
+    assert db.get("client_info", "main_client")["second_telegram_id"] == 4004
+    await e["text"]("/setclient2 off")
+    assert roles.resolve(4004) is None
+    assert db.get("client_info", "main_client")["balance"] == stored["balance"]
+
+
+def test_notifications_go_to_both_client_people(db, services, admin):
+    from crm.domain.notifications import NotificationSettings, NotifyRecipient
+
+    services.clients.set_second(admin, 4004)
+    chat_ids = services.notifications._chat_ids(
+        NotificationSettings(recipient=NotifyRecipient.CLIENT)
+    )
+    assert set(chat_ids) == {CLIENT_TG, 4004}
 
 
 async def test_assistants_get_no_client_access(db, env):

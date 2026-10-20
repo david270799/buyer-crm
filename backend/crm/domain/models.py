@@ -179,6 +179,14 @@ class ClientInfo:
     # None means the stored value is missing or unreadable: financial
     # operations must refuse instead of assuming zero.
     balance: int | None
+    # A second person on the same account (the owner, 20.10.2026: /setclient2):
+    # same orders, balance and showcase, own Telegram ID.
+    second_telegram_id: int | None = None
+    second_name: str | None = None
+
+    @property
+    def telegram_ids(self) -> tuple[int, ...]:
+        return tuple(i for i in (self.telegram_id, self.second_telegram_id) if i is not None)
 
     @classmethod
     def from_doc(cls, doc_id: str, data: Doc) -> "ClientInfo":
@@ -187,6 +195,8 @@ class ClientInfo:
             telegram_id=_int_or_none(data.get("telegram_id")),
             name=_str_or_none(data.get("name")),
             balance=to_int_amount(data.get("balance")),
+            second_telegram_id=_int_or_none(data.get("second_telegram_id")),
+            second_name=_str_or_none(data.get("second_name")),
         )
 
 

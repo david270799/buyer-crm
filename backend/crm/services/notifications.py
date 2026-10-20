@@ -173,8 +173,8 @@ class NotificationService:
         ids: list[int] = []
         if settings.recipient in (NotifyRecipient.CLIENT, NotifyRecipient.BOTH):
             client = self._clients.get_main(self._db)
-            if client is not None and client.telegram_id is not None:
-                ids.append(client.telegram_id)
+            if client is not None:
+                ids.extend(client.telegram_ids)  # both people on the account
         if settings.recipient in (NotifyRecipient.ADMINS, NotifyRecipient.BOTH):
             ids.extend(i for i in sorted(self._admin_ids) if i not in ids)
         return tuple(ids)
