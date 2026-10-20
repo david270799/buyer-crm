@@ -346,13 +346,12 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
         )}
         <div className="row between" style={{ margin: "16px 0 8px" }}>
           <span className="small muted">{colors.length ? "Цвет" : "Размер"}</span>
-          {!client && (
           <button
             className="btn small"
             disabled={action.isPending}
             onClick={() =>
               action.mutate("refresh", {
-                onSuccess: () => toast("Наличие обновлено"),
+                onSuccess: () => toast(client ? "Наличие проверено" : "Наличие обновлено"),
                 onError: (e) => toast(errorText(e), "error"),
               })
             }
@@ -360,7 +359,6 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
             {action.isPending ? <Loader2 className="spin" size={14} /> : <RefreshCw size={14} />} Обновить
             {item.refreshed_at ? ` · ${ago(item.refreshed_at)}` : ""}
           </button>
-          )}
         </div>
         {colors.length > 0 && (
           <>

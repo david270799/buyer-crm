@@ -665,7 +665,7 @@ def _seed_cards(db):
     seed(db, "showcase", "sc2", {**base, "status": "draft"})
 
 
-def test_client_sees_published_cards_without_shop_details(db, api):
+def test_client_sees_published_cards_without_shop_details(db, api, clock):
     # The owner, 20.10.2026: the showcase is out of test mode, open to the client.
     _seed_cards(db)
     assert [i["id"] for i in api("GET", "/api/showcase").json()["items"]] == ["sc1", "sc2"]
@@ -675,7 +675,9 @@ def test_client_sees_published_cards_without_shop_details(db, api):
     for hidden in ("url", "shop", "shop_price_krw", "markup_value", "note"):
         assert card[hidden] is None
     assert api("GET", "/api/showcase/sc2", who=CLIENT_TG).status_code == 404  # a draft
-    assert api("POST", "/api/showcase/sc1/refresh", who=CLIENT_TG).status_code == 403
+    db.run_transaction(lambda tx: tx.update("showcase", "sc1", {"refreshed_at": clock.current}))
+    fresh = api("POST", "/api/showcase/sc1/refresh", who=CLIENT_TG).json()["item"]
+    assert fresh["id"] == "sc1" and fresh["url"] is None  # read a moment ago: not asked again
     assert api("POST", "/api/showcase/sc1/status/hidden", who=CLIENT_TG).status_code == 403
     assert api("GET", "/api/showcase-stats", who=CLIENT_TG).status_code == 403
     assert api("GET", "/api/showcase", who=777).status_code == 403  # a helper: no access

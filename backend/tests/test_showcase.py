@@ -1,11 +1,12 @@
 import io
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
 from conftest import START_BALANCE, balance
 from PIL import Image
 
-from crm.domain.errors import ConflictError, PermissionDeniedError, ValidationError
+from crm.domain.errors import ConflictError, NotFoundError, PermissionDeniedError, ValidationError
 from crm.repositories import ShowcaseRepository
 from crm.services.offers import better_image_url, parse_offer
 from crm.services.showcase_service import CartLine, ShowcaseService, shop_name
@@ -160,8 +161,8 @@ def test_refresh_likes_delete_and_admin_only(db, showcase, admin, client_actor):
     assert showcase.toggle_like(admin, item.id) == [item.id]
     assert showcase.toggle_like(admin, item.id) == []
     assert showcase.items(client_actor) == []  # a draft: not on the client's showcase
-    with pytest.raises(PermissionDeniedError):
-        showcase.refresh(client_actor, item.id)
+    with pytest.raises(NotFoundError):
+        showcase.refresh(client_actor, item.id)  # a draft: the client cannot see it
     with pytest.raises(PermissionDeniedError):
         showcase.delete(client_actor, item.id)
     showcase.delete(admin, item.id)
@@ -371,3 +372,19 @@ def test_plain_sizes_are_not_sent_and_doubtful_splits_are_dropped(showcase, admi
     item = showcase.add(admin, URL)
     names = [(s.get("color"), s["name"]) for s in item.sizes]
     assert names == [(None, "Black XS"), (None, "Black S")]
+
+
+def test_client_refresh_asks_the_shop_at_most_once_a_minute(showcase, admin, client_actor, clock):
+    item = showcase.add(admin, URL)
+    showcase.set_status(admin, item.id, "published")
+    calls = []
+    page = showcase.fetcher.html
+    showcase.fetcher.html = lambda url: calls.append(url) or page(url)
+    showcase.refresh(client_actor, item.id)
+    assert calls == []  # just read when the card was made
+    clock.current += timedelta(seconds=61)
+    showcase.refresh(client_actor, item.id)
+    showcase.refresh(client_actor, item.id)
+    assert len(calls) == 1
+    showcase.refresh(admin, item.id)  # the admin is never held back
+    assert len(calls) == 2

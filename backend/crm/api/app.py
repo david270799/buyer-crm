@@ -811,9 +811,12 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         return {"item": showcase_json(item)}
 
     @app.post("/api/showcase/{item_id}/refresh")
-    def showcase_refresh(item_id: str, p: Admin) -> dict[str, Any]:
+    def showcase_refresh(item_id: str, p: Any_) -> dict[str, Any]:
+        if p.preview:
+            raise ApiError(403, "forbidden", "В режиме «Как видит клиент» ничего не меняется.")
         liked = set(_showcase().liked(p.actor))
-        return {"item": showcase_json(_showcase().refresh(p.actor, item_id), liked)}
+        item = _showcase().refresh(p.actor, item_id)
+        return {"item": showcase_json(item, liked, p.role)}
 
     # The client's showcase writes (20.10.2026): opened a card, ♥, «Заказать».
     # Nothing here moves money; the preview «Как видит клиент» writes nothing.

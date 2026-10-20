@@ -10,7 +10,7 @@ filled in). No money moves: the order is bought out as usual with /buy.
 import logging
 import threading
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -124,6 +124,7 @@ class CartLine:
 # and resizes them): the server has 1 GB RAM, so a burst of links waits here
 # in turn instead of decoding dozens of photos at once.
 READ_PARALLEL = 2
+CLIENT_REFRESH_EVERY = timedelta(minutes=1)  # the shop is not asked more often
 HISTORY_LIMIT = 300  # newest entries shown in «Статистика»
 
 
@@ -430,11 +431,16 @@ class ShowcaseService:
         return self._write(actor, item_id, fields, "showcase.update")
 
     def refresh(self, actor: Actor, item_id: str) -> ShowcaseItem:
-        """Read the shop page again: the price and the sizes in stock now."""
-        require_admin(actor)
+        """Read the shop page again: the price and the sizes in stock now.
+        The client may press «Обновить» too (the owner, 20.10.2026): a card
+        read less than CLIENT_REFRESH_EVERY ago is just returned as it is."""
         item = self.get(actor, item_id)
+        if actor.role is not Role.ADMIN and item.refreshed_at is not None:
+            if self._clock.now() - item.refreshed_at < CLIENT_REFRESH_EVERY:
+                return item
         try:
-            html, _ = self._fetcher.html(item.url)
+            with self._reading:
+                html, _ = self._fetcher.html(item.url)
         except LinkError as exc:
             raise ValidationError(f"Магазин не открылся: {exc}") from None
         offer = self._offer(html)
