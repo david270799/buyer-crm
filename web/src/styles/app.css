@@ -2741,8 +2741,9 @@ table.orders .r {
 :root[data-theme="light"] .badge.sc-from { background: #ece6ff; color: #5b3fd6; }
 .btn.sc-download { width: 100%; min-height: 50px; margin-top: 14px; font-size: 16px; font-weight: 800; background: var(--text); color: var(--bg); border: 0; }
 .sc-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-.sc-stats div { display: flex; flex-direction: column; align-items: center; padding: 10px 4px; border: 1px solid var(--border); border-radius: var(--radius); text-align: center; }
+.sc-stats button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; text-align: center; cursor: pointer; transition: background 0.2s ease, color 0.2s ease; }
+.sc-stats button.active { background: var(--text); color: var(--bg); border-color: var(--text); }
 .sc-stats b { font-size: 20px; }
-.sc-stats span { font-size: 11px; color: var(--text-3); }
-.sc-stat-row { padding: 6px 0; border-bottom: 1px solid var(--border); color: inherit; text-decoration: none; gap: 8px; }
-.sc-stat-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-stats span { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--text-3); }
+.sc-stats button.active span { color: inherit; opacity: 0.75; }
+.sc-views { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--text-2); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }

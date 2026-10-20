@@ -52,6 +52,16 @@ export function dateTime(value: string | null | undefined): string {
   return value ? `${date(value)}, ${timeFmt.format(new Date(value))}` : "—";
 }
 
+/** Short moment: «сегодня, 21:33», «вчера, 09:10», «18 окт., 14:05». */
+export function moment(value: string | null | undefined): string {
+  if (!value) return "—";
+  const day = dayKey(value);
+  const today = dayKey(new Date().toISOString());
+  const yesterday = dayKey(new Date(Date.now() - 86_400_000).toISOString());
+  const label = day === today ? "сегодня" : day === yesterday ? "вчера" : shortDate(value);
+  return `${label}, ${timeFmt.format(new Date(value))}`;
+}
+
 /** Seoul calendar day, for grouping (YYYY-MM-DD). */
 export function dayKey(value: string | null | undefined): string {
   return value ? dayKeyFmt.format(new Date(value)) : "";

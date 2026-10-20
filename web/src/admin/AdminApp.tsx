@@ -5,7 +5,7 @@ import {
   ShowcaseCartPage,
   ShowcaseItemPage,
   ShowcasePage,
-  ShowcaseStatsCard,
+  ShowcaseStatsPage,
 } from "./Showcase";
 import { CategoryPicker } from "../shared/CategoryPicker";
 import { ShopPicker } from "./ShopPicker";
@@ -63,15 +63,6 @@ function ModeSwitch({ showcase }: { showcase: boolean }) {
         <ShoppingBag size={15} /> Витрина
       </button>
     </div>
-  );
-}
-
-function StatsPage() {
-  return (
-    <>
-      <PageHead title="Статистика" sub="Витрина · кто что смотрел" />
-      <ShowcaseStatsCard />
-    </>
   );
 }
 
@@ -515,7 +506,7 @@ export function AdminApp({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
         <Route path="/showcase/:id" element={<ShowcaseItemPage />} />
         <Route path="/prep" element={<PrepPage />} />
         <Route path="/prep/:id" element={<PrepItemPage />} />
-        <Route path="/stats" element={<StatsPage />} />
+        <Route path="/stats" element={<ShowcaseStatsPage />} />
         <Route path="/profit" element={<ProfitPage />} />
         <Route path="/balance" element={<Navigate to="/finance" replace />} />
         <Route path="/settings" element={<SettingsPage onLeaveDemo={onLeaveDemo} />} />

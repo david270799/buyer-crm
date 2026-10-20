@@ -1,10 +1,11 @@
-import { Check, Download, Heart, Loader2, RefreshCw, Search, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react";
+import { Check, Download, Eye, Heart, LayoutGrid, Loader2, RefreshCw, Search, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
   markShowcaseViewed,
   type ShowcasePatch,
+  type ShowcaseStatKind,
   useShowcase,
   useShowcaseAction,
   useShowcaseAdd,
@@ -16,7 +17,7 @@ import {
 import type { Category, ShowcaseItem, ShowcaseSize } from "../api/types";
 import { PageHead } from "../components/Layout";
 import { Empty, ErrorState, Field, Loading, MoneyInput, errorText, useToast } from "../components/ui";
-import { CATEGORY_LABEL, krw, plural } from "../lib/format";
+import { CATEGORY_LABEL, krw, moment, plural } from "../lib/format";
 import { downloadFiles } from "../telegram";
 
 // «Витрина» (the owner, 20.10.2026). Test mode: only the admin sees it; he
@@ -704,69 +705,148 @@ const STATUS_LABEL: Record<ShowcaseItem["status"], string> = {
   hidden: "Скрыто",
 };
 
-/* ------------------------------------------------- statistics («Настройки») */
+/* ------------------------------------------------------- «Статистика» */
 
-export function ShowcaseStatsCard() {
-  const { data } = useShowcaseStats();
-  const viewers = data?.viewers ?? [];
+type StatFilter = "cards" | "views" | "likes" | "orders";
+
+const STAT_TILES: { key: StatFilter; label: string; title: string; icon: typeof Eye }[] = [
+  { key: "cards", label: "карточек", title: "Открытые карточки", icon: LayoutGrid },
+  { key: "views", label: "просмотров", title: "Просмотры", icon: Eye },
+  { key: "likes", label: "лайков", title: "Лайки", icon: Heart },
+  { key: "orders", label: "заказов", title: "Заказы", icon: ShoppingCart },
+];
+
+const KIND_TEXT: Record<ShowcaseStatKind, string> = {
+  view: "Открыл",
+  like: "♥ Лайкнул",
+  unlike: "Убрал ♥",
+  order: "Заказал",
+};
+
+/** The owner (20.10.2026): four totals on top that filter the list below; by
+ * default the whole history; next to each row how often the card was opened. */
+export function ShowcaseStatsPage() {
+  const { data, error, isLoading, refetch } = useShowcaseStats();
+  const [viewer, setViewer] = useState<string | null>(null);
+  const [filter, setFilter] = useState<StatFilter | null>(null);
+  const view = useMemo(() => {
+    const mine = <T extends { viewer: string | null }>(rows: T[]) => rows.filter((r) => !viewer || r.viewer === viewer);
+    const cards = mine(data?.cards ?? []);
+    const history = mine(data?.history ?? []);
+    const perItem = new Map<string, { views: number; liked: boolean; last_at: string | null }>();
+    for (const c of cards) {
+      const row = perItem.get(c.item_id) ?? { views: 0, liked: false, last_at: null };
+      row.views += c.views;
+      row.liked ||= c.liked;
+      if (c.last_at && (!row.last_at || c.last_at > row.last_at)) row.last_at = c.last_at;
+      perItem.set(c.item_id, row);
+    }
+    const lastLike = new Map<string, string>();
+    for (const h of history) if (h.kind === "like" && h.item_id && h.at && !lastLike.has(h.item_id)) lastLike.set(h.item_id, h.at);
+    const opened = [...perItem.entries()].filter(([, r]) => r.views > 0);
+    const liked = [...perItem.entries()].filter(([, r]) => r.liked);
+    const orders = history.filter((h) => h.kind === "order");
+    return {
+      perItem,
+      lastLike,
+      opened: opened.sort((a, b) => b[1].views - a[1].views),
+      liked: liked.sort((a, b) => (lastLike.get(b[0]) ?? "").localeCompare(lastLike.get(a[0]) ?? "")),
+      history,
+      totals: {
+        cards: opened.length,
+        views: opened.reduce((sum, [, r]) => sum + r.views, 0),
+        likes: liked.length,
+        orders: orders.length,
+      } as Record<StatFilter, number>,
+    };
+  }, [data, viewer]);
+
+  if (isLoading) return <Loading />;
+  if (error || !data) return <ErrorState error={error} onRetry={() => void refetch()} />;
+  const views = (id: string | null) => (id ? view.perItem.get(id)?.views ?? 0 : 0);
+  const labels = new Map(data.viewers.map((v) => [v.viewer, v.label]));
+  const who = (id: string | null) => (data.viewers.length > 1 && id ? `${labels.get(id) ?? ""} · ` : "");
+
+  const row = (key: string, itemId: string | null, sub: string, to?: string) => {
+    const item = itemId ? data.items[itemId] : undefined;
+    return (
+      <Link key={key} to={to ?? (itemId && item ? `/showcase/${itemId}` : "#")} className="list-item">
+        <div className="thumb">{item?.thumbnail_url ? <img src={item.thumbnail_url} alt="" /> : null}</div>
+        <div className="grow" style={{ minWidth: 0 }}>
+          <div className="title">{item?.title ?? "Карточка удалена"}</div>
+          <div className="small muted">{sub}</div>
+        </div>
+        <span className="sc-views" title="Сколько раз открыта">
+          <Eye size={14} /> {views(itemId)}
+        </span>
+      </Link>
+    );
+  };
+
+  let rows: JSX.Element[];
+  if (filter === "cards") {
+    rows = view.opened.map(([id, r]) => row(id, id, `${r.liked ? "♥ · " : ""}последний раз ${moment(r.last_at)}`));
+  } else if (filter === "likes") {
+    rows = view.liked.map(([id]) => row(id, id, view.lastLike.has(id) ? `♥ ${moment(view.lastLike.get(id))}` : "♥"));
+  } else {
+    const kinds: ShowcaseStatKind[] | null = filter === "views" ? ["view"] : filter === "orders" ? ["order"] : null;
+    rows = view.history
+      .filter((h) => !kinds || kinds.includes(h.kind))
+      .map((h, i) => {
+        const extra = h.kind === "order" ? `${h.size ? ` · ${h.size}` : ""}${h.order_id ? ` · ${h.order_id}` : ""}` : "";
+        return row(
+          `${i}-${h.at}`,
+          h.item_id,
+          `${who(h.viewer)}${KIND_TEXT[h.kind]}${extra} · ${moment(h.at)}`,
+          h.kind === "order" && h.order_id ? `/orders/${h.order_id}` : undefined,
+        );
+      });
+  }
+  const title = filter ? STAT_TILES.find((t) => t.key === filter)!.title : "История";
+
   return (
-    <div className="card pad stack">
-      <h3>Статистика витрины</h3>
-      {!viewers.length ? (
-        <div className="small muted">Пока никто не открывал карточки.</div>
-      ) : (
-        viewers.map((v) => (
-          <div key={v.viewer} className="stack" style={{ gap: 8 }}>
-            <div className="row between">
-              <b>{v.label}</b>
-              <span className="tiny faint">{v.last_at ? `был ${new Date(v.last_at).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}</span>
-            </div>
-            <div className="sc-stats">
-              <div>
-                <b>{v.cards_opened}</b>
-                <span>карточек открыл</span>
-              </div>
-              <div>
-                <b>{v.opens}</b>
-                <span>просмотров</span>
-              </div>
-              <div>
-                <b>{v.likes}</b>
-                <span>♥ лайков</span>
-              </div>
-              <div>
-                <b>{v.orders}</b>
-                <span>заказов</span>
-              </div>
-            </div>
-            {v.top.length > 0 && (
-              <div className="small">
-                <div className="tiny faint" style={{ marginBottom: 4 }}>Чаще всего смотрел</div>
-                {v.top.map((t) => (
-                  <Link key={t.id} to={`/showcase/${t.id}`} className="row between sc-stat-row">
-                    <span>
-                      {t.liked ? "♥ " : ""}
-                      {t.title}
-                    </span>
-                    <span className="num faint">{t.opens}×</span>
-                  </Link>
-                ))}
-              </div>
-            )}
-            {v.liked.length > 0 && (
-              <div className="small">
-                <div className="tiny faint" style={{ marginBottom: 4 }}>Лайкнул</div>
-                {v.liked.map((t) => (
-                  <Link key={t.id} to={`/showcase/${t.id}`} className="row between sc-stat-row">
-                    <span>♥ {t.title}</span>
-                    <span className="num faint">{t.opens}×</span>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        ))
+    <>
+      <PageHead title="Статистика" sub="Витрина" />
+      {data.viewers.length > 1 && (
+        <div className="chips" style={{ marginBottom: 10 }}>
+          <button className={`chip ${viewer ? "" : "active"}`} onClick={() => setViewer(null)}>
+            Все
+          </button>
+          {data.viewers.map((v) => (
+            <button key={v.viewer} className={`chip ${viewer === v.viewer ? "active" : ""}`} onClick={() => setViewer(v.viewer)}>
+              {v.label}
+            </button>
+          ))}
+        </div>
       )}
-    </div>
+      <div className="sc-stats">
+        {STAT_TILES.map((t) => (
+          <button
+            key={t.key}
+            className={filter === t.key ? "active" : ""}
+            aria-pressed={filter === t.key}
+            onClick={() => setFilter(filter === t.key ? null : t.key)}
+          >
+            <b>{view.totals[t.key]}</b>
+            <span>
+              <t.icon size={11} /> {t.label}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="row between" style={{ margin: "18px 0 8px" }}>
+        <h3>{title}</h3>
+        {filter && (
+          <button className="btn small ghost" onClick={() => setFilter(null)}>
+            <X size={14} /> Вся история
+          </button>
+        )}
+      </div>
+      {rows.length ? (
+        <div className="card list">{rows}</div>
+      ) : (
+        <Empty title="Пока пусто" hint="Здесь появится, кто какие карточки открывал, лайкал и заказывал." />
+      )}
+    </>
   );
 }

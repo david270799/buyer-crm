@@ -10,7 +10,7 @@ filled in). No money moves: the order is bought out as usual with /buy.
 import logging
 import threading
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -89,6 +89,7 @@ class CartLine:
 # and resizes them): the server has 1 GB RAM, so a burst of links waits here
 # in turn instead of decoding dozens of photos at once.
 READ_PARALLEL = 2
+HISTORY_LIMIT = 300  # newest entries shown in «Статистика»
 
 
 class ShowcaseService:
@@ -394,7 +395,7 @@ class ShowcaseService:
     # --- interest («Статистика» in «Настройки», the owner, 20.10.2026) -------------
 
     def viewed(self, actor: Actor, item_id: str) -> None:
-        """The viewer opened a card: counted per card for the statistics."""
+        """The viewer opened a card: counted per card and kept in the history."""
         self.get(actor, item_id)
 
         def fn(tx: Transaction) -> None:
@@ -402,57 +403,83 @@ class ShowcaseService:
             views = dict(stats.get("views") or {})
             views[item_id] = int(views.get(item_id, 0)) + 1
             now = self._clock.now()
+            last = {**(stats.get("last") or {}), item_id: now}
             self._repo.set_stats(
                 tx,
                 actor.id,
-                {"views": views, "last_at": now, "first_at": stats.get("first_at") or now},
+                {
+                    "views": views,
+                    "last": last,
+                    "last_at": now,
+                    "first_at": stats.get("first_at") or now,
+                },
             )
+            self._log(tx, actor, item_id, "view", now)
 
         self._db.run_transaction(fn)
 
-    def statistics(self, actor: Actor) -> list[dict[str, Any]]:
-        """Per viewer: cards opened, opens, likes, orders, the most opened cards."""
+    def _log(self, tx: Transaction, actor: Actor, item_id: str, kind: str, at: datetime) -> None:
+        entry = {"viewer": actor.id, "item_id": item_id, "kind": kind, "at": at}
+        self._repo.add_log(tx, f"log{self._db.new_id()}", entry)
+
+    def statistics(self, actor: Actor) -> dict[str, Any]:
+        """«Статистика» (the owner, 20.10.2026): per viewer and card how often
+        it was opened and whether it is ♥, the orders, and the history of
+        opens / ♥ / orders, newest first (the page filters and adds them up)."""
         require_admin(actor)
-        items = {i.id: i for i in self._repo.list_all(self._db)}
+        items = {
+            i.id: {"title": i.title_line, "thumbnail_url": i.thumbnail_url or i.photo_url}
+            for i in self._repo.list_all(self._db)
+        }
         likes = {viewer: data.get("ids") or [] for viewer, data in self._repo.all_likes(self._db)}
-        stats = dict(self._repo.all_stats(self._db))
-        orders: dict[str, int] = {}
-        for order in self._orders.showcase_orders(actor):
-            orders[order.created_by or ""] = orders.get(order.created_by or "", 0) + 1
-        result = []
-        for viewer in sorted(set(stats) | set(likes)):
-            views = {k: int(v) for k, v in (stats.get(viewer, {}).get("views") or {}).items()}
-            liked = [i for i in likes.get(viewer, []) if i in items]
-            top = sorted(views.items(), key=lambda kv: kv[1], reverse=True)[:5]
-            result.append(
-                {
-                    "viewer": viewer,
-                    "cards_opened": len(views),
-                    "opens": sum(views.values()),
-                    "likes": len(liked),
-                    "orders": orders.get(viewer, 0),
-                    "last_at": stats.get(viewer, {}).get("last_at"),
-                    "top": [
+        cards = []
+        for viewer, data in self._repo.all_stats(self._db):
+            last = data.get("last") or {}
+            for item_id, count in (data.get("views") or {}).items():
+                cards.append(
+                    {
+                        "viewer": viewer,
+                        "item_id": item_id,
+                        "views": int(count),
+                        "liked": item_id in likes.get(viewer, []),
+                        "last_at": last.get(item_id),
+                    }
+                )
+        seen = {(c["viewer"], c["item_id"]) for c in cards}
+        for viewer, ids in likes.items():  # ♥ without a counted open (older data)
+            for item_id in ids:
+                if (viewer, item_id) not in seen and item_id in items:
+                    cards.append(
                         {
-                            "id": item_id,
-                            "title": items[item_id].title_line if item_id in items else "удалена",
-                            "opens": count,
-                            "liked": item_id in liked,
-                        }
-                        for item_id, count in top
-                    ],
-                    "liked": [
-                        {
-                            "id": i,
-                            "title": items[i].title_line,
-                            "opens": views.get(i, 0),
+                            "viewer": viewer,
+                            "item_id": item_id,
+                            "views": 0,
                             "liked": True,
+                            "last_at": None,
                         }
-                        for i in liked[:10]
-                    ],
+                    )
+        history = [
+            {
+                "kind": d.get("kind"),
+                "viewer": d.get("viewer"),
+                "item_id": d.get("item_id"),
+                "at": d.get("at"),
+            }
+            for _, d in self._repo.all_log(self._db)
+        ]
+        for order in self._orders.showcase_orders(actor):
+            history.append(
+                {
+                    "kind": "order",
+                    "viewer": order.created_by,
+                    "item_id": order.showcase_id,
+                    "at": order.timestamp("created_at"),
+                    "order_id": order.id,
+                    "size": order.size or order.size_kr,
                 }
             )
-        return result
+        history.sort(key=lambda h: h["at"] or datetime.min.replace(tzinfo=UTC), reverse=True)
+        return {"items": items, "cards": cards, "history": history[:HISTORY_LIMIT]}
 
     # --- likes and orders -----------------------------------------------------
 
@@ -465,8 +492,10 @@ class ShowcaseService:
 
         def fn(tx: Transaction) -> list[str]:
             ids = self._repo.liked(tx, actor.id)
-            ids = [i for i in ids if i != item_id] if item_id in ids else [item_id, *ids]
+            liked = item_id not in ids
+            ids = [item_id, *ids] if liked else [i for i in ids if i != item_id]
             self._repo.set_liked(tx, actor.id, ids[:200])
+            self._log(tx, actor, item_id, "like" if liked else "unlike", self._clock.now())
             return ids
 
         return self._db.run_transaction(fn)

@@ -649,3 +649,13 @@ def _jpeg_bytes() -> bytes:
 def test_showcase_is_admin_only_in_test_mode(api):
     assert api("GET", "/api/showcase", who=CLIENT_TG).status_code == 403
     assert api("GET", "/api/showcase").json() == {"items": []}
+
+
+def test_showcase_stats_shape(api):
+    assert api("GET", "/api/showcase-stats", who=CLIENT_TG).status_code == 403
+    assert api("GET", "/api/showcase-stats").json() == {
+        "items": {},
+        "cards": [],
+        "history": [],
+        "viewers": [],
+    }

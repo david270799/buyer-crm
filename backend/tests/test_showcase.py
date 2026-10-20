@@ -170,9 +170,18 @@ def test_statistics_count_opens_likes_and_orders(showcase, admin):
     showcase.toggle_like(admin, item.id)
     showcase.order(admin, [CartLine(item.id, "S")])
 
-    [row] = showcase.statistics(admin)
-    assert (row["cards_opened"], row["opens"], row["likes"], row["orders"]) == (1, 3, 1, 1)
-    assert row["top"][0] == {"id": item.id, "title": item.title_line, "opens": 3, "liked": True}
+    showcase.toggle_like(admin, item.id)  # ♥ off …
+    showcase.toggle_like(admin, item.id)  # … and on again
+
+    stats = showcase.statistics(admin)
+    [card] = stats["cards"]
+    assert (card["item_id"], card["views"], card["liked"]) == (item.id, 3, True)
+    assert card["last_at"] is not None
+    kinds = [h["kind"] for h in stats["history"]]
+    assert sorted(kinds) == sorted(["view"] * 3 + ["like", "unlike", "like", "order"])
+    order = next(h for h in stats["history"] if h["kind"] == "order")
+    assert order["size"] == "S" and order["order_id"] and order["viewer"] == admin.id
+    assert stats["items"][item.id]["title"] == item.title_line
 
 
 def test_all_product_photos_are_kept_up_to_the_first_gap(showcase, admin):

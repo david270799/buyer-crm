@@ -520,22 +520,29 @@ export const useShowcaseOrder = () => {
   });
 };
 
-export interface ShowcaseViewerStats {
-  viewer: string;
-  label: string;
-  cards_opened: number;
-  opens: number;
-  likes: number;
-  orders: number;
-  last_at: string | null;
-  top: { id: string; title: string; opens: number; liked: boolean }[];
-  liked: { id: string; title: string; opens: number; liked: boolean }[];
+export type ShowcaseStatKind = "view" | "like" | "unlike" | "order";
+
+/** «Статистика» витрины: raw rows, the page adds them up and filters. */
+export interface ShowcaseStats {
+  items: Record<string, { title: string; thumbnail_url: string | null }>;
+  /** Per viewer and card: opens and ♥. */
+  cards: { viewer: string; item_id: string; views: number; liked: boolean; last_at: string | null }[];
+  /** Opens, ♥ and orders, newest first. */
+  history: {
+    kind: ShowcaseStatKind;
+    viewer: string | null;
+    item_id: string | null;
+    at: string | null;
+    order_id?: string;
+    size?: string | null;
+  }[];
+  viewers: { viewer: string; label: string }[];
 }
 
 export const useShowcaseStats = () =>
   useQuery({
     queryKey: [...showcaseKey, "stats"],
-    queryFn: () => get<{ viewers: ShowcaseViewerStats[] }>("/api/showcase-stats"),
+    queryFn: () => get<ShowcaseStats>("/api/showcase-stats"),
   });
 
 /** A card was opened (counted for «Статистика»). */

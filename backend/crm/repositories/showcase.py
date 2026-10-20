@@ -8,6 +8,7 @@ class ShowcaseRepository:
     collection = "showcase"
     likes = "showcase_likes"
     stats = "showcase_stats"  # per viewer: how often each card was opened
+    log = "showcase_log"  # each open / ♥ with its time («Статистика» history)
 
     def get(self, reader: Reader, item_id: str) -> ShowcaseItem | None:
         data = reader.get(self.collection, item_id)
@@ -44,3 +45,9 @@ class ShowcaseRepository:
 
     def all_likes(self, db: Database) -> list[tuple[str, Doc]]:
         return db.scan(self.likes)
+
+    def add_log(self, tx: Transaction, entry_id: str, data: Doc) -> None:
+        tx.create(self.log, entry_id, data)
+
+    def all_log(self, db: Database) -> list[tuple[str, Doc]]:
+        return db.scan(self.log)
