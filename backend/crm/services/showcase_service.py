@@ -66,6 +66,19 @@ _SHOP_NAMES = {
 }
 
 
+# Naver Smart Store answers every program with HTTP 429 (checked 20.10.2026,
+# also from the owner's Korean server), so say so plainly.
+NAVER_BLOCKED = (
+    "Naver не даёт программам читать страницы Smart Store. "
+    "Такой товар пока можно добавить только вручную (обычным заказом)."
+)
+
+
+def _is_naver(url: str) -> bool:
+    host = (urlsplit(url).hostname or "").lower()
+    return host == "naver.me" or host.endswith((".naver.com", ".naver.me")) or host == "naver.com"
+
+
 def shop_name(url: str) -> str | None:
     host = (urlsplit(url).hostname or "").lower().removeprefix("www.").removeprefix("m.")
     for domain, name in _SHOP_NAMES.items():
@@ -154,6 +167,8 @@ class ShowcaseService:
         try:
             html, final = self._fetcher.html(url)
         except LinkError as exc:
+            if "HTTP 429" in str(exc) and _is_naver(url):
+                raise ValidationError(NAVER_BLOCKED) from None
             raise ValidationError(f"{exc} Проверьте ссылку.") from None
         page = parse_page(html, final)
         offer = self._offer(html)

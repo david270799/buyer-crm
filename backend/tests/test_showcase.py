@@ -271,3 +271,16 @@ def test_colour_answers_failing_keep_the_page_list(showcase, admin):
     showcase.fetcher.page_html = COLOR_HTML
     item = showcase.add(admin, "https://www.hmall.com/md/pda/itemPtc?slitmCd=2245070800")
     assert [s["name"] for s in item.sizes] == ["NJ5JR66A_BLK", "NJ5JR66B_CHC", "NJ5JR66C_DBE"]
+
+
+def test_naver_blocking_programs_gets_a_plain_message(showcase, admin):
+    from crm.services.link_import import LinkError
+
+    def blocked(url):
+        raise LinkError("Сайт ответил ошибкой (HTTP 429).")
+
+    showcase.fetcher.html = blocked
+    with pytest.raises(ValidationError, match="Naver не даёт"):
+        showcase.add(admin, "https://naver.me/5T0YL3Hn")
+    with pytest.raises(ValidationError, match="Проверьте ссылку"):
+        showcase.add(admin, URL)  # other shops: the usual message
