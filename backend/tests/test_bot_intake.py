@@ -600,3 +600,42 @@ async def test_photo_series_without_number_asks_once(db, env):
     await e["press"](_last_markup(e).inline_keyboard[0][0].callback_data)
     order = db.get("orders", "N5")
     assert order["status"] == "warehouse" and len(order["arrival_photos"]) == 2
+
+
+async def test_album_sent_at_once_is_one_series(db, env):
+    import asyncio
+
+    from crm.domain.enums import Role
+    from crm.services.common import Actor
+
+    gemini = ArrivalGemini()
+    calls = []
+    original = gemini.check_arrival
+    gemini.check_arrival = lambda image, **kw: calls.append(1) or original(image, **kw)
+    e = env(gemini)
+    seed_order(db, "N5", size="270")
+    e["services"].orders.buy(Actor.telegram(ADMIN_TG, Role.ADMIN), "5", 100, 200)
+
+    # An album: Telegram delivers the photos together, they are handled concurrently.
+    await asyncio.gather(
+        e["photo"]("N5", user_id=ADMIN_TG, chat_id=ADMIN_TG),
+        e["photo"](None, user_id=ADMIN_TG, chat_id=ADMIN_TG),
+        e["photo"](None, user_id=ADMIN_TG, chat_id=ADMIN_TG),
+    )
+    order = db.get("orders", "N5")
+    assert len(calls) == 1 and len(order["arrival_photos"]) == 2
+
+
+async def test_album_without_number_asks_once(db, env):
+    import asyncio
+
+    from crm.domain.enums import Role
+    from crm.services.common import Actor
+
+    e = env(ArrivalGemini())
+    seed_order(db, "N5", size="270")
+    e["services"].orders.buy(Actor.telegram(ADMIN_TG, Role.ADMIN), "5", 100, 200)
+    await asyncio.gather(*(e["photo"](None, user_id=ADMIN_TG, chat_id=ADMIN_TG) for _ in range(3)))
+    assert len([t for t in e["session"].to(ADMIN_TG) if "Какой это заказ" in t]) == 1
+    await e["press"](_last_markup(e).inline_keyboard[0][0].callback_data)
+    assert len(db.get("orders", "N5")["arrival_photos"]) == 2
