@@ -12,7 +12,7 @@ import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from crm.domain.categories import CATEGORIES, category_from_text
 from crm.domain.enums import Role
@@ -79,6 +79,19 @@ NAVER_BLOCKED = (
 def _is_naver(url: str) -> bool:
     host = (urlsplit(url).hostname or "").lower()
     return host == "naver.me" or host.endswith((".naver.com", ".naver.me")) or host == "naver.com"
+
+
+def _gateway_target(url: str) -> str | None:
+    """SSG share links (ssg.li) open a «snsGateway» page that only points to the
+    product (`?url=…`); the product page is that inner URL."""
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    if not (host == "ssg.com" or host.endswith(".ssg.com")) or "snsGateway" not in parts.path:
+        return None
+    inner = (parse_qs(parts.query).get("url") or [""])[0]
+    inner_host = (urlsplit(inner).hostname or "").lower()
+    ssg = inner_host == "ssg.com" or inner_host.endswith(".ssg.com")
+    return inner if inner.startswith("https://") and ssg else None
 
 
 def _require_viewer(actor: Actor) -> None:
@@ -224,6 +237,9 @@ class ShowcaseService:
     def _read_page(self, url: str) -> tuple[dict[str, Any], list[str]]:
         try:
             html, final = self._fetcher.html(url)
+            inner = _gateway_target(final)
+            if inner:
+                html, final = self._fetcher.html(inner)
         except LinkError as exc:
             if "HTTP 429" in str(exc) and _is_naver(url):
                 raise ValidationError(NAVER_BLOCKED) from None
@@ -297,6 +313,24 @@ class ShowcaseService:
         elif note:
             notes.append(note)
         return fields, notes
+
+    def page_source(self, actor: Actor, url: str) -> tuple[str, str]:
+        """/pagefile: the shop page exactly as this server gets it (HTML, final
+        URL) — to see whether a shop lets the server in and how its page is
+        built before teaching the CRM to read it (the owner, 20.10.2026: SSG)."""
+        require_admin(actor)
+        url = (url or "").strip()
+        if not url.startswith(("http://", "https://")):
+            raise ValidationError("Нужна ссылка (https://…).")
+        try:
+            with self._reading:
+                html, final = self._fetcher.html(url)
+                inner = _gateway_target(final)
+                if inner:
+                    html, final = self._fetcher.html(inner)
+        except LinkError as exc:
+            raise ValidationError(f"Магазин не пустил сервер: {exc}") from None
+        return html, final
 
     # --- admin: drafts ------------------------------------------------------
 

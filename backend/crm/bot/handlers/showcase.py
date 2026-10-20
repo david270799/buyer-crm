@@ -7,7 +7,14 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from aiogram import Bot, F, Router
 from aiogram.enums import ChatType
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
+from aiogram.filters import Command, CommandObject
+from aiogram.types import (
+    BufferedInputFile,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    WebAppInfo,
+)
 
 from crm.bot import formatting as fmt
 from crm.bot.access import HasRole
@@ -65,6 +72,32 @@ def build(services: Services, settings: Settings) -> Router:
                 continue
             await bot.edit_message_text(draft_text(item), reply_markup=keyboard(item), **where)
 
+    async def pagefile(message: Message, command: CommandObject, actor: Actor | None) -> None:
+        """/pagefile <ссылка>: the page as this server sees it, as a file (to
+        teach the CRM a new shop)."""
+        if actor is None or services.showcase is None:
+            return
+        urls = extract_urls(command.args)
+        if not urls:
+            await message.answer("Пришлите так: <code>/pagefile https://ссылка-на-товар</code>")
+            return
+        try:
+            html, final = await asyncio.to_thread(services.showcase.page_source, actor, urls[0])
+        except CRMError as exc:
+            await message.answer(f"❌ {fmt.e(exc.user_message)}")
+            return
+        name = (urlsplit(final).hostname or "page").replace(".", "_") + ".html"
+        await message.answer_document(
+            BufferedInputFile(html.encode("utf-8"), filename=name),
+            caption=(
+                "✅ Магазин пустил сервер. Перешлите этот файл в чат с разработчиком.\n"
+                f"{fmt.e(final)}"
+            ),
+        )
+
+    router.message.register(
+        pagefile, Command("pagefile"), F.chat.type == ChatType.PRIVATE, HasRole(Role.ADMIN)
+    )
     router.message.register(
         on_link,
         F.chat.type == ChatType.PRIVATE,

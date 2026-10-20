@@ -388,3 +388,36 @@ def test_client_refresh_asks_the_shop_at_most_once_a_minute(showcase, admin, cli
     assert len(calls) == 1
     showcase.refresh(admin, item.id)  # the admin is never held back
     assert len(calls) == 2
+
+
+SSG_GATEWAY = (
+    "https://www.ssg.com/snsGateway.ssg?url=https%3A%2F%2Fm.ssg.com%2Fitem%2FitemView.ssg"
+    "%3FitemId%3D1000739180156%26siteNo%3D6004&title=x"
+)
+
+
+def test_ssg_share_link_opens_the_product_page(showcase, admin):
+    from crm.services.showcase_service import _gateway_target
+
+    assert _gateway_target(SSG_GATEWAY) == (
+        "https://m.ssg.com/item/itemView.ssg?itemId=1000739180156&siteNo=6004"
+    )
+    assert _gateway_target("https://www.ssg.com/snsGateway.ssg?url=https%3A%2F%2Fevil.com") is None
+    assert _gateway_target(URL) is None
+    opened = []
+
+    def html(url):
+        opened.append(url)
+        if "ssg.li" in url:
+            return "<html>gateway</html>", SSG_GATEWAY
+        return "<html>item</html>", url
+
+    showcase.fetcher.html = html
+    page, final = showcase.page_source(admin, "http://ssg.li/YYUniZk2wn")
+    assert page == "<html>item</html>" and "itemView" in final
+    assert opened == ["http://ssg.li/YYUniZk2wn", final]
+
+
+def test_pagefile_is_admin_only(showcase, client_actor):
+    with pytest.raises(PermissionDeniedError):
+        showcase.page_source(client_actor, URL)
