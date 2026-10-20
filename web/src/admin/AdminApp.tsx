@@ -1,4 +1,5 @@
-import { Eye, LayoutGrid, Package, Plus, Settings, Truck, Wallet } from "lucide-react";
+import { Eye, LayoutGrid, Menu, Package, Plus, Settings, ShoppingBag, Truck, Wallet } from "lucide-react";
+import { PrepItemPage, PrepPage, ShowcaseCartPage, ShowcaseItemPage, ShowcasePage } from "./Showcase";
 import { CategoryPicker } from "../shared/CategoryPicker";
 import { ShopPicker } from "./ShopPicker";
 import { useState } from "react";
@@ -6,7 +7,7 @@ import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 
 import { setClientPreview } from "../api/client";
 import { AppearanceSettings } from "../shared/AppearanceSettings";
-import { useCreateOrder, useOverview, useSetNotifications, useSetRate, useSettings } from "../api/hooks";
+import { useCreateOrder, useOverview, useSetNotifications, useSetRate, useSettings, useShowcase } from "../api/hooks";
 import type { Category, NotificationSettings, NotifyLevel, NotifyRecipient, Shipment } from "../api/types";
 import { type NavItem, PageHead, Shell } from "../components/Layout";
 import { BalanceCard } from "../components/money";
@@ -24,13 +25,43 @@ import { PinSettings } from "./pin";
 import { ProfitPage } from "./profit";
 import { AiFillButton, MoneySheet, NewShipmentFlow, ShipmentDeliveredButton, ShipmentSplitButton, PhotoInput, type PhotoValue, recognizedFields, ShipmentEditSheet, useBalance } from "./sheets";
 
+// «Витрина» joined the menu (20.10.2026); «Отправки», «Подготовка» and
+// «Настройки» moved under «Ещё».
 const NAV: NavItem[] = [
   { to: "/", label: "Сводка", icon: LayoutGrid },
   { to: "/orders", label: "Заказы", icon: Package },
-  { to: "/shipments", label: "Отправки", icon: Truck },
+  { to: "/showcase", label: "Витрина", icon: ShoppingBag },
   { to: "/finance", label: "Финансы", icon: Wallet },
-  { to: "/settings", label: "Настройки", icon: Settings },
+  { to: "/more", label: "Ещё", icon: Menu, also: ["/shipments", "/settings", "/prep"] },
 ];
+
+function MorePage() {
+  const { data } = useShowcase("draft");
+  const drafts = data?.items.length ?? 0;
+  const rows: { to: string; label: string; hint: string; icon: typeof Truck }[] = [
+    { to: "/shipments", label: "Отправки", hint: "Посылки, трек-номера, доставка", icon: Truck },
+    { to: "/prep", label: "Подготовка витрины", hint: drafts ? `На одобрении: ${drafts}` : "Ссылки → карточки", icon: ShoppingBag },
+    { to: "/settings", label: "Настройки", hint: "Курс, уведомления, оформление", icon: Settings },
+  ];
+  return (
+    <>
+      <PageHead title="Ещё" />
+      <div className="card list">
+        {rows.map((row) => (
+          <Link key={row.to} to={row.to} className="list-item">
+            <div className="thumb icon">
+              <row.icon size={18} strokeWidth={1.8} />
+            </div>
+            <div className="grow">
+              <div className="title">{row.label}</div>
+              <div className="small muted">{row.hint}</div>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </>
+  );
+}
 
 function Dashboard() {
   const { data, error, isLoading, refetch } = useOverview();
@@ -461,6 +492,12 @@ export function AdminApp({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
         <Route path="/shipments" element={<AdminShipmentsPage />} />
         <Route path="/shipments/:id" element={<AdminShipmentDetails />} />
         <Route path="/finance" element={<FinancePage />} />
+        <Route path="/more" element={<MorePage />} />
+        <Route path="/showcase" element={<ShowcasePage />} />
+        <Route path="/showcase/cart" element={<ShowcaseCartPage />} />
+        <Route path="/showcase/:id" element={<ShowcaseItemPage />} />
+        <Route path="/prep" element={<PrepPage />} />
+        <Route path="/prep/:id" element={<PrepItemPage />} />
         <Route path="/profit" element={<ProfitPage />} />
         <Route path="/balance" element={<Navigate to="/finance" replace />} />
         <Route path="/settings" element={<SettingsPage onLeaveDemo={onLeaveDemo} />} />

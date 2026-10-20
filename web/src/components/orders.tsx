@@ -112,8 +112,12 @@ export function OrderCard({
       className={`order-card st-${order.status ?? "new"} ${selected ? "selected" : ""} ${canSelect ? "no-callout" : ""}`}
       {...(canSelect ? press : { onClick: open })}
     >
-      {(order.attention_required || order.stuck_days != null || order.arrival_check?.status === "mismatch") && (
+      {(order.attention_required ||
+        order.stuck_days != null ||
+        order.arrival_check?.status === "mismatch" ||
+        order.showcase_id) && (
         <span className="card-flags">
+          {order.showcase_id && <span className="badge sc-from">🛍 Из витрины</span>}
           {order.arrival_check?.status === "mismatch" && (
             <span className="badge size-wrong" title="Размер на фото со склада не совпал">
               <AlertTriangle size={12} /> Размер?

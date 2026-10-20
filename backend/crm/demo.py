@@ -247,4 +247,66 @@ def create_demo_database(
         ),
     )
     logger.info("Demo data ready: %s orders", len(_ORDERS) + 1)
+    # «Витрина» (test mode): two published cards and a draft, no network needed.
+    showcase = [
+        (
+            "sc_demo1",
+            "N6",
+            "published",
+            "Musinsa",
+            199_000,
+            239_000,
+            20_000,
+            [("260", 2), ("265", 0), ("270", 5), ("280", 1)],
+            "shoes",
+        ),
+        (
+            "sc_demo2",
+            "N4",
+            "published",
+            "Hmall",
+            489_000,
+            None,
+            40_000,
+            [("S", 0), ("M", 3), ("L", 9), ("XL", 2)],
+            "clothes",
+        ),
+        (
+            "sc_demo3",
+            "N3",
+            "draft",
+            "29CM",
+            129_000,
+            149_000,
+            0,
+            [("240", 4), ("250", 0), ("260", 7)],
+            "shoes",
+        ),
+    ]
+    for item_id, order_id, status, shop, price, official, markup, sizes, category in showcase:
+        order = db.get("orders", order_id) or {}
+        now = clock.now()
+        db.seed(
+            "showcase",
+            item_id,
+            {
+                "url": f"https://shop.example.kr/{item_id}",
+                "status": status,
+                "shop": shop,
+                "brand": order.get("brand"),
+                "model": order.get("model"),
+                "category": category,
+                "photo_url": order.get("photo_url"),
+                "thumbnail_url": order.get("thumbnail_url"),
+                "shop_price_krw": price,
+                "official_price_krw": official,
+                "markup_type": "krw",
+                "markup_value": markup,
+                "sizes": [{"name": n, "stock": c, "available": c > 0} for n, c in sizes],
+                "refreshed_at": now,
+                "created_at": now,
+                "updated_at": now,
+                "published_at": now if status == "published" else None,
+            },
+        )
     return db

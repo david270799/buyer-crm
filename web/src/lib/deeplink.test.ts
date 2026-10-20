@@ -8,6 +8,7 @@ describe("deep links from notifications", () => {
     expect(deepLinkPath("?open=order:n125")).toBe("/orders/N125");
     expect(deepLinkPath("?v=2&open=shipment%3ASHP-2026-001")).toBe("/shipments/SHP-2026-001");
     expect(deepLinkPath("?open=notifications")).toBe("/notifications");
+    expect(deepLinkPath("?open=prep%3Asc123")).toBe("/prep/sc123");
   });
   it("ignores anything else", () => {
     expect(deepLinkPath("")).toBeNull();

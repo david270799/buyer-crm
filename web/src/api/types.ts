@@ -23,6 +23,8 @@ export interface Order {
   // Admin only
   source_url?: string | null;
   shop?: string | null;
+  /** Ordered from the «Витрина» card with this id. */
+  showcase_id?: string | null;
   /** Days since the buy-out while still «Выкуплен» after 4 days; else null. */
   stuck_days?: number | null;
   arrival_photo_url?: string | null;
@@ -295,4 +297,37 @@ export interface ArrivalResult {
   note: string | null;
   moved_to_warehouse: boolean;
   error: string | null;
+}
+
+export interface ShowcaseSize {
+  name: string;
+  stock: number | null;
+  available: boolean;
+}
+
+export interface ShowcaseItem {
+  id: string;
+  url: string;
+  status: "draft" | "published" | "hidden";
+  shop: string | null;
+  brand: string | null;
+  model: string | null;
+  title: string | null;
+  title_line: string;
+  category: Category | null;
+  photo_url: string | null;
+  thumbnail_url: string | null;
+  shop_price_krw: number | null;
+  official_price_krw: number | null;
+  official_url: string | null;
+  markup_type: "krw" | "pct";
+  markup_value: number;
+  client_price_override: number | null;
+  client_price_krw: number | null;
+  sizes: ShowcaseSize[];
+  note: string | null;
+  liked: boolean;
+  refreshed_at: string | null;
+  created_at: string | null;
+  published_at: string | null;
 }

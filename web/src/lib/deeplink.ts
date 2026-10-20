@@ -9,6 +9,8 @@ export function deepLinkPath(search: string): string | null {
   if (order) return `/orders/N${order[1]}`;
   const shipment = /^shipment:([A-Za-z0-9_-]{1,64})$/.exec(open);
   if (shipment) return `/shipments/${shipment[1]}`;
+  const prep = /^prep:([A-Za-z0-9_-]{1,64})$/.exec(open);
+  if (prep) return `/prep/${prep[1]}`;
   return null;
 }
 

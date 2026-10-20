@@ -3,6 +3,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 import { api, get, newIdempotencyKey, patch, post, put, query } from "./client";
 import type {
   ArrivalResult,
+  ShowcaseItem,
   Category,
   BalanceChange,
   CrmEvent,
@@ -446,3 +447,73 @@ export async function uploadImage(file: File): Promise<{ photo_url: string; thum
   form.append("file", file);
   return api("/api/images", { method: "POST", body: form });
 }
+
+// --- «Витрина» (test mode: admin only) -----------------------------------------
+
+const showcaseKey = ["showcase"] as const;
+
+export const useShowcase = (status?: ShowcaseItem["status"]) =>
+  useQuery({
+    queryKey: [...showcaseKey, "list", status ?? "all"],
+    queryFn: () => get<{ items: ShowcaseItem[] }>(`/api/showcase${query({ status })}`),
+  });
+
+export const useShowcaseItem = (id: string) =>
+  useQuery({
+    queryKey: [...showcaseKey, "item", id],
+    queryFn: () => get<{ item: ShowcaseItem }>(`/api/showcase/${id}`),
+  });
+
+function useShowcaseRefresh() {
+  const client = useQueryClient();
+  return () => client.invalidateQueries({ queryKey: showcaseKey });
+}
+
+export const useShowcaseAdd = () => {
+  const refresh = useShowcaseRefresh();
+  return useMutation({
+    mutationFn: (url: string) => post<{ item: ShowcaseItem }>("/api/showcase", { url }),
+    onSuccess: refresh,
+  });
+};
+
+export type ShowcasePatch = Partial<
+  Pick<
+    ShowcaseItem,
+    | "shop_price_krw"
+    | "official_price_krw"
+    | "client_price_override"
+    | "markup_type"
+    | "markup_value"
+    | "brand"
+    | "model"
+    | "shop"
+    | "category"
+  >
+>;
+
+export const useShowcasePatch = (id: string) => {
+  const refresh = useShowcaseRefresh();
+  return useMutation({
+    mutationFn: (body: ShowcasePatch) => patch<{ item: ShowcaseItem }>(`/api/showcase/${id}`, body),
+    onSuccess: refresh,
+  });
+};
+
+export const useShowcaseAction = (id: string) => {
+  const refresh = useShowcaseRefresh();
+  return useMutation({
+    mutationFn: (action: "refresh" | "like" | "delete" | "status/published" | "status/hidden" | "status/draft") =>
+      post<{ item?: ShowcaseItem; liked?: boolean; ok?: boolean }>(`/api/showcase/${id}/${action}`),
+    onSuccess: refresh,
+  });
+};
+
+export const useShowcaseOrder = () => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (items: { item_id: string; size: string | null }[]) =>
+      post<{ items: Order[] }>("/api/showcase/order", { items }),
+    onSuccess: refresh,
+  });
+};

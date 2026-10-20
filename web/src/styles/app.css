@@ -2683,3 +2683,46 @@ table.orders .r {
   color: var(--text-3);
   text-align: right;
 }
+
+/* ==========================================================================
+   «Витрина» (20.10.2026): tiles 2 in a row, a big product card, cart, «Подготовка».
+   ========================================================================== */
+.sc-test { font-size: 12px; font-weight: 700; color: var(--warning); }
+.sc-search { position: relative; display: block; }
+.sc-search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-3); }
+.sc-search .input { padding-left: 38px; }
+.sc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (min-width: 720px) { .sc-grid { grid-template-columns: repeat(4, 1fr); } }
+.sc-tile { display: block; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); color: inherit; text-decoration: none; }
+.sc-photo { position: relative; aspect-ratio: 1 / 1; background: #fff; }
+.sc-photo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.sc-photo.big { border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border); }
+.sc-shop { position: absolute; left: 8px; top: 8px; padding: 3px 9px; border-radius: 999px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 11px; font-weight: 700; }
+.sc-heart { position: absolute; right: 8px; top: 8px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.5); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.sc-heart.on { color: #ff4d6d; }
+.sc-body { padding: 10px; }
+.sc-brand { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
+.sc-model { font-size: 14px; font-weight: 700; margin: 2px 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-title { font-size: 20px; margin: 2px 0 6px; }
+.sc-price b { font-size: 15px; }
+.sc-price s { display: block; font-size: 12px; color: var(--text-3); }
+.sc-price.big b { font-size: 24px; }
+.sc-price.big s { display: inline; margin-left: 8px; }
+.sc-sizes { display: flex; flex-wrap: wrap; gap: 6px; }
+.sc-sizes.small { gap: 4px; margin-top: 6px; }
+.sc-size { display: inline-flex; align-items: baseline; gap: 5px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: transparent; color: var(--text); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.sc-sizes.small .sc-size { padding: 2px 6px; font-size: 11px; border-radius: 7px; cursor: inherit; }
+.sc-size i { font-style: normal; font-size: 11px; color: var(--positive); }
+.sc-size.low i { color: var(--warning); }
+.sc-size.out { color: var(--text-3); text-decoration: line-through; border-style: dashed; cursor: default; }
+.sc-size.sel { background: var(--text); color: var(--bg); border-color: var(--text); }
+.sc-size.sel i { color: inherit; opacity: 0.7; }
+.sc-detail { padding-bottom: 90px; }
+.sc-cta { position: sticky; bottom: calc(86px + var(--safe-bottom, 0px)); display: flex; gap: 8px; margin-top: 16px; z-index: 5; }
+.sc-cta .btn { flex: 1; min-height: 48px; }
+.sc-cta .btn.danger { flex: none; width: 52px; }
+.sc-count { margin-left: 4px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--negative); color: #fff; font-size: 11px; font-weight: 800; }
+.sc-preview { width: 180px; padding: 8px; border: 1px dashed var(--border); border-radius: var(--radius-lg); }
+.badge.sc-bad { background: var(--negative); color: #fff; }
+.badge.sc-from { background: #2b1f4d; color: #c9b8ff; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
+:root[data-theme="light"] .badge.sc-from { background: #ece6ff; color: #5b3fd6; }
