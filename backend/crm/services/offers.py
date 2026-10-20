@@ -5,7 +5,9 @@ takes one of them. Nothing is guessed: what is not found stays empty and the
 admin fills it in on the «Подготовка» page.
 
 * Hmall (Next.js): `__NEXT_DATA__` → `itemPtc.sellPrc` and `stockList[]`
-  (`uitm1AttrNm`, `sumUitmAttrNmStockCnt`);
+  (`uitm1AttrNm`, `sumUitmAttrNmStockCnt`); a product with colour → size
+  (`uitmCombYn: Y`) gives only the colours there, the pairs come from Hmall's
+  own JSON (`hmall_option_urls`, `parse_hmall_options`);
 * any shop with schema.org JSON-LD `Product.offers` (price, availability);
 * Open Graph `product:price:amount`.
 """
@@ -19,7 +21,7 @@ from crm.services.link_import import _ld_product, _MetaParser
 
 _NEXT_DATA = re.compile(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', re.S)
 _SIZE_NAME = re.compile(r"^(?:XXS|XS|S|M|L|XL|XXL|XXXL|[2-5]XL|F|FREE|\d{2,3}(?:[.,]5)?)$", re.I)
-MAX_SIZES = 40
+MAX_SIZES = 60  # e.g. 6 colours × 10 sizes
 
 
 @dataclass(frozen=True)
@@ -27,6 +29,7 @@ class SizeStock:
     name: str
     stock: int | None  # None: the shop does not say how many
     available: bool
+    color: str | None = None  # the shop asks for a colour first (20.10.2026)
 
 
 @dataclass
@@ -94,6 +97,64 @@ def _hmall(html: str) -> Offer | None:
             name = f"{name} {_clean_size(row['uitm2AttrNm'])}"
         offer.sizes.append(SizeStock(name, stock, (stock or 0) > 0))
     return offer if offer.price_krw or offer.sizes else None
+
+
+HMALL_API = "https://www.hmall.com/api/hf/dp/v1/item-ptc"
+_ON_SALE = "00"  # Hmall `sellGbcd`: on sale; other codes are sold out / stopped
+
+
+def hmall_option_urls(html: str) -> tuple[str, str] | None:
+    """Hmall URLs with every colour / size and the stock of each pair, when the
+    product is chosen in two steps (colour, then size); else None."""
+    match = _NEXT_DATA.search(html)
+    if not match:
+        return None
+    try:
+        item = _find(json.loads(match.group(1)), "itemPtc")
+    except ValueError:
+        return None
+    if not isinstance(item, dict) or item.get("uitmCombYn") != "Y":
+        return None
+    code = str(item.get("slitmCd") or "")
+    if not code.isdigit():
+        return None
+    return (
+        f"{HMALL_API}/uitm-attr-type?slitmCd={code}&uitmAttrTypeSeq=0",
+        f"{HMALL_API}/item-stockcount?slitmCd={code}",
+    )
+
+
+def parse_hmall_options(attrs: Any, stock: Any) -> list[SizeStock] | None:
+    """Colour × size pairs with stock from the two Hmall answers; None when
+    the product has not exactly two steps (then the page's list stays).
+    Pairs missing from the stock answer are sold out."""
+    levels = _find(attrs, "attrTypeMstVOList")
+    if not isinstance(levels, list) or len(levels) != 2:
+        return None
+    names = []
+    for level in sorted(levels, key=lambda lv: lv.get("uitmAttrTypeSeq") or 0):
+        values = [
+            str(v["uitmAttrNm"]).strip()
+            for v in level.get("uitmAttrMstList") or []
+            if isinstance(v, dict) and v.get("uitmAttrNm")
+        ]
+        names.append(values)
+    colors, sizes = names
+    if not colors or not sizes:
+        return None
+    pairs: dict[tuple[str, str], int] = {}
+    for row in _find(stock, "stockList") or []:
+        if not isinstance(row, dict) or row.get("sellGbcd") != _ON_SALE:
+            continue
+        key = (str(row.get("uitm1AttrNm") or "").strip(), str(row.get("uitm2AttrNm") or "").strip())
+        count = row.get("stockCount")
+        if isinstance(count, int) and not isinstance(count, bool) and count > 0:
+            pairs[key] = count
+    return [
+        SizeStock(_clean_size(size), pairs.get((color, size), 0), (color, size) in pairs, color)
+        for color in colors
+        for size in sizes
+    ][:MAX_SIZES]
 
 
 def _json_ld(html: str) -> Offer | None:

@@ -247,6 +247,16 @@ def create_demo_database(
         ),
     )
     logger.info("Demo data ready: %s orders", len(_ORDERS) + 1)
+
+    def _demo_sizes(item_id: str, sizes: list[tuple[str, int]]) -> list[dict]:
+        rows = [{"name": n, "stock": c, "available": c > 0} for n, c in sizes]
+        if item_id != "sc_demo2":
+            return rows
+        # Colour first, then size (like Hmall jackets): two colours.
+        black = [{**r, "color": "BLACK"} for r in rows]
+        navy = [{**r, "color": "NAVY", "stock": 4, "available": True} for r in rows[:2]]
+        return black + navy + [{**rows[2], "color": "NAVY", "stock": 0, "available": False}]
+
     # «Витрина» (test mode): two published cards and a draft, no network needed.
     showcase = [
         (
@@ -310,7 +320,7 @@ def create_demo_database(
                 "official_price_krw": official,
                 "markup_type": "krw",
                 "markup_value": markup,
-                "sizes": [{"name": n, "stock": c, "available": c > 0} for n, c in sizes],
+                "sizes": _demo_sizes(item_id, sizes),
                 "refreshed_at": now,
                 "created_at": now,
                 "updated_at": now,

@@ -13,6 +13,7 @@ from crm.services.showcase_service import CartLine, ShowcaseService, shop_name
 pytestmark = pytest.mark.usefixtures("client_doc")
 
 HMALL_HTML = (Path(__file__).parent / "fixtures" / "hmall_item.html").read_text()
+COLOR_HTML = (Path(__file__).parent / "fixtures" / "hmall_color_size.html").read_text()
 URL = "https://www.hmall.com/md/pda/itemPtc?slitmCd=2249340866"
 
 
@@ -26,6 +27,15 @@ class FakeFetcher:
     def __init__(self, html=HMALL_HTML):
         self.page_html = html
         self.images = []
+        self.answers = {}  # URL part → JSON (Hmall colour / size answers)
+
+    def json(self, url):
+        from crm.services.link_import import LinkError
+
+        for part, answer in self.answers.items():
+            if part in url:
+                return answer
+        raise LinkError("Сайт ответил ошибкой (HTTP 404).")
 
     def html(self, url):
         return self.page_html, url
@@ -217,3 +227,47 @@ def test_a_burst_of_links_reads_at_most_two_pages_at_once(showcase, admin):
         thread.join()
     assert state["peak"] == READ_PARALLEL == 2
     assert len(showcase.items(admin, "draft")) == 6
+
+
+def _fixture(name):
+    import json
+
+    return json.loads((Path(__file__).parent / "fixtures" / name).read_text())
+
+
+def test_colour_then_size_product_gets_every_pair_with_stock(showcase, admin):
+    # The owner, 20.10.2026: on Hmall a jacket is chosen colour first, then
+    # size; the page itself lists only the colours (stock 0 for each).
+    showcase.fetcher.page_html = COLOR_HTML
+    showcase.fetcher.answers = {
+        "uitm-attr-type": _fixture("hmall_color_size_attr.json"),
+        "item-stockcount": _fixture("hmall_color_size_stock.json"),
+    }
+    item = showcase.add(admin, "https://www.hmall.com/md/pda/itemPtc?slitmCd=2245070800")
+    assert item.shop_price_krw == 79_000
+    black = [(s["name"], s["stock"]) for s in item.sizes if s["color"] == "NJ5JR66A_BLK"]
+    assert black == [
+        ("090(S)", 16),
+        ("095(M)", 37),
+        ("100(L)", 57),
+        ("105(XL)", 19),
+        ("110(XXL)", 19),
+    ]
+    charcoal_xxl = next(
+        s for s in item.sizes if s["color"] == "NJ5JR66B_CHC" and s["name"] == "110(XXL)"
+    )
+    assert charcoal_xxl["available"] is False  # Hmall: sold out (not on sale)
+    assert len({s["color"] for s in item.sizes}) == 3 and len(item.sizes) == 15
+
+    showcase.set_status(admin, item.id, "published")
+    with pytest.raises(ValidationError, match="цвет"):
+        showcase.order(admin, [CartLine(item.id, "090(S)")])
+    [order] = showcase.order(admin, [CartLine(item.id, "095(M)", "NJ5JR66B_CHC")])
+    assert order.model.endswith("· NJ5JR66B_CHC")
+    assert (order.size, order.size_kr) == ("M", "095")
+
+
+def test_colour_answers_failing_keep_the_page_list(showcase, admin):
+    showcase.fetcher.page_html = COLOR_HTML
+    item = showcase.add(admin, "https://www.hmall.com/md/pda/itemPtc?slitmCd=2245070800")
+    assert [s["name"] for s in item.sizes] == ["NJ5JR66A_BLK", "NJ5JR66B_CHC", "NJ5JR66C_DBE"]

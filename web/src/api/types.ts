@@ -303,6 +303,8 @@ export interface ShowcaseSize {
   name: string;
   stock: number | null;
   available: boolean;
+  /** Colour first, then size (Hmall jackets, 20.10.2026). */
+  color?: string | null;
 }
 
 export interface ShowcaseItem {

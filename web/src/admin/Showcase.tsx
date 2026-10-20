@@ -25,7 +25,7 @@ import { downloadFiles, overrideBack } from "../telegram";
 
 /* ---------------------------------------------------------------- the cart */
 
-type CartLine = { item_id: string; size: string | null };
+type CartLine = { item_id: string; size: string | null; color?: string | null };
 const CART_KEY = "crm-showcase-cart";
 
 function readCart(): CartLine[] {
@@ -110,6 +110,29 @@ function SizeChips({
   );
 }
 
+/** Colours of a colour → size product, each with its total stock. */
+function colorsOf(sizes: ShowcaseSize[]): ShowcaseSize[] {
+  const colors = new Map<string, ShowcaseSize>();
+  for (const s of sizes) {
+    if (!s.color) continue;
+    const c = colors.get(s.color) ?? { name: s.color, stock: 0, available: false };
+    c.stock = (c.stock ?? 0) + (s.stock ?? 0);
+    c.available ||= s.available;
+    colors.set(s.color, c);
+  }
+  return [...colors.values()];
+}
+
+/** On a tile: each size once (available in any colour). */
+function sizesOnce(sizes: ShowcaseSize[]): ShowcaseSize[] {
+  const once = new Map<string, ShowcaseSize>();
+  for (const s of sizes) {
+    const seen = once.get(s.name);
+    once.set(s.name, seen ? { ...seen, available: seen.available || s.available } : { ...s, color: null });
+  }
+  return [...once.values()];
+}
+
 function LikeButton({ item, preview }: { item: ShowcaseItem; preview?: boolean }) {
   const toast = useToast();
   const action = useShowcaseAction(item.id);
@@ -142,7 +165,12 @@ export function ShowcaseTile({ item, preview }: { item: ShowcaseItem; preview?: 
         <div className="sc-brand">{item.brand ?? item.shop ?? ""}</div>
         <div className="sc-model">{item.model ?? item.title_line}</div>
         <Price item={item} />
-        <SizeChips sizes={item.sizes} />
+        {colorsOf(item.sizes).length > 1 && (
+          <div className="tiny faint" style={{ marginBottom: 4 }}>
+            {colorsOf(item.sizes).length} {plural(colorsOf(item.sizes).length, "цвет", "цвета", "цветов")}
+          </div>
+        )}
+        <SizeChips sizes={sizesOnce(item.sizes)} />
       </div>
     </>
   );
@@ -253,8 +281,12 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
   const order = useShowcaseOrder();
   const cart = useCart();
   const [size, setSize] = useState<string | null>(null);
+  const colors = colorsOf(item.sizes);
+  const [color, setColor] = useState<string | null>(null);
+  const sizes = colors.length ? item.sizes.filter((s) => s.color === color) : item.sizes;
   const needsSize = item.sizes.length > 0;
-  const ready = !needsSize || Boolean(size);
+  const ready = (!colors.length || Boolean(color)) && (!needsSize || Boolean(size));
+  const choice = [color, size].filter(Boolean).join(" · ");
   return (
     <>
       <div className="sc-detail">
@@ -279,7 +311,7 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
           </button>
         )}
         <div className="row between" style={{ margin: "16px 0 8px" }}>
-          <span className="small muted">Размер</span>
+          <span className="small muted">{colors.length ? "Цвет" : "Размер"}</span>
           <button
             className="btn small"
             disabled={action.isPending}
@@ -294,8 +326,26 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
             {item.refreshed_at ? ` · ${ago(item.refreshed_at)}` : ""}
           </button>
         </div>
-        {needsSize ? (
-          <SizeChips sizes={item.sizes} selected={size} onSelect={setSize} counts />
+        {colors.length > 0 && (
+          <>
+            <SizeChips
+              sizes={colors}
+              selected={color}
+              onSelect={(c) => {
+                setColor(c);
+                setSize(null);
+              }}
+              counts
+            />
+            <div className="small muted" style={{ margin: "16px 0 8px" }}>
+              Размер
+            </div>
+          </>
+        )}
+        {colors.length > 0 && !color ? (
+          <div className="small muted">Сначала выберите цвет.</div>
+        ) : needsSize ? (
+          <SizeChips sizes={sizes} selected={size} onSelect={setSize} counts />
         ) : (
           <div className="small muted">Размеры магазин не показал — укажите в комментарии к заказу.</div>
         )}
@@ -306,7 +356,7 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
           disabled={!ready}
           onClick={() => {
             if (preview) return toast(PREVIEW_HINT);
-            cart.add({ item_id: item.id, size });
+            cart.add({ item_id: item.id, size, color });
             toast(`В корзине: ${cart.lines.length + 1}`);
           }}
         >
@@ -318,7 +368,7 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
           onClick={() =>
             preview
               ? toast(PREVIEW_HINT)
-              : order.mutate([{ item_id: item.id, size }], {
+              : order.mutate([{ item_id: item.id, size, color }], {
               onSuccess: (r) => {
                 toast(`Заказ ${r.items.map((o) => o.id).join(", ")} создан — в «Новых»`);
                 navigate(`/orders/${r.items[0].id}`);
@@ -327,7 +377,15 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
             })
           }
         >
-          {order.isPending ? "Подождите…" : needsSize ? (size ? `Заказать · ${size}` : "Выберите размер") : "Заказать"}
+          {order.isPending
+            ? "Подождите…"
+            : colors.length && !color
+              ? "Выберите цвет"
+              : needsSize && !size
+                ? "Выберите размер"
+                : choice
+                  ? `Заказать · ${choice}`
+                  : "Заказать"}
         </button>
       </div>
     </>
@@ -432,6 +490,7 @@ export function ShowcaseCartPage() {
                 <div className="grow" style={{ minWidth: 0 }}>
                   <div className="title">{item ? item.title_line : "Товар снят с витрины"}</div>
                   <div className="small muted">
+                    {line.color ? `${line.color} · ` : ""}
                     {line.size ? `Размер ${line.size} · ` : ""}
                     {item?.client_price_krw ? krw(item.client_price_krw) : "—"}
                   </div>

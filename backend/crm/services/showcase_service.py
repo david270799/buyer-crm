@@ -28,7 +28,14 @@ from crm.services.link_import import (
     has_hangul,
     parse_page,
 )
-from crm.services.offers import MAX_PHOTOS, Offer, parse_offer, photo_candidates
+from crm.services.offers import (
+    MAX_PHOTOS,
+    Offer,
+    hmall_option_urls,
+    parse_hmall_options,
+    parse_offer,
+    photo_candidates,
+)
 from crm.services.order_service import NewOrder, OrderService, clean_shop
 from crm.services.recognition import MIN_CONFIDENCE, RecognitionError
 from crm.services.sizes import order_sizes
@@ -76,13 +83,20 @@ def _price(value: Any, name: str) -> int | None:
 
 
 def _sizes(offer: Offer) -> list[dict[str, Any]]:
-    return [{"name": s.name, "stock": s.stock, "available": s.available} for s in offer.sizes]
+    rows = []
+    for s in offer.sizes:
+        row = {"name": s.name, "stock": s.stock, "available": s.available}
+        if s.color:
+            row["color"] = s.color
+        rows.append(row)
+    return rows
 
 
 @dataclass(frozen=True)
 class CartLine:
     item_id: str
     size: str | None
+    color: str | None = None  # products chosen colour first, then size
 
 
 # Shop pages read at the same time (each one downloads up to MAX_PHOTOS photos
@@ -116,6 +130,21 @@ class ShowcaseService:
 
     # --- reading the shop page -----------------------------------------------
 
+    def _offer(self, html: str) -> Offer:
+        """Price and sizes; Hmall's colour → size products ask Hmall for the
+        pairs (a failed answer keeps what the page itself showed)."""
+        offer = parse_offer(html)
+        urls = hmall_option_urls(html)
+        if urls and hasattr(self._fetcher, "json"):
+            try:
+                pairs = parse_hmall_options(*(self._fetcher.json(u) for u in urls))
+            except LinkError as exc:
+                logger.info("Hmall options not read: %s", exc)
+                pairs = None
+            if pairs:
+                offer.sizes = pairs
+        return offer
+
     def _read(self, url: str) -> tuple[dict[str, Any], list[str]]:
         """Fields from the shop page and what could not be read."""
         with self._reading:
@@ -127,7 +156,7 @@ class ShowcaseService:
         except LinkError as exc:
             raise ValidationError(f"{exc} Проверьте ссылку.") from None
         page = parse_page(html, final)
-        offer = parse_offer(html)
+        offer = self._offer(html)
         notes: list[str] = []
         fields: dict[str, Any] = {
             "title": page.title,
@@ -329,7 +358,7 @@ class ShowcaseService:
             html, _ = self._fetcher.html(item.url)
         except LinkError as exc:
             raise ValidationError(f"Магазин не открылся: {exc}") from None
-        offer = parse_offer(html)
+        offer = self._offer(html)
         fields: dict[str, Any] = {"refreshed_at": self._clock.now()}
         if offer.sizes:
             fields["sizes"] = _sizes(offer)
@@ -512,7 +541,12 @@ class ShowcaseService:
             item = self.get(actor, line.item_id)
             if item.status != "published":
                 raise ConflictError(f"«{item.title_line}» снят с витрины.")
-            names = {s.get("name") for s in item.sizes}
+            colors = {s.get("color") for s in item.sizes if s.get("color")}
+            if colors and line.color not in colors:
+                raise ValidationError(f"Выберите цвет для «{item.title_line}».")
+            names = {
+                s.get("name") for s in item.sizes if not colors or s.get("color") == line.color
+            }
             if item.sizes and line.size not in names:
                 raise ValidationError(f"Выберите размер для «{item.title_line}».")
             items[line.item_id] = item
@@ -525,7 +559,7 @@ class ShowcaseService:
                     actor,
                     NewOrder(
                         brand=item.brand,
-                        model=item.model,
+                        model=" · ".join(p for p in (item.model, line.color) if p) or None,
                         size=size,
                         size_kr=size_kr,
                         source_url=item.url,

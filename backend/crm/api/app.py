@@ -141,6 +141,7 @@ class ShowcasePatchIn(BaseModel):
 class CartLineIn(BaseModel):
     item_id: str = Field(max_length=80)
     size: str | None = Field(default=None, max_length=40)
+    color: str | None = Field(default=None, max_length=80)
 
 
 class ShowcaseOrderIn(BaseModel):
@@ -844,7 +845,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
 
     @app.post("/api/showcase/order")
     def showcase_order(body: ShowcaseOrderIn, p: Admin) -> dict[str, Any]:
-        lines = [CartLine(line.item_id, line.size) for line in body.items]
+        lines = [CartLine(line.item_id, line.size, line.color) for line in body.items]
         orders = _showcase().order(p.actor, lines)
         return {"items": [order_json(o, p.role) for o in orders]}
 

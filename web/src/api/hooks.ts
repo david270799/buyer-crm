@@ -514,7 +514,7 @@ export const useShowcaseAction = (id: string) => {
 export const useShowcaseOrder = () => {
   const refresh = useInvalidateAll();
   return useMutation({
-    mutationFn: (items: { item_id: string; size: string | null }[]) =>
+    mutationFn: (items: { item_id: string; size: string | null; color?: string | null }[]) =>
       post<{ items: Order[] }>("/api/showcase/order", { items }),
     onSuccess: refresh,
   });

@@ -230,6 +230,17 @@ class PageFetcher:
         html, final = self.html(url)
         return parse_page(html, final)
 
+    def json(self, url: str) -> Any:
+        """A shop's own JSON answer (Hmall colour / size stock)."""
+        try:
+            body, _, _ = _get(self._client, url, MAX_PAGE_BYTES)
+        except httpx.HTTPError as exc:
+            raise LinkError(f"Сайт не открылся ({type(exc).__name__}).") from None
+        try:
+            return json.loads(body)
+        except ValueError:
+            raise LinkError("Сайт ответил не данными.") from None
+
     def image(self, url: str) -> bytes:
         try:
             body, _, _ = _get(self._client, url, MAX_IMAGE_BYTES)
