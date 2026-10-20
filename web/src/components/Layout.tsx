@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import { type CSSProperties, type ReactNode, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
-import { backButton } from "../telegram";
+import { backButton, handleBackOverride } from "../telegram";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { BellButton } from "./events";
 
@@ -32,7 +32,7 @@ function useTelegramBack() {
     const top = ["/balance", "/notifications", "/profit"].includes(pathname);
     const nested = parts.length > 1 || top;
     const parent = parts.length > 1 ? `/${parts.slice(0, -1).join("/")}` : "/";
-    return backButton(nested, () => navigate(parent + (lastSearch.get(parent) ?? "")));
+    return backButton(nested, () => handleBackOverride() || navigate(parent + (lastSearch.get(parent) ?? "")));
   }, [pathname, navigate]);
 }
 

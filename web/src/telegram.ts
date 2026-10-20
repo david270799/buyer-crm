@@ -85,6 +85,24 @@ export function backButton(visible: boolean, onClick: () => void): () => void {
   return () => app.BackButton.offClick(onClick);
 }
 
+let backOverride: (() => void) | null = null;
+
+/** A full-screen layer (the card preview) takes Telegram's back button until
+ * it closes: «назад» closes the layer instead of leaving the page. */
+export function overrideBack(onBack: () => void): () => void {
+  backOverride = onBack;
+  return () => {
+    if (backOverride === onBack) backOverride = null;
+  };
+}
+
+/** True when a layer handled «назад». */
+export function handleBackOverride(): boolean {
+  if (!backOverride) return false;
+  backOverride();
+  return true;
+}
+
 /** Save a file to the phone: Telegram's own download (Bot API 8.0+, it asks
  * where to save and puts photos in the gallery), else a normal browser download. */
 export function downloadFile(url: string, fileName: string): void {

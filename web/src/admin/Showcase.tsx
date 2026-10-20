@@ -18,7 +18,7 @@ import type { Category, ShowcaseItem, ShowcaseSize } from "../api/types";
 import { PageHead } from "../components/Layout";
 import { Empty, ErrorState, Field, Loading, MoneyInput, errorText, useToast } from "../components/ui";
 import { CATEGORY_LABEL, krw, moment, plural } from "../lib/format";
-import { downloadFiles } from "../telegram";
+import { downloadFiles, overrideBack } from "../telegram";
 
 // «Витрина» (the owner, 20.10.2026). Test mode: only the admin sees it; he
 // walks the client's path himself (♥, size, cart, «Заказать») before it opens.
@@ -110,7 +110,7 @@ function SizeChips({
   );
 }
 
-function LikeButton({ item }: { item: ShowcaseItem }) {
+function LikeButton({ item, preview }: { item: ShowcaseItem; preview?: boolean }) {
   const toast = useToast();
   const action = useShowcaseAction(item.id);
   return (
@@ -121,6 +121,7 @@ function LikeButton({ item }: { item: ShowcaseItem }) {
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (preview) return toast(PREVIEW_HINT);
         action.mutate("like", { onError: (err) => toast(errorText(err), "error") });
       }}
     >
@@ -231,25 +232,33 @@ export function ShowcasePage() {
 
 export function ShowcaseItemPage() {
   const { id = "" } = useParams();
-  const toast = useToast();
-  const navigate = useNavigate();
   const { data, error, isLoading, refetch } = useShowcaseItem(id);
-  const action = useShowcaseAction(id);
-  const order = useShowcaseOrder();
-  const cart = useCart();
-  const [size, setSize] = useState<string | null>(null);
   useEffect(() => {
     if (id) markShowcaseViewed(id);
   }, [id]);
   if (isLoading) return <Loading rows={3} height={140} />;
   if (error || !data) return <ErrorState error={error} onRetry={refetch} />;
-  const item = data.item;
+  return <ShowcaseItemView item={data.item} />;
+}
+
+const PREVIEW_HINT = "Это предпросмотр: заказать можно после одобрения";
+
+/** The product card as the client opens it. `preview` (from «Одобрение»,
+ * the owner 20.10.2026): the same card with unsaved prices; ♥, cart and
+ * «Заказать» only explain, nothing is counted or ordered. */
+function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boolean }) {
+  const toast = useToast();
+  const navigate = useNavigate();
+  const action = useShowcaseAction(item.id);
+  const order = useShowcaseOrder();
+  const cart = useCart();
+  const [size, setSize] = useState<string | null>(null);
   const needsSize = item.sizes.length > 0;
   const ready = !needsSize || Boolean(size);
   return (
     <>
       <div className="sc-detail">
-        <ShowcasePhotos item={item} />
+        <ShowcasePhotos item={item} preview={preview} />
         <div className="sc-brand" style={{ marginTop: 14 }}>
           {item.brand}
           {item.category ? ` · ${CATEGORY_LABEL[item.category]}` : ""}
@@ -296,6 +305,7 @@ export function ShowcaseItemPage() {
           className="btn"
           disabled={!ready}
           onClick={() => {
+            if (preview) return toast(PREVIEW_HINT);
             cart.add({ item_id: item.id, size });
             toast(`В корзине: ${cart.lines.length + 1}`);
           }}
@@ -306,7 +316,9 @@ export function ShowcaseItemPage() {
           className="btn primary"
           disabled={!ready || order.isPending}
           onClick={() =>
-            order.mutate([{ item_id: item.id, size }], {
+            preview
+              ? toast(PREVIEW_HINT)
+              : order.mutate([{ item_id: item.id, size }], {
               onSuccess: (r) => {
                 toast(`Заказ ${r.items.map((o) => o.id).join(", ")} создан — в «Новых»`);
                 navigate(`/orders/${r.items[0].id}`);
@@ -322,8 +334,34 @@ export function ShowcaseItemPage() {
   );
 }
 
+/** «Открыть как клиент» on «Одобрение»: the whole card over the page, with
+ * the prices being edited; «Закрыть» or Telegram's «назад» returns. */
+function FullPreview({ item, onClose }: { item: ShowcaseItem; onClose: () => void }) {
+  useEffect(() => overrideBack(onClose), [onClose]);
+  useEffect(() => {
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = overflow;
+    };
+  }, []);
+  return (
+    <div className="sc-full" role="dialog" aria-modal="true" aria-label="Предпросмотр карточки">
+      <div className="sc-full-bar">
+        <span>
+          <Eye size={16} /> Так увидит клиент
+        </span>
+        <button className="btn small" onClick={onClose}>
+          <X size={16} /> Закрыть
+        </button>
+      </div>
+      <ShowcaseItemView item={item} preview />
+    </div>
+  );
+}
+
 /** Big photo; several photos swipe sideways with dots below. */
-function ShowcasePhotos({ item }: { item: ShowcaseItem }) {
+function ShowcasePhotos({ item, preview }: { item: ShowcaseItem; preview?: boolean }) {
   const [index, setIndex] = useState(0);
   const photos = item.photos;
   return (
@@ -338,7 +376,7 @@ function ShowcasePhotos({ item }: { item: ShowcaseItem }) {
           ))}
         </div>
         {item.shop && <span className="sc-shop">{item.shop}</span>}
-        <LikeButton item={item} />
+        <LikeButton item={item} preview={preview} />
       </div>
       {photos.length > 1 && (
         <div className="photo-dots" aria-hidden>
@@ -543,6 +581,7 @@ function PrepEditor({
 }) {
   const save = useShowcasePatch(item.id);
   const action = useShowcaseAction(item.id);
+  const [full, setFull] = useState(false);
   const [form, setForm] = useState({
     brand: item.brand ?? "",
     model: item.model ?? "",
@@ -662,9 +701,13 @@ function PrepEditor({
           <RefreshCw size={14} /> Обновить наличие
         </button>
       </div>
-      <div className="sc-preview">
+      <button type="button" className="sc-preview" onClick={() => setFull(true)} aria-label="Открыть карточку как клиент">
         <ShowcaseTile item={preview} preview />
-      </div>
+        <span className="sc-preview-open">
+          <Eye size={14} /> Открыть как клиент
+        </span>
+      </button>
+      {full && <FullPreview item={preview} onClose={() => setFull(false)} />}
       <div className="sc-cta">
         <button
           className="btn ghost danger"
