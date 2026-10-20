@@ -802,6 +802,10 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         liked = set(_showcase().liked(p.actor))
         return {"item": showcase_json(_showcase().refresh(p.actor, item_id), liked)}
 
+    @app.post("/api/showcase/{item_id}/official")
+    def showcase_official(item_id: str, p: Admin) -> dict[str, Any]:
+        return {"item": showcase_json(_showcase().find_official(p.actor, item_id))}
+
     @app.post("/api/showcase/{item_id}/status/{status}")
     def showcase_status(item_id: str, status: str, p: Admin) -> dict[str, Any]:
         return {"item": showcase_json(_showcase().set_status(p.actor, item_id, status))}

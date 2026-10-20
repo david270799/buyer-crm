@@ -161,6 +161,11 @@ class ShowcaseService:
         fields["category"] = category
         if not (fields["brand"] or fields["model"]):
             notes.append("название не переведено")
+        price, official_url, note = self._official(fields["brand"], fields["model"])
+        if price:
+            fields["official_price_krw"], fields["official_url"] = price, official_url
+        elif note:
+            notes.append(note)
         return fields, notes
 
     # --- admin: drafts ------------------------------------------------------
@@ -205,6 +210,36 @@ class ShowcaseService:
 
         self._db.run_transaction(fn)
         return self.get(actor, item_id)
+
+    def find_official(self, actor: Actor, item_id: str) -> ShowcaseItem:
+        """Look for the brand's own store price (Gemini + Google Search). Taken
+        only when the page is on a domain carrying the brand's name."""
+        item = self.get(actor, item_id)
+        price, url, note = self._official(item.brand, item.model or item.title)
+        fields: dict[str, Any] = {"note": note} if note else {}
+        if price:
+            fields.update(official_price_krw=price, official_url=url)
+        if not fields:
+            fields["official_url"] = None
+        return self._write(actor, item_id, fields, "showcase.official")
+
+    def _official(
+        self, brand: str | None, model: str | None
+    ) -> tuple[int | None, str | None, str | None]:
+        if not brand or self._recognizer is None:
+            return None, None, None
+        if not hasattr(self._recognizer, "find_official_price"):
+            return None, None, None
+        try:
+            answer = self._recognizer.find_official_price(f"{brand} {model or ''}".strip())
+        except RecognitionError as exc:
+            return None, None, f"официальная цена: {exc}"
+        url, price = answer.get("url"), answer.get("price_krw")
+        token = "".join(ch for ch in brand.lower() if ch.isalnum())
+        host = (urlsplit(url).hostname or "").lower() if url else ""
+        if not price or not token or token not in host.replace("-", ""):
+            return None, None, "официальная цена не найдена"
+        return price, url, None
 
     def get(self, actor: Actor, item_id: str) -> ShowcaseItem:
         require_admin(actor)

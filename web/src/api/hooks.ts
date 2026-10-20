@@ -503,7 +503,9 @@ export const useShowcasePatch = (id: string) => {
 export const useShowcaseAction = (id: string) => {
   const refresh = useShowcaseRefresh();
   return useMutation({
-    mutationFn: (action: "refresh" | "like" | "delete" | "status/published" | "status/hidden" | "status/draft") =>
+    mutationFn: (
+      action: "refresh" | "like" | "delete" | "official" | "status/published" | "status/hidden" | "status/draft",
+    ) =>
       post<{ item?: ShowcaseItem; liked?: boolean; ok?: boolean }>(`/api/showcase/${id}/${action}`),
     onSuccess: refresh,
   });

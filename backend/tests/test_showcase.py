@@ -37,6 +37,11 @@ class FakeFetcher:
 
 class FakeGemini:
     engine = "fake"
+    official = {"price_krw": 79_000, "url": "https://www.adidas.co.kr/kf8282.html"}
+
+    def find_official_price(self, product):
+        self.asked = product
+        return self.official
 
     def read_listing(self, image, text):
         return {
@@ -141,3 +146,13 @@ def test_page_without_data_still_makes_a_draft(showcase, admin):
     assert item.shop_price_krw is None and "цена не найдена" in item.note
     with pytest.raises(ConflictError):
         showcase.set_status(admin, item.id, "published")
+
+
+def test_official_price_is_taken_only_from_the_brand_site(showcase, admin):
+    item = showcase.add(admin, URL)
+    assert item.official_price_krw == 79_000 and "adidas.co.kr" in item.official_url
+
+    showcase._recognizer.official = {"price_krw": 49_000, "url": "https://reseller.example/x"}
+    again = showcase.find_official(admin, item.id)
+    assert again.official_price_krw == 79_000  # a reseller page is not «official»
+    assert "не найдена" in again.note

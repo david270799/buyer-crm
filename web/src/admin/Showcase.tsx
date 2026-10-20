@@ -562,9 +562,30 @@ function PrepEditor({
           <Field label="Цена в магазине">
             <MoneyInput value={form.shop_price_krw} onChange={(v) => set("shop_price_krw", v)} />
           </Field>
-          <Field label="Официальная цена" hint="Для зачёркивания, если выше вашей">
+          <Field
+            label="Официальная цена"
+            hint={item.official_url ? `Найдено: ${new URL(item.official_url).hostname}` : "Для зачёркивания, если выше вашей"}
+          >
             <MoneyInput value={form.official_price_krw} onChange={(v) => set("official_price_krw", v)} placeholder="не указана" />
           </Field>
+          <button
+            type="button"
+            className="btn small"
+            style={{ alignSelf: "flex-start" }}
+            disabled={action.isPending}
+            onClick={() =>
+              action.mutate("official", {
+                onSuccess: (r) => {
+                  const found = r.item?.official_price_krw;
+                  if (found) set("official_price_krw", found);
+                  toast(found ? `Официальная цена: ${krw(found)}` : "Официальная цена не найдена — впишите сами");
+                },
+                onError: (e) => toast(errorText(e), "error"),
+              })
+            }
+          >
+            <Search size={14} /> Найти официальную цену
+          </button>
         </div>
         <div className="row" style={{ gap: 8, alignItems: "flex-end" }}>
           <div className="field" style={{ flex: 1 }}>

@@ -245,3 +245,24 @@ def test_thinking_level_is_dropped_if_the_model_refuses_it():
     assert g.recognize(b"img", CAPTION).brand == "Nike"
     # One refused request, then never sent again.
     assert ["thinkingConfig" in c for c in sent] == [True, False, False]
+
+
+def test_official_price_uses_google_search_and_reads_the_json_line():
+    seen = {}
+
+    def handler(request):
+        seen["body"] = json.loads(request.content)
+        text = 'Found it.\n{"price_krw": 79000, "url": "https://www.adidas.co.kr/x.html"}'
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": text}]}}]})
+
+    found = recognizer(handler).find_official_price("Adidas KF8282 STSV Track Top")
+    assert found == {"price_krw": 79_000, "url": "https://www.adidas.co.kr/x.html"}
+    assert seen["body"]["tools"] == [{"google_search": {}}]
+
+
+def test_official_price_not_found_gives_nulls():
+    def handler(request):
+        text = "I could not find it."
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": text}]}}]})
+
+    assert recognizer(handler).find_official_price("x") == {"price_krw": None, "url": None}
