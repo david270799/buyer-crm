@@ -33,6 +33,7 @@ from crm.services.offers import (
     MAX_PHOTOS,
     Offer,
     hmall_option_urls,
+    is_plain_size,
     parse_hmall_options,
     parse_offer,
     photo_candidates,
@@ -165,6 +166,33 @@ class ShowcaseService:
                 offer.sizes = pairs
         return offer
 
+    def _split(self, rows: list[dict[str, Any]]) -> None:
+        """«블랙A 85(XS)» in one name → colour «블랙A» + size «85(XS)» (the owner,
+        20.10.2026: Gemini splits, the card asks colour first). Applied only
+        when every option splits and both parts are in the name word for word."""
+        if not rows or any(r.get("color") for r in rows):
+            return
+        names = [r["name"] for r in rows]
+        if all(is_plain_size(n) for n in names):
+            return
+        if self._recognizer is None or not hasattr(self._recognizer, "split_options"):
+            return
+        try:
+            parts = self._recognizer.split_options(names)
+        except RecognitionError as exc:
+            logger.info("Option names not split: %s", exc)
+            return
+
+        def squeeze(text: str) -> str:
+            return "".join(text.split()).lower()
+
+        for name, (color, size) in zip(names, parts, strict=True):
+            whole = squeeze(name)
+            if not color or not size or squeeze(color) not in whole or squeeze(size) not in whole:
+                return  # one doubtful answer: keep the shop's names as they are
+        for row, (color, size) in zip(rows, parts, strict=True):
+            row["color"], row["name"] = color, size
+
     def _translate(self, rows: list[dict[str, Any]], known: dict[str, str]) -> None:
         """Korean colour / size names get an English name in front, the shop's
         own word kept in brackets: «Black A (블랙A)» (the owner, 20.10.2026).
@@ -207,6 +235,7 @@ class ShowcaseService:
             "shop_price_krw": offer.price_krw,
             "sizes": _sizes(offer),
         }
+        self._split(fields["sizes"])
         self._translate(fields["sizes"], {})
         if not offer.price_krw:
             notes.append("цена не найдена")
@@ -418,6 +447,7 @@ class ShowcaseService:
                 if r.get(f"{k}_ko")
             }
             fields["sizes"] = _sizes(offer)
+            self._split(fields["sizes"])
             self._translate(fields["sizes"], known)
         if offer.price_krw:
             fields["shop_price_krw"] = offer.price_krw

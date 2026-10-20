@@ -54,6 +54,10 @@ class FakeGemini:
     words = {"블랙A": "Black A", "그레이시카키B": "Grayish Khaki B"}
     translated = 0  # how many names were sent
 
+    def split_options(self, labels):
+        self.split_asked = list(labels)
+        return [tuple(label.rsplit(" ", 1)) if " " in label else (None, label) for label in labels]
+
     def translate_labels(self, labels):
         self.translated += len(labels)
         return [self.words.get(label) for label in labels]
@@ -337,3 +341,33 @@ def test_korean_colour_names_are_translated_once(showcase, admin):
     again = showcase.refresh(admin, item.id)
     assert again.sizes[0]["color"] == "Black A (블랙A)"
     assert gemini.translated == sent + 1  # only the untranslated «모름» is asked again
+
+
+def _page_with(names):
+    import json
+
+    rows = [{"uitm1AttrNm": n, "sumUitmAttrNmStockCnt": 2} for n in names]
+    data = {"props": {"pageProps": {"itemPtc": {"sellPrc": 99000, "stockList": rows}}}}
+    return f'<script id="__NEXT_DATA__" type="application/json">{json.dumps(data)}</script>'
+
+
+def test_joined_colour_and_size_names_are_split_by_gemini(showcase, admin):
+    showcase.fetcher.page_html = _page_with(["블랙A 85(XS)", "블랙A 90(S)", "그레이시카키B 90(S)"])
+    item = showcase.add(admin, URL)
+    assert [(s["color"], s["name"]) for s in item.sizes] == [
+        ("Black A (블랙A)", "85(XS)"),
+        ("Black A (블랙A)", "90(S)"),
+        ("Grayish Khaki B (그레이시카키B)", "90(S)"),
+    ]
+
+
+def test_plain_sizes_are_not_sent_and_doubtful_splits_are_dropped(showcase, admin):
+    gemini = showcase._recognizer
+    showcase.fetcher.page_html = _page_with(["85(XS)", "M", "270"])
+    showcase.add(admin, URL)
+    assert not hasattr(gemini, "split_asked")  # nothing to split, no Gemini call
+    gemini.split_options = lambda labels: [("Black", "XS"), ("Navy", "S")]  # «Navy» not in name
+    showcase.fetcher.page_html = _page_with(["Black XS", "Black S"])
+    item = showcase.add(admin, URL)
+    names = [(s.get("color"), s["name"]) for s in item.sizes]
+    assert names == [(None, "Black XS"), (None, "Black S")]

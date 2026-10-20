@@ -256,6 +256,29 @@ TRANSLATE_SCHEMA: dict[str, Any] = {
     "required": ["labels"],
 }
 
+SPLIT_PROMPT = """\
+You get option names from a shop; each is one option of a product and may join a colour and a \
+size in one string: "블랙A 85(XS)", "Black/270", "네이비 L". Split each into the colour part and \
+the size part, copying the text exactly as written (no translation, no changes). When a name \
+has no colour or no size, give null for that part. Same order, one result per input."""
+
+SPLIT_SCHEMA: dict[str, Any] = {
+    "type": "OBJECT",
+    "properties": {
+        "options": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "color": {"type": "STRING", "nullable": True},
+                    "size": {"type": "STRING", "nullable": True},
+                },
+            },
+        }
+    },
+    "required": ["options"],
+}
+
 ARRIVAL_PROMPT = """\
 A buyer photographed an item that arrived at the warehouse: usually the box label, the size \
 tag or the item itself. You get the ordered item (brand, model) and the ordered size; the size \
@@ -487,6 +510,34 @@ class GeminiRecognizer:
             "note": _text(answer.get("note"), "note"),
             "review_ko": _text(answer.get("review_ko"), "review"),
         }
+
+    def split_options(self, labels: list[str]) -> list[tuple[str | None, str | None]]:
+        """Colour and size parts of joined option names («블랙A 85(XS)»); the
+        caller keeps only parts found word for word in the name."""
+        config = self._generation_config()
+        config["responseSchema"] = SPLIT_SCHEMA
+        body = {
+            "systemInstruction": {"parts": [{"text": SPLIT_PROMPT}]},
+            "contents": [
+                {"role": "user", "parts": [{"text": json.dumps(labels, ensure_ascii=False)}]}
+            ],
+            "generationConfig": config,
+        }
+        answer = _answer_json(self._call(body))
+        got = answer.get("options") if isinstance(answer, dict) else None
+        if not isinstance(got, list) or len(got) != len(labels):
+            raise RecognitionError("Gemini вернул не тот список вариантов")
+        result: list[tuple[str | None, str | None]] = []
+        for value in got:
+            value = value if isinstance(value, dict) else {}
+            color, size = value.get("color"), value.get("size")
+            result.append(
+                (
+                    color.strip() if isinstance(color, str) and color.strip() else None,
+                    size.strip() if isinstance(size, str) and size.strip() else None,
+                )
+            )
+        return result
 
     def translate_labels(self, labels: list[str]) -> list[str | None]:
         """English names of Korean colour / size options («Витрина», 20.10.2026);

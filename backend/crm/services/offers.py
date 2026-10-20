@@ -38,6 +38,18 @@ class Offer:
     sizes: list[SizeStock] = field(default_factory=list)
 
 
+_PLAIN_SIZE = re.compile(
+    r"^(?:\d{2,3}(?:[.,]5)?(?:\s*\(\s*[0-9A-Z]{1,5}\s*\))?"
+    r"|(?:XXS|XS|S|M|L|XL|XXL|XXXL|[2-5]XL|F|FREE)(?:\s*\(\s*\d{2,3}\s*\))?)$",
+    re.I,
+)
+
+
+def is_plain_size(name: str) -> bool:
+    """«270», «85(XS)», «M», «L(100)»: a size alone, nothing to split."""
+    return bool(_PLAIN_SIZE.match(" ".join(str(name).split())))
+
+
 def _int(value: Any) -> int | None:
     if isinstance(value, bool):
         return None
