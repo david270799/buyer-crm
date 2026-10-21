@@ -1,0 +1,22 @@
+{
+  "default_cwd": "/opt/buyer-crm",
+  "actions": [
+    {"id": "crm-status", "name": "Статус", "group": "Buyer CRM", "command": "docker compose ps", "cwd": "/opt/buyer-crm", "confirm": false},
+    {"id": "crm-logs", "name": "Логи CRM", "description": "последние 200 строк", "group": "Buyer CRM", "command": "docker compose logs --tail 200 crm", "cwd": "/opt/buyer-crm", "confirm": false},
+    {"id": "caddy-logs", "name": "Логи Caddy (HTTPS)", "group": "Buyer CRM", "command": "docker compose logs --tail 100 caddy", "cwd": "/opt/buyer-crm", "confirm": false},
+    {"id": "crm-doctor", "name": "Проверка настроек", "description": "doctor: настройки, база, копии, ключ Gemini; ничего не меняет", "group": "Buyer CRM", "command": "docker compose exec -T crm python -m crm.tools.doctor", "cwd": "/opt/buyer-crm", "confirm": false},
+    {"id": "crm-version", "name": "Какая версия стоит", "group": "Buyer CRM", "command": "git log --oneline -5 && git status -sb", "cwd": "/opt/buyer-crm", "confirm": false},
+    {"id": "crm-backup", "name": "Сделать копию базы", "group": "Buyer CRM", "command": "docker compose exec -T crm python -m crm.tools.backup", "cwd": "/opt/buyer-crm", "confirm": false},
+    {"id": "crm-backup-list", "name": "Список копий", "group": "Buyer CRM", "command": "docker compose exec -T crm python -m crm.tools.backup --list", "cwd": "/opt/buyer-crm", "confirm": false},
+    {"id": "crm-update", "name": "Обновить CRM", "description": "копия базы → git pull → пересборка; 3–10 минут", "group": "Buyer CRM", "command": "docker compose exec -T crm python -m crm.tools.backup && git pull && docker compose up -d --build", "cwd": "/opt/buyer-crm", "confirm": true},
+    {"id": "crm-restart", "name": "Перезапустить CRM", "group": "Buyer CRM", "command": "docker compose restart crm", "cwd": "/opt/buyer-crm", "confirm": true},
+    {"id": "crm-stop", "name": "Остановить CRM", "description": "бот и Mini App перестанут работать", "group": "Buyer CRM", "command": "docker compose stop crm", "cwd": "/opt/buyer-crm", "confirm": true},
+    {"id": "crm-start", "name": "Запустить CRM", "group": "Buyer CRM", "command": "docker compose start crm", "cwd": "/opt/buyer-crm", "confirm": false},
+    {"id": "sys-disk", "name": "Место на диске", "group": "Сервер", "command": "df -h / && docker system df", "cwd": "/opt/buyer-crm", "confirm": false},
+    {"id": "sys-mem", "name": "Память и нагрузка", "group": "Сервер", "command": "free -m && uptime", "cwd": "/opt/buyer-crm", "confirm": false},
+    {"id": "sys-ports", "name": "Занятые порты", "group": "Сервер", "command": "ss -tlnp", "cwd": "/opt/buyer-crm", "confirm": false},
+    {"id": "docker-prune", "name": "Почистить старые образы", "description": "удаляет неиспользуемые образы и кеш сборки; база и фото (тома) не трогаются", "group": "Сервер", "command": "docker image prune -af && docker builder prune -af", "cwd": "/opt/buyer-crm", "confirm": true},
+    {"id": "sys-upgrade", "name": "Обновить Ubuntu", "group": "Сервер", "command": "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade", "cwd": "/opt/buyer-crm", "confirm": true},
+    {"id": "sys-reboot", "name": "Перезагрузить сервер", "description": "CRM поднимется сама после загрузки", "group": "Сервер", "command": "reboot", "cwd": "/", "confirm": true}
+  ]
+}
