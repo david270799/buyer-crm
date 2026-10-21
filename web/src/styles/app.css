@@ -2755,3 +2755,6 @@ table.orders .r {
 .sc-stats span { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--text-3); }
 .sc-stats button.active span { color: inherit; opacity: 0.75; }
 .sc-views { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--text-2); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* «Обновить CRM»: the tail of the server's update log when it failed. */
+.update-log { max-height: 220px; overflow: auto; margin: 0; padding: 10px; border-radius: var(--radius); background: var(--surface-2); font-size: 11px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }

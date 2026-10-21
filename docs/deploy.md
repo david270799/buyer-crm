@@ -64,6 +64,13 @@ Telegram открывает Mini App только по **HTTPS**, поэтому
 Обновление после изменений в коде: `cd /opt/buyer-crm && git pull && docker compose up -d --build` —
 данные в томе `crm_data` сохраняются.
 
+Кнопка **«Обновить CRM»** в Mini App («Настройки») делает то же самое. Включается один раз:
+`cd /opt/buyer-crm && bash deploy/install-updater.sh` — ставит службы `crm-updater.path` (ждёт заявку
+`update/request.json` в папке данных CRM) и `crm-updater.service` (запускает `deploy/updater.sh`,
+пишет `update/status.json` и `update/update.log`). Контейнер CRM доступа к Docker не получает.
+Состояние: `systemctl status crm-updater.path`; журнал последнего обновления — `update.log`;
+выключить: `systemctl disable --now crm-updater.path`.
+
 ## Копии и восстановление
 
 ```bash

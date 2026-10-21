@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 from crm.repositories import (
     AuditRepository,
@@ -35,6 +36,7 @@ from crm.services.security_service import SecurityService
 from crm.services.sequences import SequenceAllocator
 from crm.services.shipment_service import ShipmentService
 from crm.services.showcase_service import ShowcaseService
+from crm.services.update_service import UpdateService
 from crm.storage import Database
 from crm.storage.blobs import BlobStorage
 
@@ -61,6 +63,7 @@ class Services:
     groups: GroupService | None = None
     arrival: ArrivalService | None = None
     showcase: ShowcaseService | None = None
+    updates: UpdateService | None = None
 
 
 def build_services(
@@ -70,6 +73,7 @@ def build_services(
     blob_storage: BlobStorage | None = None,
     recognizer: Recognizer | None = None,
     allowed_chat_ids: frozenset[int] = frozenset(),
+    update_dir: Path | None = None,
 ) -> Services:
     clock = clock or SystemClock()
     orders_repo = OrderRepository()
@@ -144,4 +148,5 @@ def build_services(
             ImageService(blob_storage, clock) if blob_storage is not None else None,
             recognizer,
         ),
+        updates=UpdateService(db, clock, auditor, update_dir),
     )

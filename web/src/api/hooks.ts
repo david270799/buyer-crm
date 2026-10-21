@@ -549,3 +549,32 @@ export const useShowcaseStats = () =>
 export function markShowcaseViewed(id: string): void {
   post(`/api/showcase/${id}/view`).catch(() => undefined);
 }
+
+/* «Обновить CRM» (21.10.2026): the server's updater runs git pull + rebuild. */
+export interface UpdateStatus {
+  installed: boolean;
+  requested?: boolean;
+  state?: "idle" | "running" | "done" | "failed";
+  started_at?: string | null;
+  finished_at?: string | null;
+  before?: string | null;
+  after?: string | null;
+  log?: string;
+}
+
+/** Checked again every few seconds only while an update is under way. */
+export const useUpdateStatus = (watching: boolean) =>
+  useQuery({
+    queryKey: ["system-update"],
+    queryFn: () => get<UpdateStatus>("/api/system/update"),
+    refetchInterval: watching ? 5000 : false,
+    retry: watching ? true : 1,
+  });
+
+export const useRequestUpdate = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => post<UpdateStatus>("/api/system/update"),
+    onSuccess: (data) => qc.setQueryData(["system-update"], data),
+  });
+};

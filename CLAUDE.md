@@ -68,6 +68,9 @@ README.md                    обзор для человека, команды 
 Dockerfile                   образ: сборка web → python-сервер, данные в /data (VOLUME)
 docker-compose.yml           crm + caddy; том crm_data (/data); DATA_DIR закреплён за /data
 deploy/setup.sh              установка на Ubuntu одной командой (swap, Docker, .env, запуск, проверка)
+deploy/install-updater.sh    (21.10) кнопка «Обновить CRM» в Mini App: systemd-путь ждёт DATA_DIR/update/request.json,
+                             deploy/updater.sh делает git pull && docker compose up -d --build и пишет status.json
+deploy/agent-brief.md, agent-actions.json   сведения о сервере и кнопки для мобильного агента владельца
 firestore.rules, storage.rules, firebase.json, firestore.indexes.json   только для STORAGE=firestore (deny-all)
 .github/workflows/tests.yml  CI: backend (ruff, pytest на memory/sqlite/emulator), web, образ + smoke-тесты
 docs/

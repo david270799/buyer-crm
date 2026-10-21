@@ -866,6 +866,19 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         orders = _showcase().order(p.actor, lines)
         return {"items": [order_json(o, p.role) for o in orders]}
 
+    # «Обновить CRM» (the owner, 21.10.2026): the server's updater does the work.
+    @app.get("/api/system/update")
+    def update_status(p: Admin) -> dict[str, Any]:
+        return services.updates.status(p.actor) if services.updates else {"installed": False}
+
+    @app.post("/api/system/update")
+    def update_request(p: Admin) -> dict[str, Any]:
+        if p.preview:
+            raise ApiError(403, "forbidden", "В режиме «Как видит клиент» ничего не меняется.")
+        if services.updates is None:
+            raise ApiError(409, "conflict", "Обновление из Mini App здесь недоступно.")
+        return services.updates.request(p.actor)
+
     @app.get("/api/settings/shops")
     def get_shops(p: Admin) -> dict[str, Any]:
         return {"names": services.orders.shop_names(p.actor)}
