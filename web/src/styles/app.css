@@ -496,8 +496,14 @@ h3 {
   flex: 1;
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr);
+  grid-template-rows: auto 14px auto;
+  align-items: center;
+}
+
+.pipeline-arrow {
+  justify-self: center;
+  color: var(--text-3);
 }
 
 .pipeline-chain button {
@@ -543,11 +549,6 @@ h3 {
 .pipeline .c-warehouse { --status-color: var(--st-warehouse); }
 .pipeline .c-cargo { --status-color: var(--st-cargo); }
 
-@media (min-width: 960px) {
-  .pipeline-chain {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
 
 .kpis {
   display: grid;

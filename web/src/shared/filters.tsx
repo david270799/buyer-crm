@@ -1,4 +1,4 @@
-import { AlertTriangle, LayoutGrid, List, Search, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, LayoutGrid, List, Search, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
@@ -16,6 +16,13 @@ export function StatusPipeline({ counts }: { counts: Record<OrderStatus, number>
   const stages = STATUS_FLOW.filter((status) => status !== "delivered");
   const total = stages.reduce((sum, status) => sum + (counts[status] ?? 0), 0);
   let offset = 0;
+  const stage = (status: OrderStatus) => (
+    <button type="button" className={`c-${status}`} onClick={() => navigate(`/orders?status=${status}`)}>
+      <i className="status-dot" />
+      <span>{STATUS_PLURAL[status]}</span>
+      <b className="num">{counts[status] ?? 0}</b>
+    </button>
+  );
   return (
     <div className="pipeline">
       <svg className="pipeline-ring" viewBox="0 0 76 76" aria-hidden="true">
@@ -44,14 +51,17 @@ export function StatusPipeline({ counts }: { counts: Record<OrderStatus, number>
           в работе
         </text>
       </svg>
+      {/* A snake (the owner's choice, 22.10): Новые → Выкуплены ↓ Склад, then ← Карго. */}
       <div className="pipeline-chain">
-        {stages.map((status) => (
-          <button key={status} type="button" className={`c-${status}`} onClick={() => navigate(`/orders?status=${status}`)}>
-            <i className="status-dot" />
-            <span>{STATUS_PLURAL[status]}</span>
-            <b className="num">{counts[status] ?? 0}</b>
-          </button>
-        ))}
+        {stage("new")}
+        <ArrowRight className="pipeline-arrow" size={14} aria-hidden="true" />
+        {stage("bought")}
+        <span />
+        <span />
+        <ArrowDown className="pipeline-arrow" size={14} aria-hidden="true" />
+        {stage("cargo")}
+        <ArrowLeft className="pipeline-arrow" size={14} aria-hidden="true" />
+        {stage("warehouse")}
       </div>
     </div>
   );
