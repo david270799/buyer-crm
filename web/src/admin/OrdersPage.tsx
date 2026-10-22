@@ -140,7 +140,7 @@ export function AdminOrdersPage() {
         sub={data ? `${data.total} ${plural(data.total, "заказ", "заказа", "заказов")}` : undefined}
         action={
           <Link to="/orders/new" className="btn primary small">
-            <Plus size={16} /> Новый
+            <Plus size={16} /> Заказ
           </Link>
         }
       />
