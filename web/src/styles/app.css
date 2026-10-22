@@ -446,68 +446,96 @@ h3 {
   color: var(--negative);
 }
 
-/* «Заказы в работе»: one bar split by stage */
+/* «Заказы в работе»: a ring with the total + the stages beside it */
 
 .pipeline {
-  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
 
-.pipeline-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 10px;
-  color: var(--text-2);
-  font-size: 14px;
+.pipeline-ring {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  transform: rotate(-90deg);
 }
 
-.pipeline-head b {
-  color: var(--text);
-  font-size: 16px;
+.pipeline-ring circle {
+  fill: none;
+  stroke: var(--status-color);
+  stroke-width: 9;
 }
 
-.pipeline-bar {
-  display: flex;
-  gap: 2px;
-  height: 10px;
-  margin-bottom: 8px;
-  border-radius: 6px;
-  overflow: hidden;
-  background: var(--surface-3);
+.pipeline-ring .track {
+  stroke: var(--surface-3);
 }
 
-.pipeline-bar span {
-  flex-basis: 0;
-  background: var(--status-color);
+.pipeline-ring text {
+  transform: rotate(90deg);
+  transform-origin: 38px 38px;
+  text-anchor: middle;
 }
 
-.pipeline-legend {
+.pipeline-ring .total {
+  fill: var(--text);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.pipeline-ring .caption {
+  fill: var(--text-2);
+  font-size: 8.5px;
+}
+
+.pipeline-chain {
+  flex: 1;
+  min-width: 0;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 0 16px;
+  gap: 6px;
 }
 
-.pipeline-legend button {
+.pipeline-chain button {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
+  min-width: 0;
   min-height: 40px;
-  padding: 0;
+  padding: 0 8px;
   border: 0;
-  background: none;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
   color: var(--text-2);
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   text-align: left;
   cursor: pointer;
 }
 
-.pipeline-legend b {
+.pipeline-chain span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pipeline-chain b {
   margin-left: auto;
   color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.pipeline-chain .status-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-color);
 }
 
 .pipeline .c-new { --status-color: var(--st-new); }
@@ -515,16 +543,8 @@ h3 {
 .pipeline .c-warehouse { --status-color: var(--st-warehouse); }
 .pipeline .c-cargo { --status-color: var(--st-cargo); }
 
-.pipeline-legend .status-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 3px;
-  flex: none;
-  background: var(--status-color);
-}
-
 @media (min-width: 960px) {
-  .pipeline-legend {
+  .pipeline-chain {
     grid-template-columns: repeat(4, 1fr);
   }
 }

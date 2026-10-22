@@ -5,29 +5,50 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import type { OrderFilters, OrderStatus } from "../api/types";
 import { STATUS_FLOW, STATUS_PLURAL } from "../lib/format";
 
-/** «Заказы в работе»: one bar split by stage instead of side-scrolling tiles
- * (the owner, 22.10.2026). «Доставлен» is left out: it only grows and would
- * squeeze the stages that need work. A tap on a stage opens its orders. */
+const RING_R = 30;
+const RING_LEN = 2 * Math.PI * RING_R;
+
+/** «Заказы в работе» (the owner, 22.10.2026): a ring with the total inside
+ * and the stages in order next to it (Новые › Выкуплены › Склад › Карго).
+ * «Доставлен» is left out: it only grows. A tap on a stage opens its orders. */
 export function StatusPipeline({ counts }: { counts: Record<OrderStatus, number> }) {
   const navigate = useNavigate();
   const stages = STATUS_FLOW.filter((status) => status !== "delivered");
   const total = stages.reduce((sum, status) => sum + (counts[status] ?? 0), 0);
+  let offset = 0;
   return (
     <div className="pipeline">
-      <div className="pipeline-head">
-        <span>Заказы в работе</span>
-        <b className="num">{total}</b>
-      </div>
-      <div className="pipeline-bar" aria-hidden="true">
-        {stages.map((status) =>
-          counts[status] ? <span key={status} className={`c-${status}`} style={{ flexGrow: counts[status] }} /> : null,
-        )}
-      </div>
-      <div className="pipeline-legend">
+      <svg className="pipeline-ring" viewBox="0 0 76 76" aria-hidden="true">
+        <circle cx="38" cy="38" r={RING_R} className="track" />
+        {stages.map((status) => {
+          const share = total ? ((counts[status] ?? 0) / total) * RING_LEN : 0;
+          const gap = share > 3 ? 2 : 0;
+          const arc = (
+            <circle
+              key={status}
+              cx="38"
+              cy="38"
+              r={RING_R}
+              className={`c-${status}`}
+              strokeDasharray={`${Math.max(share - gap, 0)} ${RING_LEN}`}
+              strokeDashoffset={-offset}
+            />
+          );
+          offset += share;
+          return share ? arc : null;
+        })}
+        <text x="38" y="38" className="total">
+          {total}
+        </text>
+        <text x="38" y="52" className="caption">
+          в работе
+        </text>
+      </svg>
+      <div className="pipeline-chain">
         {stages.map((status) => (
           <button key={status} type="button" className={`c-${status}`} onClick={() => navigate(`/orders?status=${status}`)}>
-            <span className="status-dot" />
-            {STATUS_PLURAL[status]}
+            <i className="status-dot" />
+            <span>{STATUS_PLURAL[status]}</span>
             <b className="num">{counts[status] ?? 0}</b>
           </button>
         ))}
