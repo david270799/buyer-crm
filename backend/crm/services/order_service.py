@@ -273,6 +273,7 @@ class OrderQuery:
     search: str | None = None
     attention: bool | None = None
     stuck: bool | None = None  # admin: bought ≥ STUCK_AFTER ago, not at the warehouse yet
+    problem: bool | None = None  # needs a look: «внимание» or (admin) stuck
     sort: str = "newest"
     offset: int = 0
     limit: int = 50
@@ -292,6 +293,7 @@ class OrdersOverview:
     active: int
     # Admin only (None for the client):
     stuck_count: int | None = None
+    problem_count: int | None = None  # «внимание» or stuck, each order once
     profit_total_krw: int | None = None
     profit_month_krw: int | None = None
     recent: list[Order] = field(default_factory=list)
@@ -444,6 +446,8 @@ class OrderService:
             orders = [o for o in orders if o.attention_required is query.attention]
         if query.stuck is not None and actor.role is Role.ADMIN:
             orders = [o for o in orders if (self.stuck_days(o) is not None) is query.stuck]
+        if query.problem is not None:
+            orders = [o for o in orders if self.is_problem(o, actor) is query.problem]
         needle = (query.search or "").strip().lower()
         if needle:
             admin = actor.role is Role.ADMIN
@@ -467,6 +471,13 @@ class OrderService:
         waited = self._clock.now() - bought_at
         return waited.days if waited >= STUCK_AFTER else None
 
+    def is_problem(self, order: Order, actor: Actor) -> bool:
+        """The dashboard's single orange banner (the owner, 22.10.2026): orders
+        marked «внимание» plus, for the admin, orders stuck before the warehouse."""
+        if order.attention_required:
+            return True
+        return actor.role is Role.ADMIN and self.stuck_days(order) is not None
+
     def overview(self, actor: Actor, recent: int = 6) -> OrdersOverview:
         orders = self._orders.list_all(self._db)
         counts = {status.value: 0 for status in (*STATUS_FLOW, OrderStatus.CANCELLED)}
@@ -483,6 +494,7 @@ class OrderService:
         )
         if actor.role is Role.ADMIN:
             result.stuck_count = sum(1 for o in orders if self.stuck_days(o) is not None)
+            result.problem_count = sum(1 for o in orders if self.is_problem(o, actor))
             month = to_local(self._clock.now()).strftime("%Y-%m")
             charged = [o for o in orders if o.status in CHARGED_STATUSES and o.profit is not None]
             result.profit_total_krw = sum(o.profit for o in charged)

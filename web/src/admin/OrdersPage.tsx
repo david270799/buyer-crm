@@ -1,4 +1,4 @@
-import { AlertTriangle, Hourglass, MessageSquare, Percent, Plus, Tag, Trash2, Truck, X } from "lucide-react";
+import { AlertTriangle, ChevronRight, Hourglass, MessageSquare, Percent, Plus, Tag, Trash2, Truck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -116,13 +116,14 @@ export function AdminOrdersPage() {
   const [bulk, setBulk] = useState<Bulk>(null);
   useEffect(() => {
     setLimit(PAGE);
-  }, [filters.status, q, sort, filters.attention, filters.stuck]);
+  }, [filters.status, q, sort, filters.attention, filters.stuck, filters.problem]);
 
   const { data, error, isLoading, isFetching, refetch } = useOrders({
     status: filters.status,
     q,
     attention: filters.attention || undefined,
     stuck: filters.stuck || undefined,
+    problem: filters.problem || undefined,
     sort,
     limit,
   });
@@ -162,6 +163,13 @@ export function AdminOrdersPage() {
           />
         )}
         <StatusChips value={filters.status} onChange={(s) => filters.update({ status: s || null })} />
+        {filters.problem && (
+          <button type="button" className="stuck-banner active" onClick={() => filters.update({ problem: null })}>
+            <AlertTriangle size={16} />
+            <span className="grow">Показаны заказы, требующие внимания</span>
+            <b>Сбросить</b>
+          </button>
+        )}
         <StuckBanner
           active={filters.stuck}
           onToggle={() => filters.update(filters.stuck ? { stuck: null } : { stuck: "1", status: null })}
@@ -252,6 +260,23 @@ export function AdminOrdersPage() {
         />
       )}
     </>
+  );
+}
+
+/** The dashboard's one orange line (the owner, 22.10.2026): «внимание» and
+ * orders stuck before the warehouse together; a tap shows exactly those. */
+export function ProblemBanner() {
+  const { data } = useOverview();
+  const count = data?.orders.problem_count ?? 0;
+  if (!count) return null;
+  return (
+    <Link to="/orders?problem=1" className="stuck-banner">
+      <AlertTriangle size={16} />
+      <span className="grow">
+        {count} {plural(count, "заказ требует", "заказа требуют", "заказов требуют")} внимания
+      </span>
+      <ChevronRight size={18} />
+    </Link>
   );
 }
 

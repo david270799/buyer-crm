@@ -512,6 +512,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         }
         if p.role is Role.ADMIN:
             summary["stuck_count"] = orders.stuck_count
+            summary["problem_count"] = orders.problem_count
             summary["profit_total_krw"] = orders.profit_total_krw
             summary["profit_month_krw"] = orders.profit_month_krw
         usd = balance.balance_usd
@@ -532,6 +533,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         q: Annotated[str | None, Query(max_length=100)] = None,
         attention: bool | None = None,
         stuck: bool | None = None,
+        problem: bool | None = None,
         sort: Literal["newest", "oldest", "price_desc", "price_asc", "status"] = "newest",
         offset: Annotated[int, Query(ge=0)] = 0,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
@@ -546,6 +548,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
                 search=q,
                 attention=attention,
                 stuck=stuck,
+                problem=problem,
                 sort=sort,
                 offset=offset,
                 limit=limit,
