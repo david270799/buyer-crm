@@ -566,19 +566,18 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
-/* Profit is what the owner opens the dashboard for: green and larger. */
+/* Profit is what the owner opens the dashboard for: a green line on the left
+ * and a larger green figure, on a plain card (the owner's choice, 22.10). */
 .kpi.profit {
-  background: var(--positive-soft);
-  border-color: transparent;
-}
-
-.kpi.profit .small,
-.kpi.profit .value {
-  color: var(--positive);
+  border-left: 4px solid var(--positive);
 }
 
 .kpi.profit .small {
-  font-weight: 600;
+  font-weight: 500;
+}
+
+.kpi.profit .value {
+  color: var(--positive);
 }
 
 .kpi.profit .value {
@@ -2884,3 +2883,6 @@ table.orders .r {
 
 /* «Обновить CRM»: the tail of the server's update log when it failed. */
 .update-log { max-height: 220px; overflow: auto; margin: 0; padding: 10px; border-radius: var(--radius); background: var(--surface-2); font-size: 11px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+
+/* The profit cards keep their green line in every look. */
+:root[data-skin] .kpi.profit { border-left: 4px solid var(--positive); }
