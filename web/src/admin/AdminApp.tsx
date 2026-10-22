@@ -74,14 +74,8 @@ function Dashboard() {
   const o = data.orders;
   return (
     <>
-      <PageHead
-        title="Сводка"
-        action={
-          <Link to="/orders/new" className="btn primary small">
-            <Plus size={16} /> Заказ
-          </Link>
-        }
-      />
+      {/* No heading and no «+ Заказ» here (the owner, 22.10.2026): the menu
+          already says «Сводка», and orders are added in «Заказы». */}
       <div className="stack" style={{ gap: 12 }}>
         <BalanceCard balance={data.balance} to="/finance" label="Баланс клиента" />
         <div className="kpis">
