@@ -1700,6 +1700,13 @@ table.orders .r {
   margin: -4px 0 10px;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .topbar-title {
   color: var(--text-2);
   font-size: 13px;

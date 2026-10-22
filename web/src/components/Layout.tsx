@@ -21,7 +21,7 @@ function isActive(item: NavItem, pathname: string): boolean {
 const lastSearch = new Map<string, string>();
 
 /** Telegram's native back button on nested screens (/orders/N5 → /orders). */
-function useTelegramBack() {
+function useTelegramBack(nav: NavItem[]) {
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
   useEffect(() => {
@@ -29,11 +29,12 @@ function useTelegramBack() {
   }, [pathname, search]);
   useEffect(() => {
     const parts = pathname.split("/").filter(Boolean);
-    const top = ["/balance", "/notifications", "/profit"].includes(pathname);
+    // Top-level pages that are not a tab (e.g. the client's /settings behind the gear).
+    const top = ["/balance", "/notifications", "/profit"].includes(pathname) || (pathname !== "/" && !nav.some((item) => item.to === pathname));
     const nested = parts.length > 1 || top;
     const parent = parts.length > 1 ? `/${parts.slice(0, -1).join("/")}` : "/";
     return backButton(nested, () => handleBackOverride() || navigate(parent + (lastSearch.get(parent) ?? "")));
-  }, [pathname, navigate]);
+  }, [pathname, navigate, nav]);
 }
 
 export function Shell({
@@ -42,6 +43,7 @@ export function Shell({
   children,
   homes = ["/"],
   switcher,
+  topActions,
 }: {
   nav: NavItem[];
   title: string;
@@ -49,9 +51,11 @@ export function Shell({
   /** Pages with the top bar (bell and the mode switch). */
   homes?: string[];
   switcher?: ReactNode;
+  /** Extra round buttons next to the bell (the client's settings gear). */
+  topActions?: ReactNode;
 }) {
   const { pathname } = useLocation();
-  useTelegramBack();
+  useTelegramBack(nav);
   // Braces matter: an effect may return only a cleanup function. Telegram's
   // webview can make window.scrollTo return a value, and React would then
   // call it as a cleanup on the next navigation ("n is not a function").
@@ -82,7 +86,10 @@ export function Shell({
         {homes.includes(pathname) && (
           <header className="topbar">
             {switcher ?? <span className="topbar-title">{title}</span>}
-            <BellButton />
+            <div className="topbar-actions">
+              {topActions}
+              <BellButton />
+            </div>
           </header>
         )}
         <ErrorBoundary resetKey={pathname}>
