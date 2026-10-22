@@ -1,4 +1,4 @@
-import { AlertTriangle, Home, Package, Search, Truck, Wallet } from "lucide-react";
+import { AlertTriangle, Home, Package, Settings, ShoppingBag, Truck, Wallet } from "lucide-react";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
 
 import { useOrders, useOverview } from "../api/hooks";
@@ -8,18 +8,44 @@ import { BalanceCard } from "../components/money";
 import { OrderCard } from "../components/orders";
 import { Empty, ErrorState, Loading, useDebounced } from "../components/ui";
 import { plural } from "../lib/format";
+import { AppearanceSettings } from "../shared/AppearanceSettings";
 import { BalancePage } from "../shared/BalancePage";
-import { StatusChips, StatusTiles, useOrderFilters } from "../shared/filters";
+import {
+  AttentionButton,
+  SearchButton,
+  SearchField,
+  SortSelect,
+  StatusChips,
+  StatusTiles,
+  useOrderFilters,
+  useOrderSort,
+  useOrdersView,
+  useSearchToggle,
+  ViewToggle,
+} from "../shared/filters";
 import { NotificationsPage } from "../shared/NotificationsPage";
 import { OrderDetailsPage } from "../shared/OrderDetailsPage";
 import { ShipmentDetailsPage, ShipmentsPage } from "../shared/ShipmentsPages";
+import { ShowcaseCartPage, ShowcaseClientMode, ShowcaseItemPage, ShowcasePage } from "../admin/Showcase";
 
 const NAV: NavItem[] = [
   { to: "/", label: "Главная", icon: Home },
   { to: "/orders", label: "Заказы", icon: Package },
+  // «Витрина» for the client (the owner, 20.10.2026: out of test mode).
+  { to: "/showcase", label: "Витрина", icon: ShoppingBag },
   { to: "/shipments", label: "Отправки", icon: Truck },
   { to: "/balance", label: "Баланс", icon: Wallet },
+  { to: "/settings", label: "Настройки", icon: Settings },
 ];
+
+function ClientSettings() {
+  return (
+    <>
+      <PageHead title="Настройки" />
+      <AppearanceSettings />
+    </>
+  );
+}
 
 function ClientHome() {
   const { data, error, isLoading, refetch } = useOverview();
@@ -59,28 +85,34 @@ function ClientHome() {
 
 function ClientOrders() {
   const filters = useOrderFilters();
+  const [sort, setSort] = useOrderSort(filters);
+  const [view, setView] = useOrdersView();
+  const [searching, setSearching] = useSearchToggle(filters.q);
   const q = useDebounced(filters.q);
-  const request: OrderFilters = { status: filters.status, q, attention: filters.attention || undefined, limit: 200 };
+  const request: OrderFilters = { status: filters.status, q, attention: filters.attention || undefined, sort, limit: 200 };
   const { data, error, isLoading, refetch } = useOrders(request);
   return (
     <>
       <PageHead title="Заказы" sub={data ? `${data.total} ${plural(data.total, "заказ", "заказа", "заказов")}` : undefined} />
       <div className="stack">
-        <div className="search">
-          <Search size={16} />
-          <input
-            className="input"
-            placeholder="Поиск: бренд, модель, номер, трек"
-            value={filters.q}
-            onChange={(e) => filters.update({ q: e.target.value })}
+        <div className="filters">
+          <SortSelect value={sort} onChange={setSort} />
+          <ViewToggle value={view} onChange={setView} />
+          <SearchButton open={searching} onToggle={() => setSearching(!searching)} />
+          <AttentionButton
+            active={filters.attention}
+            onToggle={() => filters.update({ attention: filters.attention ? null : "1" })}
           />
         </div>
-        <StatusChips value={filters.status} onChange={(s) => filters.update({ status: s || null, attention: null })} />
-        {filters.attention && (
-          <button className="chip active" style={{ alignSelf: "flex-start" }} onClick={() => filters.update({ attention: null })}>
-            Требуют внимания ✕
-          </button>
+        {searching && (
+          <SearchField
+            value={filters.q}
+            onChange={(q) => filters.update({ q })}
+            onClose={() => setSearching(false)}
+            placeholder="Поиск: бренд, модель, номер, трек"
+          />
         )}
+        <StatusChips value={filters.status} onChange={(s) => filters.update({ status: s || null, attention: null })} />
       </div>
       <div className="section">
         {isLoading ? (
@@ -90,9 +122,9 @@ function ClientOrders() {
         ) : !data.items.length ? (
           <Empty title="Ничего не найдено" hint="Попробуйте изменить фильтр или поиск." />
         ) : (
-          <div className="order-grid">
+          <div className={view === "list" ? "order-rows card" : "order-grid"}>
             {data.items.map((order) => (
-              <OrderCard key={order.id} order={order} />
+              <OrderCard key={order.id} order={order} compact={view === "list"} />
             ))}
           </div>
         )}
@@ -104,16 +136,22 @@ function ClientOrders() {
 export function ClientApp() {
   return (
     <Shell nav={NAV} title="Мои заказы">
+      <ShowcaseClientMode value={true}>
       <Routes>
         <Route path="/" element={<ClientHome />} />
         <Route path="/orders" element={<ClientOrders />} />
+        <Route path="/settings" element={<ClientSettings />} />
         <Route path="/orders/:id" element={<OrderDetailsPage />} />
         <Route path="/shipments" element={<ShipmentsPage />} />
         <Route path="/shipments/:id" element={<ShipmentDetailsPage />} />
         <Route path="/balance" element={<BalancePage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/showcase" element={<ShowcasePage />} />
+        <Route path="/showcase/cart" element={<ShowcaseCartPage />} />
+        <Route path="/showcase/:id" element={<ShowcaseItemPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </ShowcaseClientMode>
     </Shell>
   );
 }

@@ -34,6 +34,7 @@ class EventType(StrEnum):
     DEPOSIT = "deposit"
     ADJUSTMENT = "adjustment"
     RATE = "rate"
+    DEBT_WARNING = "debt_warning"  # the debt passed another million (sent to the client)
 
 
 IMPORTANT_EVENTS = frozenset(
@@ -45,6 +46,8 @@ IMPORTANT_EVENTS = frozenset(
         EventType.ATTENTION,
         EventType.SHIPPING_COST,
         EventType.ADJUSTMENT,
+        EventType.RATE,
+        EventType.DEBT_WARNING,
     }
 )
 

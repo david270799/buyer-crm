@@ -67,7 +67,11 @@ def test_uploaded_photo_is_recognised_without_saving_anything(db, clock):
     answer = api("POST", "/api/recognize", json={"photo_url": photo_url}).json()
 
     assert answer["recognized"] is True
-    assert (answer["brand"], answer["model"], answer["size"]) == ("Nike", "Dunk Low Panda", "270")
+    assert (answer["brand"], answer["model"], answer["size_kr"]) == (
+        "Nike",
+        "Dunk Low Panda",
+        "270",
+    )
     # Gemini saw the stored (processed WebP) photo.
     assert gemini.images[0][:4] == b"RIFF"
     assert db.query("orders") == []

@@ -1,20 +1,27 @@
-import { ArrowDownLeft, ChevronRight, Gift, RotateCcw, SlidersHorizontal, Truck } from "lucide-react";
+import { ArrowDownLeft, ChevronRight, Gift, RotateCcw, SlidersHorizontal, Truck, Watch } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
 import type { Balance, LedgerItem } from "../api/types";
 import { dayKey, date, krw, LEDGER_LABEL, shortDate, usd } from "../lib/format";
 import { Thumb } from "./orders";
-import { Empty } from "./ui";
+import { Empty, useSeenAmount } from "./ui";
 
 export function BalanceCard({ balance, to, label = "Баланс" }: { balance: Balance; to?: string; label?: string }) {
   const debt = balance.krw < 0;
+  const { shown, delta } = useSeenAmount("balance", balance.krw);
   const content = (
     <>
       <div className="label">
         {label}
         {debt && <span className="debt-badge">долг</span>}
+        {delta !== 0 && (
+          <span key={`${delta}:${balance.krw}`} className={`balance-delta ${delta > 0 ? "up" : "down"}`}>{krw(delta, true)}</span>
+        )}
       </div>
-      <div className="krw num">{krw(balance.krw)}</div>
+      <div className="krw num">
+        {krw(shown)}
+      </div>
       <div className="usd num">
         {balance.usd !== null ? usd(balance.usd) : "курс $ не задан"}
         {balance.krw_per_usd ? <span className="tiny"> · 1 $ = {balance.krw_per_usd.toLocaleString("en-US")} ₩</span> : null}
@@ -22,7 +29,7 @@ export function BalanceCard({ balance, to, label = "Баланс" }: { balance: 
       {to && <ChevronRight className="chev" size={20} />}
     </>
   );
-  const className = `balance-card ${debt ? "debt" : ""}`;
+  const className = `balance-card ${debt ? "debt" : ""} ${delta !== 0 ? "changed" : ""}`;
   return to ? (
     <Link to={to} className={className}>
       {content}
@@ -34,11 +41,15 @@ export function BalanceCard({ balance, to, label = "Баланс" }: { balance: 
 
 function EntryIcon({ item }: { item: LedgerItem }) {
   if (item.order) return <Thumb src={item.order.thumbnail_url} alt={item.order.title ?? item.order.id} />;
+  if (item.type !== "watch_charge" && item.shipment?.thumbnail_url)
+    return <Thumb src={item.shipment.thumbnail_url} alt="Фото отправки" />;
   const Icon =
     item.type === "deposit"
       ? ArrowDownLeft
       : item.type === "shipping_charge"
         ? Truck
+        : item.type === "watch_charge"
+          ? Watch
         : item.type === "order_discount"
           ? Gift
         : item.type === "order_refund" || item.type === "order_rebuy"
@@ -51,8 +62,16 @@ function EntryIcon({ item }: { item: LedgerItem }) {
   );
 }
 
-function entryTitle(item: LedgerItem): string {
-  if (item.type === "shipping_charge") return item.shipment_id ? `Доставка · ${item.shipment_id}` : "Доставка";
+function entryTitle(item: LedgerItem): ReactNode {
+  if (item.type === "shipping_charge" || item.type === "watch_charge") {
+    const code = item.shipment?.tracking_code ?? item.shipment_id;
+    return (
+      <>
+        <span className="shipping-word">{item.type === "watch_charge" ? "Доставка часов" : "Доставка"}</span>
+        {code ? <span className="num"> · {code}</span> : null}
+      </>
+    );
+  }
   if (item.order_id) {
     const title = item.order?.title;
     const prefix =
@@ -73,6 +92,8 @@ const orderDeleted = (item: LedgerItem) => Boolean(item.order_id) && !item.order
 
 function entrySubtitle(item: LedgerItem): string | null {
   if (orderDeleted(item)) return item.comment || "Заказ удалён";
+  if (item.original_amount_krw !== undefined)
+    return `Перезаказ: ${krw(-item.original_amount_krw)} → ${krw(-item.amount_krw)}`;
   if (item.order_id || item.type === "shipping_charge") return null;
   return item.comment;
 }
@@ -102,6 +123,9 @@ export function History({ items }: { items: LedgerItem[] }) {
                     <div className="tiny faint num">после: {krw(item.balance_after)}</div>
                   </div>
                   <div className={`amount ${item.amount_krw > 0 ? "positive" : ""}`}>
+                    {item.original_amount_krw !== undefined && item.original_amount_krw !== item.amount_krw && (
+                      <s className="amount-was">{krw(item.original_amount_krw, true)}</s>
+                    )}
                     {krw(item.amount_krw, true)}
                   </div>
                 </>

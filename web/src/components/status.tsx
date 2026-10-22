@@ -18,14 +18,19 @@ export function StatusIcon({ status, size = 16 }: { status: OrderStatus; size?: 
 }
 
 export function StatusBadge({ status }: { status: OrderStatus | null }) {
-  return <span className={`badge s-${status ?? "new"}`}>{statusLabel(status)}</span>;
+  return (
+    <span className={`badge s-${status ?? "new"}`}>
+      <span className="status-dot" />
+      {statusLabel(status)}
+    </span>
+  );
 }
 
 /** Compact `● ● ● ○ ○` progress for cards. */
 export function Dots({ status }: { status: OrderStatus | null }) {
   const reached = status ? STATUS_FLOW.indexOf(status) : -1;
   return (
-    <span className="dots" aria-label={statusLabel(status)}>
+    <span className={`dots s-${status ?? "new"}`} aria-label={statusLabel(status)}>
       {STATUS_FLOW.map((step, i) => (
         <span key={step} className={i <= reached ? "on" : ""} />
       ))}

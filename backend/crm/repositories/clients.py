@@ -27,3 +27,13 @@ class ClientRepository:
         if create:
             data.update(balance=0, balance_updated_at=now, created_at=now)
         tx.set(self.collection, self.main_client_id, data, merge=True)
+
+    def set_second(
+        self, tx: Transaction, telegram_id: int | None, name: str | None, now: datetime
+    ) -> None:
+        """The second person on the account (None: removed). Balance untouched."""
+        tx.update(
+            self.collection,
+            self.main_client_id,
+            {"second_telegram_id": telegram_id, "second_name": name, "updated_at": now},
+        )

@@ -11,6 +11,21 @@ class SettingsRepository:
     collection = "settings"
     general_id = "general"
     notifications_id = "notifications"
+    shops_id = "shops"
+
+    def get_shops(self, reader: Reader) -> list[str] | None:
+        """The shop bubbles of the buy form; None = never edited (use the defaults)."""
+        doc = reader.get(self.collection, self.shops_id)
+        names = doc.get("names") if doc else None
+        return [n for n in names if isinstance(n, str)] if isinstance(names, list) else None
+
+    def set_shops(self, tx: Transaction, names: list[str], now: datetime, actor_id: str) -> None:
+        tx.set(
+            self.collection,
+            self.shops_id,
+            {"names": names, "updated_at": now, "updated_by": actor_id},
+            merge=True,
+        )
 
     def get_general(self, reader: Reader) -> GeneralSettings:
         return GeneralSettings.from_doc(reader.get(self.collection, self.general_id))

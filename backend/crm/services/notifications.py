@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from crm.domain.errors import ValidationError
-from crm.domain.events import Event
+from crm.domain.events import Event, EventType
 from crm.domain.notifications import (
     DeliveryStatus,
     NotificationSettings,
@@ -54,6 +54,13 @@ class SendOutcome:
 def _skip_reason(
     event: Event, settings: NotificationSettings, chat_ids: tuple[int, ...], now: datetime
 ) -> str | None:
+    if event.type is EventType.DEBT_WARNING:
+        # Always to the client, whatever the settings (the owner, 16.10.2026).
+        if event.created_at is None:
+            return "no_time"
+        if now - event.created_at > MAX_AGE:
+            return "too_old"
+        return None if chat_ids else "no_recipient"
     if settings.recipient is NotifyRecipient.OFF:
         return "off"
     if settings.level is NotifyLevel.IMPORTANT and not event.important:
@@ -163,13 +170,14 @@ class NotificationService:
         self._recorder.remove_listener(callback)
 
     def _chat_ids(self, settings: NotificationSettings) -> tuple[int, ...]:
-        if settings.recipient is NotifyRecipient.ADMINS:
-            return tuple(sorted(self._admin_ids))
-        if settings.recipient is NotifyRecipient.CLIENT:
+        ids: list[int] = []
+        if settings.recipient in (NotifyRecipient.CLIENT, NotifyRecipient.BOTH):
             client = self._clients.get_main(self._db)
-            if client is not None and client.telegram_id is not None:
-                return (client.telegram_id,)
-        return ()
+            if client is not None:
+                ids.extend(client.telegram_ids)  # both people on the account
+        if settings.recipient in (NotifyRecipient.ADMINS, NotifyRecipient.BOTH):
+            ids.extend(i for i in sorted(self._admin_ids) if i not in ids)
+        return tuple(ids)
 
     def due(self, limit: int = 50) -> DueBatch:
         """Pending events to send now, oldest first. Events that must not be
@@ -179,16 +187,22 @@ class NotificationService:
         if not pending:
             return DueBatch(deliveries=[], more=False)
         chat_ids = self._chat_ids(settings)
+        client_ids: tuple[int, ...] | None = None
         now = self._clock.now()
         deliveries = []
         for event in pending:
-            reason = _skip_reason(event, settings, chat_ids, now)
+            targets = chat_ids
+            if event.type is EventType.DEBT_WARNING:
+                if client_ids is None:
+                    client_ids = self._chat_ids(replace(settings, recipient=NotifyRecipient.CLIENT))
+                targets = client_ids
+            reason = _skip_reason(event, settings, targets, now)
             if reason is not None:
                 self._finish(
                     event.id, {"delivery": DeliveryStatus.SKIPPED.value, "delivery_note": reason}
                 )
                 continue
-            remaining = tuple(c for c in chat_ids if c not in event.delivered_to)
+            remaining = tuple(c for c in targets if c not in event.delivered_to)
             if remaining:
                 deliveries.append(Delivery(event, remaining))
             else:

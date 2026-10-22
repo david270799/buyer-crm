@@ -1,4 +1,5 @@
 import { Ban, Copy, ExternalLink, Pencil, Repeat, ShoppingBag, Sparkles, Trash2, Truck, Warehouse } from "lucide-react";
+import { ArrivalPanel } from "./ArrivalPanel";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -64,7 +65,8 @@ export function OrderAdminPanel({ order }: { order: Order }) {
 
   const status = order.status;
   const beforeShipping = (status === "bought" || status === "warehouse") && !order.shipment_id;
-  const canCancel = status === "new" || beforeShipping;
+  const canCancel = Boolean(status) && status !== "cancelled";
+  const shipped = status === "cargo" || status === "delivered";
   const canRebuy = beforeShipping && (order.charged_amount_krw ?? 0) > 0;
   const purchases = order.purchases ?? [];
   const profit = order.profit ?? null;
@@ -86,6 +88,12 @@ export function OrderAdminPanel({ order }: { order: Order }) {
           <dd className={profit !== null && profit < 0 ? "negative" : ""}>{krw(profit)}</dd>
           <dt>Списано с баланса</dt>
           <dd>{krw(order.charged_amount_krw ?? 0)}</dd>
+          {order.shop && (
+            <>
+              <dt>Магазин</dt>
+              <dd>{order.shop}</dd>
+            </>
+          )}
           {order.source_url && (
             <>
               <dt>Ссылка</dt>
@@ -97,6 +105,7 @@ export function OrderAdminPanel({ order }: { order: Order }) {
             </>
           )}
         </dl>
+        <ArrivalPanel order={order} />
         {order.recognition && <RecognitionInfo recognition={order.recognition} link={telegramLink(order)} />}
         {purchases.length > 1 && (
           <div className="stack" style={{ gap: 6 }}>
@@ -106,7 +115,7 @@ export function OrderAdminPanel({ order }: { order: Order }) {
                 <li key={i} className={p.replaced_at ? "replaced" : ""}>
                   <div className="row between">
                     <span className="grow" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {shopName(p.source_url)}
+                      {p.shop ?? shopName(p.source_url)}
                     </span>
                     <span className="num">{krw(p.purchase_price)}</span>
                   </div>
@@ -152,7 +161,7 @@ export function OrderAdminPanel({ order }: { order: Order }) {
           )}
           {canCancel && (
             <button className="btn danger" onClick={() => setDialog("cancel")}>
-              <Ban size={16} /> Отменить
+              <Ban size={16} /> {shipped ? "Возврат" : "Отменить"}
             </button>
           )}
           <button className="btn" onClick={() => setDialog("copy")}>

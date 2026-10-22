@@ -1,0 +1,86 @@
+/* common for previews */
+:root[data-skin] h1 { text-transform: none; }
+
+/* 1. «Ночной Сеул» — тёмно-синий, неон розовый + бирюзовый */
+:root[data-skin="night"] {
+  --bg:#070b1d; --surface:#0f1530; --surface-2:#151d40; --surface-3:#1e2852; --border:#1f2a55; --border-strong:#2d3b75;
+  --text:#eef1ff; --text-2:#9aa6d6; --text-3:#6672a6; --accent:#ff3d9a; --accent-hover:#ff5aab; --accent-contrast:#fff; --accent-soft:#3a1636;
+  --radius-sm:12px; --radius:18px; --radius-lg:24px; --shadow: 0 8px 28px rgba(0,0,0,.35);
+  --st-new:#b6a4ff; --st-new-soft:#2b2545; --st-bought:#8ab8ff; --st-bought-soft:#1c2b42; --st-warehouse:#ffc266; --st-warehouse-soft:#3a2c14;
+  --st-cargo:#4ff0ff; --st-cargo-soft:#0f3540; --st-delivered:#7ee0a4; --st-delivered-soft:#183424; --st-cancelled:#ff9686; --st-cancelled-soft:#3d1f1a;
+  color-scheme: dark;
+}
+:root[data-skin="night"] body { background: radial-gradient(900px 500px at 100% 0%, #2a0f45 0%, transparent 60%), radial-gradient(700px 400px at 0% 100%, #002a3a 0%, transparent 60%), #070b1d; }
+:root[data-skin="night"] h1 { color:#fff; text-shadow: 0 0 18px rgba(255,61,154,.55); }
+:root[data-skin="night"] .balance-card { background: linear-gradient(135deg,#0f1530,#1b1046); border:1px solid #ff3d9a; box-shadow: 0 0 24px rgba(255,61,154,.35), inset 0 0 30px rgba(79,240,255,.08); }
+:root[data-skin="night"] .balance-card .krw { color:#4ff0ff !important; text-shadow: 0 0 14px rgba(79,240,255,.6); }
+:root[data-skin="night"] .balance-card * { color:#eef1ff; }
+:root[data-skin="night"] .btn.primary { background:#ff3d9a; box-shadow: 0 0 16px rgba(255,61,154,.5); }
+:root[data-skin="night"] .tabbar { background: rgba(10,14,35,.9); border:1px solid #2d3b75; --tab-pill: #4ff0ff; --tab-active:#061020; }
+:root[data-skin="night"] .tabbar a { color:#7f8bbd; }
+:root[data-skin="night"] .tabbar a.active { color:#061020; }
+:root[data-skin="night"] .tab-pill { box-shadow: 0 0 20px rgba(79,240,255,.6); }
+:root[data-skin="night"] .chip.active { background:#ff3d9a; color:#fff; border-color:#ff3d9a; }
+
+/* 2. «Крафт» — крем, терракота, шрифт с засечками */
+:root[data-skin="craft"] {
+  --bg:#f6efe4; --surface:#fffaf2; --surface-2:#f1e6d6; --surface-3:#e8d9c3; --border:#e6d6bf; --border-strong:#cdb592;
+  --text:#2b1d12; --text-2:#7a6450; --text-3:#a8927b; --accent:#c2410c; --accent-hover:#9a3412; --accent-contrast:#fff; --accent-soft:#fbe3d3;
+  --radius-sm:16px; --radius:22px; --radius-lg:30px; --shadow: 0 2px 0 #e6d6bf, 0 10px 24px rgba(120,72,30,.08);
+  --st-new:#6b4fd8; --st-new-soft:#ece8fb; --st-bought:#1f6fd1; --st-bought-soft:#e2edfb; --st-warehouse:#b86e00; --st-warehouse-soft:#fbefd9;
+  --st-cargo:#0a8a96; --st-cargo-soft:#dcf2f4; --st-delivered:#23824f; --st-delivered-soft:#dff1e6; --st-cancelled:#c23b2a; --st-cancelled-soft:#f8e1dd;
+  color-scheme: light;
+}
+:root[data-skin="craft"] body { background:#f6efe4; }
+:root[data-skin="craft"] h1, :root[data-skin="craft"] h2, :root[data-skin="craft"] .model, :root[data-skin="craft"] .balance-card .krw { font-family: Georgia, "Times New Roman", serif; }
+:root[data-skin="craft"] h1 { font-size:32px; font-style: italic; }
+:root[data-skin="craft"] .balance-card { background:#2b1d12; }
+:root[data-skin="craft"] .balance-card * { color:#fbe9d6 !important; }
+:root[data-skin="craft"] .tabbar { background:#2b1d12; border:0; --tab-pill:#fdba74; --tab-active:#2b1d12; }
+:root[data-skin="craft"] .tabbar a { color:#c9ae92; }
+:root[data-skin="craft"] .tabbar a.active { color:#2b1d12; }
+:root[data-skin="craft"] .chip.active { background:#c2410c; color:#fff; border-color:#c2410c; }
+
+/* 3. «Терминал» — чёрный, зелёный моноширинный */
+:root[data-skin="terminal"] {
+  --bg:#050805; --surface:#0a110a; --surface-2:#0f1a0f; --surface-3:#142414; --border:#1c3a1c; --border-strong:#33ff66;
+  --text:#c8ffd2; --text-2:#6fcf86; --text-3:#3f8a52; --accent:#33ff66; --accent-hover:#5cff85; --accent-contrast:#031a08; --accent-soft:#0f2a14;
+  --radius-sm:2px; --radius:2px; --radius-lg:3px; --shadow:none;
+  --font: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  --st-new:#c39bff; --st-new-soft:#1d1530; --st-bought:#7fb6ff; --st-bought-soft:#0f1d33; --st-warehouse:#ffd166; --st-warehouse-soft:#2b2210;
+  --st-cargo:#5cf3ff; --st-cargo-soft:#0b2a2e; --st-delivered:#33ff66; --st-delivered-soft:#0f2a14; --st-cancelled:#ff6b6b; --st-cancelled-soft:#2e1010;
+  color-scheme: dark;
+}
+:root[data-skin="terminal"] body { background:#050805; }
+:root[data-skin="terminal"] h1::before { content:"> "; color:#33ff66; }
+:root[data-skin="terminal"] h1 { font-size:26px; letter-spacing:0; }
+:root[data-skin="terminal"] .card, :root[data-skin="terminal"] .order-card, :root[data-skin="terminal"] .kpi { border:1px solid #1c3a1c; }
+:root[data-skin="terminal"] .balance-card { background:#050805; border:1px solid #33ff66; }
+:root[data-skin="terminal"] .balance-card * { color:#33ff66 !important; }
+:root[data-skin="terminal"] .tabbar { background:#050805; border:1px solid #33ff66; border-radius:4px; --tab-pill:#33ff66; --tab-active:#031a08; }
+:root[data-skin="terminal"] .tab-pill { border-radius:2px; }
+:root[data-skin="terminal"] .tabbar a { color:#3f8a52; border-radius:2px; }
+:root[data-skin="terminal"] .tabbar a.active { color:#031a08; }
+:root[data-skin="terminal"] .chip { border-radius:2px; }
+:root[data-skin="terminal"] .chip.active { background:#33ff66; color:#031a08; }
+:root[data-skin="terminal"] .order-card .photo img { filter: grayscale(.4) sepia(.2) hue-rotate(60deg); }
+
+/* 4. «Пастель» — лаванда, мята, мягкие формы */
+:root[data-skin="pastel"] {
+  --bg:#f3f0ff; --surface:#ffffff; --surface-2:#f6f3ff; --surface-3:#ece6ff; --border:#e7e0ff; --border-strong:#cbbcff;
+  --text:#2d2550; --text-2:#6d6493; --text-3:#a39bc4; --accent:#7c5cff; --accent-hover:#6845f5; --accent-contrast:#fff; --accent-soft:#ece6ff;
+  --radius-sm:18px; --radius:24px; --radius-lg:32px; --shadow: 0 10px 30px rgba(124,92,255,.12);
+  --st-new:#6b4fd8; --st-new-soft:#ece8fb; --st-bought:#1f6fd1; --st-bought-soft:#e2edfb; --st-warehouse:#b86e00; --st-warehouse-soft:#fbefd9;
+  --st-cargo:#0a8a96; --st-cargo-soft:#dcf2f4; --st-delivered:#23824f; --st-delivered-soft:#dff1e6; --st-cancelled:#c23b2a; --st-cancelled-soft:#f8e1dd;
+  color-scheme: light;
+}
+:root[data-skin="pastel"] body { background: linear-gradient(180deg,#efe9ff 0%, #e8fbf5 100%) fixed; }
+:root[data-skin="pastel"] .balance-card { background: linear-gradient(135deg,#a78bfa 0%, #6ee7b7 100%); border:0; }
+:root[data-skin="pastel"] .balance-card * { color:#ffffff !important; }
+:root[data-skin="pastel"] .card, :root[data-skin="pastel"] .order-card, :root[data-skin="pastel"] .kpi { border:0; }
+:root[data-skin="pastel"] .btn.primary { background: linear-gradient(135deg,#8b5cf6,#34d399); border:0; }
+:root[data-skin="pastel"] .tabbar { background:#ffffff; border:0; box-shadow: 0 12px 30px rgba(124,92,255,.2); --tab-pill: linear-gradient(135deg,#c4b5fd,#a7f3d0); --tab-active:#2d2550; }
+:root[data-skin="pastel"] .tab-pill { background: linear-gradient(135deg,#c4b5fd,#a7f3d0); }
+:root[data-skin="pastel"] .tabbar a { color:#a39bc4; }
+:root[data-skin="pastel"] .tabbar a.active { color:#2d2550; }
+:root[data-skin="pastel"] .chip.active { background:#7c5cff; color:#fff; border-color:#7c5cff; }

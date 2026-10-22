@@ -56,6 +56,7 @@ def test_client_photo_becomes_a_new_order(db, services, client):
     assert stored["created_by"] == f"tg:{CLIENT_TG}"
     assert stored["recognition"]["engine"] == "gemini-test"
     assert stored["recognition"]["confidence"] == 0.93
+    assert stored["category"] == "shoes"  # Gemini said «кроссовки»
     assert "order.intake" in audit_actions(db)
 
 
@@ -99,7 +100,7 @@ def test_without_ai_the_caption_still_fills_size_and_link(db, services, client):
 
     order = result.order
     assert order.brand is None and order.model is None
-    assert (order.size, order.source_url) == ("270", LINK)
+    assert (order.size_kr, order.source_url) == ("270", LINK)
     assert order.client_comment == "270, срочно"  # the link never goes to the client
     assert db.get("orders", order.id)["recognition"]["error"] == "нет ключа"
 
@@ -145,3 +146,18 @@ def test_links_never_reach_client_visible_fields(db, services, client):
     texts = [view[k] for k in ("brand", "model", "size", "client_comment")]
     assert "http" not in " ".join(str(v) for v in texts) and "source_url" not in view
     assert (order.brand, order.model) == ("Nike", "Dunk")
+
+
+def test_caption_with_usual_and_korean_size(db, services, client):
+    recognition = Recognition(brand="Umbro", model="Pants", size="L", confidence=0.9, engine="g")
+    caption = "https://m.dk-on.com/UMBRO/product/UR423CFPO2/DVY0\n\nL 80"
+    order = services.intake.accept(client, incoming(caption=caption, recognition=recognition)).order
+    stored = db.get("orders", order.id)
+    assert (stored["size"], stored["size_kr"]) == ("L", "80")
+
+
+def test_korean_shoe_size_alone(db, services, client):
+    recognition = Recognition(brand="Nike", model="Dunk", size="270", confidence=0.9, engine="g")
+    order = services.intake.accept(client, incoming(caption="270", recognition=recognition)).order
+    stored = db.get("orders", order.id)
+    assert (stored["size"], stored["size_kr"]) == (None, "270")

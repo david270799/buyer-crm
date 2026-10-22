@@ -31,6 +31,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from crm.api.telegram_auth import InitDataError, TelegramUser, validate_init_data
+from crm.domain.categories import category_from_text
 from crm.domain.enums import STATUS_LABELS_RU, Role, parse_status
 from crm.domain.errors import (
     ConfigurationError,
@@ -41,15 +42,17 @@ from crm.domain.errors import (
     ValidationError,
 )
 from crm.domain.events import Event
-from crm.domain.models import LedgerEntry, Order, ProfitEntry
+from crm.domain.models import LedgerEntry, Order, ProfitEntry, ShowcaseItem
 from crm.domain.notifications import NotificationSettings
 from crm.domain.timeutil import BUSINESS_TZ
-from crm.domain.views import ledger_view, order_view, shipment_view
+from crm.domain.views import ledger_rows, ledger_view, order_view, shipment_view, showcase_view
 from crm.services.common import Actor
 from crm.services.container import Services
 from crm.services.ledger import BalanceChange
 from crm.services.order_service import BulkUpdate, NewOrder, OrderQuery, OrderUpdate
 from crm.services.shipment_service import ShipmentDetails, ShipmentUpdate
+from crm.services.showcase_service import CartLine
+from crm.services.sizes import order_sizes
 from crm.storage import TransactionContentionError
 
 logger = logging.getLogger(__name__)
@@ -83,6 +86,7 @@ class Principal:
     actor: Actor
     role: Role
     user: TelegramUser
+    preview: bool = False  # the admin looks at the client's view
 
 
 class ApiError(Exception):
@@ -110,12 +114,49 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
 class BuyIn(BaseModel):
     purchase_price: int = Field(ge=0)
     client_price: int = Field(gt=0)
+    shop: str | None = None
+
+
+class ArrivalIn(BaseModel):
+    photo_url: str = Field(max_length=500)
+    thumbnail_url: str | None = Field(default=None, max_length=500)
+
+
+class ShowcaseAddIn(BaseModel):
+    url: str = Field(min_length=8, max_length=2000)
+
+
+class ShowcasePatchIn(BaseModel):
+    shop_price_krw: int | None = None
+    official_price_krw: int | None = None
+    client_price_override: int | None = None
+    markup_type: Literal["krw", "pct"] | None = None
+    markup_value: int | None = None
+    brand: str | None = Field(default=None, max_length=60)
+    model: str | None = Field(default=None, max_length=120)
+    shop: str | None = Field(default=None, max_length=60)
+    category: str | None = None
+
+
+class CartLineIn(BaseModel):
+    item_id: str = Field(max_length=80)
+    size: str | None = Field(default=None, max_length=40)
+    color: str | None = Field(default=None, max_length=80)
+
+
+class ShowcaseOrderIn(BaseModel):
+    items: list[CartLineIn] = Field(min_length=1, max_length=20)
+
+
+class ShopsIn(BaseModel):
+    names: list[str] = Field(max_length=100)
 
 
 class RebuyIn(BaseModel):
     purchase_price: int = Field(ge=0)
     client_price: int = Field(gt=0)
     source_url: str | None = None
+    shop: str | None = None
     reason: str | None = Field(default=None, max_length=2000)
 
 
@@ -123,7 +164,10 @@ class NewOrderIn(BaseModel):
     brand: str | None = None
     model: str | None = None
     size: str | None = None
+    size_kr: str | None = None
     source_url: str | None = None
+    shop: str | None = None
+    category: str | None = None
     photo_url: str | None = None
     thumbnail_url: str | None = None
     purchase_price: int | None = Field(default=None, ge=0)
@@ -139,7 +183,10 @@ class OrderPatchIn(BaseModel):
     brand: str | None = None
     model: str | None = None
     size: str | None = None
+    size_kr: str | None = None
     source_url: str | None = None
+    shop: str | None = None
+    category: str | None = None
     photo_url: str | None = None
     thumbnail_url: str | None = None
     client_comment: str | None = None
@@ -196,6 +243,11 @@ class ShipmentIn(BaseModel):
     photo_url: str | None = None
     thumbnail_url: str | None = None
     photos: list[PhotoIn] | None = None
+    watch_count: int | None = Field(default=None, ge=0, le=50)
+
+
+class LinkIn(BaseModel):
+    url: str = Field(min_length=1, max_length=2000)
 
 
 class DuplicateIn(BaseModel):
@@ -217,6 +269,7 @@ class ShipmentPatchIn(BaseModel):
     photo_url: str | None = None
     thumbnail_url: str | None = None
     photos: list[PhotoIn] | None = None
+    watch_count: int | None = Field(default=None, ge=0, le=50)
 
 
 class MoneyIn(BaseModel):
@@ -230,14 +283,14 @@ class RateIn(BaseModel):
 
 
 class NotificationsIn(BaseModel):
-    recipient: Literal["off", "admins", "client"] | None = None
+    recipient: Literal["off", "admins", "client", "both"] | None = None
     level: Literal["important", "all"] | None = None
 
 
 # --- serialisation --------------------------------------------------------
 
 
-def order_json(order: Order, role: Role) -> dict[str, Any]:
+def _order_json(order: Order, role: Role) -> dict[str, Any]:
     view = order_view(order, role)
     view["title"] = order.title
     view["status_label"] = STATUS_LABELS_RU.get(order.status) if order.status else None
@@ -272,6 +325,50 @@ def _local_midnight(value: date | None) -> datetime | None:
     return datetime.combine(value, dtime(0, 0), tzinfo=BUSINESS_TZ) if value else None
 
 
+def showcase_json(
+    item: ShowcaseItem,
+    liked: set[str] | frozenset[str] = frozenset(),
+    role: Role = Role.ADMIN,
+) -> dict[str, Any]:
+    """A «Витрина» card; the client's copy goes through domain/views.py."""
+    return showcase_view(_showcase_card(item, liked), role)
+
+
+def _showcase_card(item: ShowcaseItem, liked: set[str] | frozenset[str]) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "url": item.url,
+        "status": item.status,
+        "shop": item.shop,
+        "brand": item.brand,
+        "model": item.model,
+        "title": item.title,
+        "title_line": item.title_line,
+        "category": item.category,
+        "photo_url": item.photo_url,
+        "thumbnail_url": item.thumbnail_url,
+        "photos": item.photos
+        or (
+            [{"photo_url": item.photo_url, "thumbnail_url": item.thumbnail_url}]
+            if item.photo_url
+            else []
+        ),
+        "shop_price_krw": item.shop_price_krw,
+        "official_price_krw": item.official_price_krw,
+        "official_url": item.official_url,
+        "markup_type": item.markup_type,
+        "markup_value": item.markup_value,
+        "client_price_override": item.client_price_override,
+        "client_price_krw": item.client_price_krw,
+        "sizes": item.sizes,
+        "note": item.note,
+        "liked": item.id in (liked or set()),
+        "refreshed_at": item.refreshed_at,
+        "created_at": item.created_at,
+        "published_at": item.published_at,
+    }
+
+
 def _rate(value: Decimal | None) -> float | None:
     return float(value) if value is not None else None
 
@@ -280,6 +377,12 @@ def _rate(value: Decimal | None) -> float | None:
 
 
 def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
+    def order_json(order: Order, role: Role) -> dict[str, Any]:
+        view = _order_json(order, role)
+        if role is Role.ADMIN:
+            view["stuck_days"] = services.orders.stuck_days(order)
+        return view
+
     app = FastAPI(
         title="Buyer CRM API", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan
     )
@@ -291,7 +394,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             CORSMiddleware,
             allow_origins=list(config.web_origins),
             allow_methods=["GET", "POST", "PATCH", "PUT"],
-            allow_headers=["Authorization", "Content-Type"],
+            allow_headers=["Authorization", "Content-Type", "X-View-As"],
         )
 
     @app.middleware("http")
@@ -368,7 +471,12 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         role = services.roles.resolve(user.id)
         if role is None:
             raise ApiError(403, "forbidden", "У этого Telegram-аккаунта нет доступа к CRM.")
-        return Principal(actor=Actor.mini_app(user.id, role), role=role, user=user)
+        # «Как видит клиент»: the admin may only step *down* to the client's view
+        # (same rules as the client: read-only, client fields only).
+        preview = role is Role.ADMIN and request.headers.get("x-view-as", "").lower() == "client"
+        if preview:
+            role = Role.CLIENT
+        return Principal(actor=Actor.mini_app(user.id, role), role=role, user=user, preview=preview)
 
     def admin(p: Annotated[Principal, Depends(principal)]) -> Principal:
         if p.role is not Role.ADMIN:
@@ -388,6 +496,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
     def me(p: Any_) -> dict[str, Any]:
         return {
             "role": p.role.value,
+            "preview": p.preview,
             "user": {"id": p.user.id, "first_name": p.user.first_name, "username": p.user.username},
         }
 
@@ -402,6 +511,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "active": orders.active,
         }
         if p.role is Role.ADMIN:
+            summary["stuck_count"] = orders.stuck_count
             summary["profit_total_krw"] = orders.profit_total_krw
             summary["profit_month_krw"] = orders.profit_month_krw
         usd = balance.balance_usd
@@ -421,7 +531,8 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         status: str | None = None,
         q: Annotated[str | None, Query(max_length=100)] = None,
         attention: bool | None = None,
-        sort: Literal["newest", "oldest", "price_desc", "price_asc"] = "newest",
+        stuck: bool | None = None,
+        sort: Literal["newest", "oldest", "price_desc", "price_asc", "status"] = "newest",
         offset: Annotated[int, Query(ge=0)] = 0,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
     ) -> dict[str, Any]:
@@ -431,7 +542,13 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         page = services.orders.list_orders(
             p.actor,
             OrderQuery(
-                status=parsed, search=q, attention=attention, sort=sort, offset=offset, limit=limit
+                status=parsed,
+                search=q,
+                attention=attention,
+                stuck=stuck,
+                sort=sort,
+                offset=offset,
+                limit=limit,
             ),
         )
         return {"items": [order_json(o, p.role) for o in page.items], "total": page.total}
@@ -515,7 +632,10 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
 
     @app.post("/api/orders/{order_id}/buy")
     def buy(order_id: str, body: BuyIn, p: Admin) -> dict[str, Any]:
-        result = services.orders.buy(p.actor, order_id, body.purchase_price, body.client_price)
+        extra = {"shop": body.shop} if "shop" in body.model_fields_set else {}
+        result = services.orders.buy(
+            p.actor, order_id, body.purchase_price, body.client_price, **extra
+        )
         return {
             "order": order_json(result.order, p.role),
             "already_done": result.already_done,
@@ -524,7 +644,11 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
 
     @app.post("/api/orders/{order_id}/rebuy")
     def rebuy(order_id: str, body: RebuyIn, p: Admin) -> dict[str, Any]:
-        extra = {"source_url": body.source_url} if "source_url" in body.model_fields_set else {}
+        extra = {
+            name: getattr(body, name)
+            for name in ("source_url", "shop")
+            if name in body.model_fields_set
+        }
         result = services.orders.rebuy(
             p.actor, order_id, body.purchase_price, body.client_price, reason=body.reason, **extra
         )
@@ -610,6 +734,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             photo_url=body.photo_url,
             thumbnail_url=body.thumbnail_url,
             photos=[p.model_dump() for p in body.photos] if body.photos is not None else None,
+            watch_count=body.watch_count,
         )
         result = services.shipments.ship_orders(
             p.actor, body.order_ids, body.tracking_code or None, details
@@ -622,6 +747,7 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "not_found": result.not_found,
             "skipped": [{"order_id": i, "reason": r} for i, r in result.skipped],
             "change": change_json(result.shipping_change),
+            "watch_change": change_json(result.watch_change),
         }
 
     @app.patch("/api/shipments/{reference}")
@@ -633,12 +759,147 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         return {
             "shipment": shipment_view(result.shipment, p.role),
             "change": change_json(result.shipping_change),
+            "watch_change": change_json(result.watch_change),
         }
+
+    @app.post("/api/orders/{order_id}/arrival")
+    def order_arrival(order_id: str, body: ArrivalIn, p: Admin) -> dict[str, Any]:
+        """«Пришло на склад» with a photo uploaded by /api/images (services/arrival)."""
+        if services.arrival is None or services.images is None:
+            raise ConfigurationError("Загрузка фото не настроена.")
+        image = services.images.read(body.photo_url)
+        if image is None:
+            raise NotFoundError("Фото не найдено — загрузите его заново.")
+        result = services.arrival.record(
+            p.actor, order_id, image, body.photo_url, body.thumbnail_url
+        )
+        return {
+            "order": order_json(result.order, p.role),
+            "status": result.status,
+            "size_seen": result.size_seen,
+            "review_ko": result.review_ko,
+            "note": result.note,
+            "moved_to_warehouse": result.moved_to_warehouse,
+            "error": result.error,
+        }
+
+    # --- «Витрина» (test mode: admin only) ----------------------------------
+
+    def _showcase():
+        if services.showcase is None:
+            raise ConfigurationError("Витрина не подключена.")
+        return services.showcase
+
+    @app.get("/api/showcase")
+    def showcase_list(p: Any_, status: str | None = None) -> dict[str, Any]:
+        liked = set(_showcase().liked(p.actor))
+        items = _showcase().items(p.actor, status)
+        return {"items": [showcase_json(i, liked, p.role) for i in items]}
+
+    @app.post("/api/showcase")
+    def showcase_add(body: ShowcaseAddIn, p: Admin) -> dict[str, Any]:
+        return {"item": showcase_json(_showcase().add(p.actor, body.url))}
+
+    @app.get("/api/showcase/{item_id}")
+    def showcase_get(item_id: str, p: Any_) -> dict[str, Any]:
+        liked = set(_showcase().liked(p.actor))
+        return {"item": showcase_json(_showcase().get(p.actor, item_id), liked, p.role)}
+
+    @app.patch("/api/showcase/{item_id}")
+    def showcase_patch(item_id: str, body: ShowcasePatchIn, p: Admin) -> dict[str, Any]:
+        item = _showcase().update(p.actor, item_id, body.model_dump(exclude_unset=True))
+        return {"item": showcase_json(item)}
+
+    @app.post("/api/showcase/{item_id}/refresh")
+    def showcase_refresh(item_id: str, p: Any_) -> dict[str, Any]:
+        if p.preview:
+            raise ApiError(403, "forbidden", "В режиме «Как видит клиент» ничего не меняется.")
+        liked = set(_showcase().liked(p.actor))
+        item = _showcase().refresh(p.actor, item_id)
+        return {"item": showcase_json(item, liked, p.role)}
+
+    # The client's showcase writes (20.10.2026): opened a card, ♥, «Заказать».
+    # Nothing here moves money; the preview «Как видит клиент» writes nothing.
+    @app.post("/api/showcase/{item_id}/view")
+    def showcase_viewed(item_id: str, p: Any_) -> dict[str, bool]:
+        if not p.preview:
+            _showcase().viewed(p.actor, item_id)
+        return {"ok": True}
+
+    @app.get("/api/showcase-stats")
+    def showcase_stats(p: Admin) -> dict[str, Any]:
+        client = services.clients.get(p.actor)
+        names: dict[str, str] = {}
+        if client is not None and client.telegram_id is not None:
+            names[f"tg:{client.telegram_id}"] = client.name or "Клиент"
+        if client is not None and client.second_telegram_id is not None:
+            names[f"tg:{client.second_telegram_id}"] = client.second_name or "Клиент 2"
+        stats = _showcase().statistics(p.actor)
+        viewers = {row["viewer"] for row in stats["cards"] + stats["history"] if row.get("viewer")}
+        labels = {v: names.get(v, "Вы") for v in viewers}
+        return {**stats, "viewers": [{"viewer": v, "label": labels[v]} for v in sorted(viewers)]}
+
+    @app.post("/api/showcase/{item_id}/official")
+    def showcase_official(item_id: str, p: Admin) -> dict[str, Any]:
+        return {"item": showcase_json(_showcase().find_official(p.actor, item_id))}
+
+    @app.post("/api/showcase/{item_id}/status/{status}")
+    def showcase_status(item_id: str, status: str, p: Admin) -> dict[str, Any]:
+        return {"item": showcase_json(_showcase().set_status(p.actor, item_id, status))}
+
+    @app.post("/api/showcase/{item_id}/delete")
+    def showcase_delete(item_id: str, p: Admin) -> dict[str, bool]:
+        _showcase().delete(p.actor, item_id)
+        return {"ok": True}
+
+    @app.post("/api/showcase/{item_id}/like")
+    def showcase_like(item_id: str, p: Any_) -> dict[str, Any]:
+        if p.preview:
+            raise ApiError(403, "forbidden", "В режиме «Как видит клиент» ничего не меняется.")
+        return {"liked": item_id in _showcase().toggle_like(p.actor, item_id)}
+
+    @app.post("/api/showcase/order")
+    def showcase_order(body: ShowcaseOrderIn, p: Any_) -> dict[str, Any]:
+        if p.preview:
+            raise ApiError(403, "forbidden", "В режиме «Как видит клиент» ничего не меняется.")
+        lines = [CartLine(line.item_id, line.size, line.color) for line in body.items]
+        orders = _showcase().order(p.actor, lines)
+        return {"items": [order_json(o, p.role) for o in orders]}
+
+    # «Обновить CRM» (the owner, 21.10.2026): the server's updater does the work.
+    @app.get("/api/system/update")
+    def update_status(p: Admin) -> dict[str, Any]:
+        return services.updates.status(p.actor) if services.updates else {"installed": False}
+
+    @app.post("/api/system/update")
+    def update_request(p: Admin) -> dict[str, Any]:
+        if p.preview:
+            raise ApiError(403, "forbidden", "В режиме «Как видит клиент» ничего не меняется.")
+        if services.updates is None:
+            raise ApiError(409, "conflict", "Обновление из Mini App здесь недоступно.")
+        return services.updates.request(p.actor)
+
+    @app.get("/api/settings/shops")
+    def get_shops(p: Admin) -> dict[str, Any]:
+        return {"names": services.orders.shop_names(p.actor)}
+
+    @app.put("/api/settings/shops")
+    def put_shops(body: ShopsIn, p: Admin) -> dict[str, Any]:
+        return {"names": services.orders.set_shop_names(p.actor, body.names)}
 
     @app.post("/api/orders/{order_id}/duplicate")
     def duplicate_order(order_id: str, body: DuplicateIn, p: Admin) -> dict[str, Any]:
         copies = services.orders.duplicate(p.actor, order_id, body.count)
         return {"items": [order_json(o, p.role) for o in copies]}
+
+    @app.post("/api/shipments/{reference}/delivered")
+    def shipment_delivered(reference: str, p: Any_) -> dict[str, Any]:
+        """The client's only write (the owner, 16.10.2026): the parcel arrived."""
+        if p.preview:
+            raise ApiError(403, "forbidden", "В режиме «Как видит клиент» ничего не меняется.")
+        shipment_id = services.shipments.resolve_id(reference)
+        result = services.orders.mark_shipment_delivered(p.actor, shipment_id)
+        return {"updated": result.updated}
 
     @app.post("/api/shipments/{reference}/split")
     def split_shipment(reference: str, body: ShipmentSplitIn, p: Admin) -> dict[str, Any]:
@@ -662,6 +923,29 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             p.actor, body.amount_krw, body.comment or "", f"ma-{body.idempotency_key}"
         )
         return {"entry": ledger_view(result.entry, p.role), "already_done": result.already_done}
+
+    @app.get("/api/finance/profit-lines")
+    def profit_lines(
+        p: Admin,
+        period: str = "all",
+        date_from: Annotated[date | None, Query(alias="from")] = None,
+        date_to: Annotated[date | None, Query(alias="to")] = None,
+    ) -> dict[str, Any]:
+        if period not in ("month", "all", "range"):
+            period = "all"
+        lines = services.orders.profit_lines(p.actor, period, date_from, date_to)
+        return {
+            "total_krw": sum(line.amount_krw for line in lines),
+            "items": [
+                {
+                    "amount_krw": line.amount_krw,
+                    "at": line.at,
+                    "comment": line.comment,
+                    "order": order_json(line.order, p.role) if line.order else None,
+                }
+                for line in lines
+            ],
+        }
 
     @app.get("/api/finance/profit")
     def profit_history(p: Admin) -> dict[str, Any]:
@@ -740,15 +1024,35 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         if services.photo_recognition is None:
             raise ConfigurationError("Распознавание не подключено.")
         result = services.photo_recognition.recognize(p.actor, body.photo_url, body.text)
+        size, size_kr = order_sizes(result.size, body.text, from_caption=True)
         return {
             "recognized": result.recognized,
             "brand": result.brand,
             "model": result.model,
-            "size": result.size,
+            "size": size,
+            "size_kr": size_kr,
             "category": result.category,
+            "category_code": category_from_text(result.category),
             "confidence": result.confidence,
             "not_a_product": result.not_a_product,
             "engine": result.engine,
+        }
+
+    @app.post("/api/recognize-link")
+    def recognize_link(body: LinkIn, p: Admin) -> dict[str, Any]:
+        if services.link_import is None:
+            raise ConfigurationError("Чтение ссылок не подключено.")
+        result = services.link_import.import_link(p.actor, body.url)
+        return {
+            "brand": result.brand,
+            "model": result.model,
+            "category": result.category,
+            "category_code": category_from_text(result.category),
+            "title": result.title,
+            "photo_url": result.photo.photo_url if result.photo else None,
+            "thumbnail_url": result.photo.thumbnail_url if result.photo else None,
+            "engine": result.engine,
+            "note": result.note,
         }
 
     @app.post("/api/images")
@@ -802,14 +1106,26 @@ def _ledger_items(
     services: Services, p: Principal, entries: list[LedgerEntry]
 ) -> list[dict[str, Any]]:
     orders = services.orders.get_orders(p.actor, [e.order_id for e in entries if e.order_id])
-    items = []
-    for entry in entries:
-        view = ledger_view(entry, p.role)
-        order = orders.get(entry.order_id) if entry.order_id else None
+    # Shipping lines show the parcel: its tracking code and a photo.
+    shipments: dict[str, dict[str, Any]] = {}
+    for shipment_id in {e.shipment_id for e in entries if e.shipment_id}:
+        try:
+            found, _ = services.shipments.get_shipment(p.actor, shipment_id)
+        except NotFoundError:
+            continue
+        shipments[shipment_id] = {
+            "id": found.id,
+            "number": found.shipment_number,
+            "tracking_code": found.tracking_code,
+            "thumbnail_url": found.thumbnail_url or found.photo_url,
+        }
+    items = ledger_rows(entries, p.role)  # a re-purchase is merged into its charge line
+    for view in items:
+        order = orders.get(view["order_id"]) if view["order_id"] else None
         view["order"] = (
             {"id": order.id, "title": order.title, "thumbnail_url": order.thumbnail_url}
             if order
             else None
         )
-        items.append(view)
+        view["shipment"] = shipments.get(view["shipment_id"]) if view["shipment_id"] else None
     return items

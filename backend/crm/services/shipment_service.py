@@ -19,7 +19,8 @@ Shipping money rules (same idea as orders):
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field, fields
-from datetime import datetime
+from datetime import datetime, timedelta
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from crm.domain.enums import LedgerType, OrderStatus
@@ -29,7 +30,7 @@ from crm.domain.ids import make_shipment_id, normalize_order_id, normalize_track
 from crm.domain.models import ClientInfo, Order, Shipment
 from crm.domain.money import MAX_AMOUNT_KRW, format_krw
 from crm.domain.timeutil import format_date, to_local
-from crm.repositories import OrderRepository, ShipmentRepository
+from crm.repositories import OrderRepository, SettingsRepository, ShipmentRepository
 from crm.services.common import (
     UNSET,
     Actor,
@@ -45,6 +46,10 @@ from crm.services.sequences import SequenceAllocator
 from crm.storage import Database, DocumentExistsError, Transaction
 
 SHIPMENT_COUNTER = "shipments"
+# Watches ship at a fixed price each (owner, 12.10), charged in KRW at the rate
+# fixed when they are first charged.
+WATCH_PRICE_USD = 10
+MAX_WATCHES = 50
 _MAX_TEXT = 2000
 _MAX_WEIGHT_KG = 1000
 
@@ -61,6 +66,7 @@ class ShipmentDetails:
     # Several photos: [{"photo_url", "thumbnail_url"}]; the first also fills
     # photo_url / thumbnail_url (lists, bot and older code use those).
     photos: list[dict[str, Any]] | None = None
+    watch_count: int | None = None
 
 
 @dataclass
@@ -76,6 +82,7 @@ class ShipmentUpdate:
     photo_url: str | None = UNSET
     thumbnail_url: str | None = UNSET
     photos: list[dict[str, Any]] | None = UNSET
+    watch_count: int | None = UNSET
 
     def provided(self) -> dict[str, Any]:
         return provided_fields(self)
@@ -90,12 +97,56 @@ class ShipResult:
     not_found: list[str] = field(default_factory=list)
     skipped: list[tuple[str, str]] = field(default_factory=list)
     shipping_change: BalanceChange | None = None
+    watch_change: BalanceChange | None = None
 
 
 @dataclass
 class ShipmentUpdateResult:
     shipment: Shipment
     shipping_change: BalanceChange | None = None
+    watch_change: BalanceChange | None = None
+
+
+@dataclass(frozen=True)
+class _WatchPlan:
+    """Read phase result for the watches line of a shipment."""
+
+    count: int
+    price_usd: int
+    rate: Decimal | None
+    charged_before: int
+    seq_before: int
+    cost: int
+
+    @property
+    def delta(self) -> int:
+        return self.cost - self.charged_before
+
+    def doc_fields(self) -> dict[str, Any]:
+        rate = self.rate
+        stored: int | float | None = None
+        if rate is not None:
+            stored = int(rate) if rate == rate.to_integral_value() else float(rate)
+        return {
+            "watch_count": self.count,
+            "watch_price_usd": self.price_usd,
+            "watch_krw_per_usd": stored,
+            "watch_charged_krw": self.cost,
+            "watch_charge_seq": self.seq_before + (1 if self.delta else 0),
+        }
+
+    def comment(self) -> str:
+        rate = f"{self.rate:,}" if self.rate is not None else "—"
+        usd = self.count * self.price_usd
+        return f"{self.count} шт. × ${self.price_usd} = ${usd} · 1 $ = {rate} ₩"
+
+
+def watch_cost_krw(count: int, price_usd: int, rate: Decimal) -> int:
+    return int((Decimal(count * price_usd) * rate).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+
+
+def watch_entry_id(shipment_id: str, seq: int) -> str:
+    return f"watch_charge_{shipment_id}_{seq}"
 
 
 def _clean_text(value: str | None, name: str) -> str | None:
@@ -132,6 +183,14 @@ def _validate_fields(values: dict[str, Any]) -> dict[str, Any]:
             cleaned[name] = _clean_text(value, "Фото")
         elif name == "photos":
             cleaned[name] = _clean_photos(value) if value is not None else None
+        elif name == "watch_count":
+            if value is not None and (
+                isinstance(value, bool)
+                or not isinstance(value, int)
+                or not 0 <= value <= MAX_WATCHES
+            ):
+                raise ValidationError(f"Часов может быть от 0 до {MAX_WATCHES}.")
+            cleaned[name] = value
         elif name == "shipment_date":
             if value is not None and not isinstance(value, datetime):
                 raise ValidationError("Некорректная дата отправки.")
@@ -192,9 +251,11 @@ class ShipmentService:
         ledger: BalanceLedger,
         auditor: Auditor,
         events: EventRecorder,
+        settings: SettingsRepository | None = None,
     ):
         self._db = db
         self._clock = clock
+        self._settings = settings or SettingsRepository()
         self._orders = orders
         self._shipments = shipments
         self._sequences = sequences
@@ -232,7 +293,8 @@ class ShipmentService:
         done: set[str] = set()
         for shipment in shipments:
             found = [orders.get(i) for i in shipment.order_ids]
-            found = [o for o in found if o is not None]
+            # A returned (cancelled) pair does not keep the shipment «В пути».
+            found = [o for o in found if o is not None and o.status is not OrderStatus.CANCELLED]
             if found and all(o.status is OrderStatus.DELIVERED for o in found):
                 done.add(shipment.id)
         return done
@@ -377,6 +439,7 @@ class ShipmentService:
         ids = list(dict.fromkeys(normalize_order_id(i) for i in order_ids))
         require_bulk_size(ids)
         detail_fields = _details_fields(details or ShipmentDetails())
+        watch_count = detail_fields.pop("watch_count", None)
 
         def fn(tx: Transaction) -> ShipResult:
             existing = self._shipments.find_by_tracking(tx, code) if code else []
@@ -429,12 +492,16 @@ class ShipmentService:
                 charged_before, seq = target.shipping_charged_krw, target.shipping_charge_seq
                 new_cost = detail_fields["shipping_cost_krw"]
             delta = (new_cost or 0) - charged_before if new_cost is not None else 0
-            client = self._ledger.load_client(tx) if delta else None
+            watches = None
+            if watch_count is not None:
+                watches = self._plan_watches(tx, target, watch_count)
+            needs_client = bool(delta) or bool(watches and watches.delta)
+            client = self._ledger.load_client(tx) if needs_client else None
 
             # --- writes ---
             added_ids = [order.id for order in to_add]
             charge_fields: dict[str, Any] = {}
-            if client is not None:
+            if client is not None and delta:
                 result.shipping_change = self._charge_shipping(
                     tx, client, actor, now, shipment_id, seq + 1, delta, new_cost or 0
                 )
@@ -442,6 +509,13 @@ class ShipmentService:
                     "shipping_charged_krw": charged_before + delta,
                     "shipping_charge_seq": seq + 1,
                 }
+            # Watches are a separate balance line, after the shipping one.
+            if watches is not None:
+                if client is not None and watches.delta:
+                    result.watch_change = self._charge_watches(
+                        tx, client, actor, now, shipment_id, watches
+                    )
+                charge_fields.update(watches.doc_fields())
 
             if target is None:
                 assert number is not None
@@ -543,6 +617,8 @@ class ShipmentService:
                 lines.append(f"Трек-номер: {code}")
             if result.shipping_change:
                 lines.append(f"Доставка: {format_krw(new_cost or 0)}")
+            if result.watch_change and watches is not None:
+                lines.append(f"Доставка часов: {watches.count} шт. — {format_krw(watches.cost)}")
             self._events.record(
                 tx,
                 actor,
@@ -554,7 +630,10 @@ class ShipmentService:
                 body="\n".join(lines),
                 order_ids=added_ids,
                 shipment_id=shipment_id,
-                amount_krw=result.shipping_change.amount_krw if result.shipping_change else None,
+                amount_krw=sum(
+                    c.amount_krw for c in (result.shipping_change, result.watch_change) if c
+                )
+                or None,
             )
             return result
 
@@ -575,7 +654,8 @@ class ShipmentService:
     ) -> ShipmentUpdateResult:
         require_admin(actor)
         changes = _validate_fields(update.provided())
-        if not changes:
+        watch_count = changes.pop("watch_count", None)
+        if not changes and watch_count is None:
             raise ValidationError("Нет изменений.")
         shipment_id = self.resolve_id(shipment_id)
 
@@ -602,13 +682,17 @@ class ShipmentService:
             delta = 0
             if "shipping_cost_krw" in changes:
                 delta = (changes["shipping_cost_krw"] or 0) - shipment.shipping_charged_krw
-            client = self._ledger.load_client(tx) if delta else None
+            watches = None
+            if watch_count is not None and watch_count != shipment.watch_count:
+                watches = self._plan_watches(tx, shipment, watch_count)
+            needs_client = bool(delta) or bool(watches and watches.delta)
+            client = self._ledger.load_client(tx) if needs_client else None
 
             # --- writes ---
             now = self._clock.now()
             doc_changes: dict[str, Any] = {**changes, "updated_at": now, "updated_by": actor.id}
             change = None
-            if client is not None:
+            if client is not None and delta:
                 seq = shipment.shipping_charge_seq + 1
                 change = self._charge_shipping(
                     tx,
@@ -622,6 +706,14 @@ class ShipmentService:
                 )
                 doc_changes["shipping_charged_krw"] = shipment.shipping_charged_krw + delta
                 doc_changes["shipping_charge_seq"] = seq
+            watch_change = None
+            if watches is not None:
+                if client is not None and watches.delta:
+                    watch_change = self._charge_watches(
+                        tx, client, actor, now, shipment_id, watches
+                    )
+                doc_changes.update(watches.doc_fields())
+                changes["watch_count"] = watches.count
             self._shipments.update(tx, shipment_id, doc_changes)
 
             for order_id, order in orders.items():
@@ -648,7 +740,22 @@ class ShipmentService:
             )
             updated = Shipment.from_doc(shipment_id, {**before, **doc_changes})
             self._record_update_events(tx, actor, now, shipment, updated, changes, change)
-            return ShipmentUpdateResult(shipment=updated, shipping_change=change)
+            if watch_change is not None:
+                name = f"#{shipment.shipment_number}" if shipment.shipment_number else shipment_id
+                self._events.record(
+                    tx,
+                    actor,
+                    now,
+                    EventType.SHIPPING_COST,
+                    f"Доставка часов отправки {name} изменена",
+                    body=f"{shipment.watch_count} шт. → {updated.watch_count} шт.",
+                    order_ids=list(shipment.order_ids),
+                    shipment_id=shipment_id,
+                    amount_krw=watch_change.amount_krw,
+                )
+            return ShipmentUpdateResult(
+                shipment=updated, shipping_change=change, watch_change=watch_change
+            )
 
         try:
             return self._db.run_transaction(fn)
@@ -711,6 +818,49 @@ class ShipmentService:
                 shipment_id=old.id,
             )
 
+    def _plan_watches(self, tx: Transaction, shipment: Shipment | None, count: int) -> _WatchPlan:
+        """Read phase: what the watches line costs. The rate is fixed the first
+        time watches are charged; later count changes reuse it."""
+        rate = shipment.watch_krw_per_usd if shipment else None
+        price = (shipment.watch_price_usd if shipment else None) or WATCH_PRICE_USD
+        if count and rate is None:
+            rate = self._settings.get_general(tx).krw_per_usd
+            if rate is None:
+                raise ValidationError(
+                    "Сначала задайте курс доллара в «Настройках»: доставка часов считается в $."
+                )
+        return _WatchPlan(
+            count=count,
+            price_usd=price,
+            rate=rate,
+            charged_before=shipment.watch_charged_krw if shipment else 0,
+            seq_before=shipment.watch_charge_seq if shipment else 0,
+            cost=watch_cost_krw(count, price, rate) if count and rate is not None else 0,
+        )
+
+    def _charge_watches(
+        self,
+        tx: Transaction,
+        client: ClientInfo,
+        actor: Actor,
+        now: datetime,
+        shipment_id: str,
+        plan: _WatchPlan,
+    ) -> BalanceChange:
+        return self._ledger.apply(
+            tx,
+            client,
+            entry_id=watch_entry_id(shipment_id, plan.seq_before + 1),
+            type=LedgerType.WATCH_CHARGE,
+            amount_krw=-plan.delta,
+            actor=actor,
+            # One microsecond after the shipping line, so the history (newest
+            # first) always shows shipping, then watches above it.
+            now=now + timedelta(microseconds=1),
+            shipment_id=shipment_id,
+            comment=plan.comment(),
+        )
+
     def _charge_shipping(
         self,
         tx: Transaction,
@@ -759,6 +909,13 @@ def _shipment_doc(shipment: Shipment) -> dict[str, Any]:
         "shipping_charged_krw": shipment.shipping_charged_krw,
         "shipping_charge_seq": shipment.shipping_charge_seq,
         "updated_at": shipment.updated_at,
+        "watch_count": shipment.watch_count,
+        "watch_price_usd": shipment.watch_price_usd,
+        "watch_krw_per_usd": (
+            float(shipment.watch_krw_per_usd) if shipment.watch_krw_per_usd else None
+        ),
+        "watch_charged_krw": shipment.watch_charged_krw,
+        "watch_charge_seq": shipment.watch_charge_seq,
     }
 
 

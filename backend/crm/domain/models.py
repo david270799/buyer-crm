@@ -60,6 +60,7 @@ class Order:
     brand: str | None = None
     model: str | None = None
     size: str | None = None
+    size_kr: str | None = None  # the Korean size of the same item (16.10.2026): 95, 260
     purchase_price: int | None = None
     client_price: int | None = None
     profit: int | None = None
@@ -70,6 +71,15 @@ class Order:
     photo_url: str | None = None
     thumbnail_url: str | None = None
     source_url: str | None = None
+    shop: str | None = None  # admin only: the shop it was bought in (16.10.2026)
+    category: str | None = None  # crm.domain.categories code
+    showcase_id: str | None = None  # ordered from the «Витрина» (20.10.2026)
+    # Admin only (services/arrival): the warehouse photo, the size check, a Korean review.
+    arrival_photo_url: str | None = None
+    arrival_thumbnail_url: str | None = None
+    arrival_check: Doc | None = None
+    arrival_photos: list[Doc] = field(default_factory=list)  # more warehouse photos
+    review_ko: str | None = None
     source_chat_id: int | None = None
     source_message_id: int | None = None
     client_comment: str | None = None
@@ -111,6 +121,7 @@ class Order:
             brand=_str_or_none(data.get("brand")),
             model=_str_or_none(data.get("model")),
             size=_str_or_none(data.get("size")),
+            size_kr=_str_or_none(data.get("size_kr")),
             purchase_price=purchase_price,
             client_price=client_price,
             profit=profit,
@@ -120,6 +131,18 @@ class Order:
             photo_url=_str_or_none(data.get("photo_url")),
             thumbnail_url=_str_or_none(data.get("thumbnail_url")),
             source_url=_str_or_none(data.get("source_url")),
+            shop=_str_or_none(data.get("shop")),
+            category=_str_or_none(data.get("category")),
+            showcase_id=_str_or_none(data.get("showcase_id")),
+            arrival_photo_url=_str_or_none(data.get("arrival_photo_url")),
+            arrival_thumbnail_url=_str_or_none(data.get("arrival_thumbnail_url")),
+            arrival_check=dict(data["arrival_check"])
+            if isinstance(data.get("arrival_check"), dict)
+            else None,
+            review_ko=_str_or_none(data.get("review_ko")),
+            arrival_photos=[
+                dict(p) for p in data.get("arrival_photos") or [] if isinstance(p, dict)
+            ],
             source_chat_id=_int_or_none(data.get("source_chat_id")),
             source_message_id=_int_or_none(data.get("source_message_id")),
             client_comment=_str_or_none(data.get("client_comment")),
@@ -156,6 +179,14 @@ class ClientInfo:
     # None means the stored value is missing or unreadable: financial
     # operations must refuse instead of assuming zero.
     balance: int | None
+    # A second person on the same account (the owner, 20.10.2026: /setclient2):
+    # same orders, balance and showcase, own Telegram ID.
+    second_telegram_id: int | None = None
+    second_name: str | None = None
+
+    @property
+    def telegram_ids(self) -> tuple[int, ...]:
+        return tuple(i for i in (self.telegram_id, self.second_telegram_id) if i is not None)
 
     @classmethod
     def from_doc(cls, doc_id: str, data: Doc) -> "ClientInfo":
@@ -164,6 +195,8 @@ class ClientInfo:
             telegram_id=_int_or_none(data.get("telegram_id")),
             name=_str_or_none(data.get("name")),
             balance=to_int_amount(data.get("balance")),
+            second_telegram_id=_int_or_none(data.get("second_telegram_id")),
+            second_name=_str_or_none(data.get("second_name")),
         )
 
 
@@ -189,6 +222,13 @@ class Shipment:
     updated_at: datetime | None = None
     # All photos (the first one is also photo_url / thumbnail_url).
     photos: list[dict[str, str | None]] = field(default_factory=list)
+    # Watches ship at a fixed price in USD each (owner, 12.10), charged separately
+    # at the rate fixed when they were first charged; charged/seq like shipping.
+    watch_count: int = 0
+    watch_price_usd: int | None = None
+    watch_krw_per_usd: Decimal | None = None
+    watch_charged_krw: int = 0
+    watch_charge_seq: int = 0
 
     @classmethod
     def from_doc(cls, doc_id: str, data: Doc) -> "Shipment":
@@ -224,6 +264,11 @@ class Shipment:
             thumbnail_url=_str_or_none(data.get("thumbnail_url")),
             updated_at=_dt(data.get("updated_at")),
             photos=photos,
+            watch_count=_int_or_none(data.get("watch_count")) or 0,
+            watch_price_usd=_int_or_none(data.get("watch_price_usd")),
+            watch_krw_per_usd=_rate_or_none(data.get("watch_krw_per_usd")),
+            watch_charged_krw=to_int_amount(data.get("watch_charged_krw")) or 0,
+            watch_charge_seq=_int_or_none(data.get("watch_charge_seq")) or 0,
         )
 
 
@@ -284,6 +329,17 @@ class LedgerEntry:
         )
 
 
+def _rate_or_none(raw: Any) -> Decimal | None:
+    """A KRW-per-USD rate stored as a number (Firestore has no decimal type)."""
+    if not isinstance(raw, (int, float, str)) or isinstance(raw, bool):
+        return None
+    try:
+        rate = Decimal(str(raw))
+    except ArithmeticError:
+        return None
+    return rate if rate.is_finite() and rate > 0 else None
+
+
 @dataclass
 class GeneralSettings:
     krw_per_usd: Decimal | None
@@ -294,17 +350,93 @@ class GeneralSettings:
     def from_doc(cls, data: Doc | None) -> "GeneralSettings":
         if not data:
             return cls(krw_per_usd=None)
-        raw = data.get("krw_per_usd")
-        rate: Decimal | None = None
-        if isinstance(raw, (int, float, str)) and not isinstance(raw, bool):
-            try:
-                rate = Decimal(str(raw))
-            except ArithmeticError:
-                rate = None
-            if rate is not None and (not rate.is_finite() or rate <= 0):
-                rate = None
         return cls(
-            krw_per_usd=rate,
+            krw_per_usd=_rate_or_none(data.get("krw_per_usd")),
             updated_at=_dt(data.get("updated_at")),
             updated_by=_str_or_none(data.get("updated_by")),
+        )
+
+
+SHOWCASE_STATUSES = ("draft", "published", "hidden")
+
+
+@dataclass
+class ShowcaseItem:
+    """A product card of the «Витрина» (20.10.2026): made from a shop link,
+    checked and priced by the admin on «Подготовка», then published."""
+
+    id: str
+    url: str
+    status: str = "draft"
+    shop: str | None = None
+    brand: str | None = None
+    model: str | None = None
+    category: str | None = None
+    title: str | None = None  # the shop's own name (often Korean)
+    photo_url: str | None = None
+    thumbnail_url: str | None = None
+    photos: list[Doc] = field(default_factory=list)  # all photos {photo_url, thumbnail_url}
+    shop_price_krw: int | None = None
+    official_price_krw: int | None = None  # crossed out for the client when higher
+    official_url: str | None = None
+    markup_type: str = "krw"  # "krw" (+ ₩) or "pct" (+ %)
+    markup_value: int = 0
+    client_price_override: int | None = None
+    sizes: list[Doc] = field(default_factory=list)  # {name, stock, available}
+    note: str | None = None  # what could not be read
+    refreshed_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    published_at: datetime | None = None
+
+    @property
+    def client_price_krw(self) -> int | None:
+        """Shop price + markup, rounded up to ₩ 100 — unless set by hand."""
+        if self.client_price_override:
+            return self.client_price_override
+        if not self.shop_price_krw:
+            return None
+        if self.markup_type == "pct":
+            raw = self.shop_price_krw * (100 + self.markup_value) / 100
+        else:
+            raw = self.shop_price_krw + self.markup_value
+        return int(-(-raw // 100) * 100)
+
+    @property
+    def title_line(self) -> str:
+        return " ".join(p for p in (self.brand, self.model) if p) or self.title or "Товар"
+
+    @classmethod
+    def from_doc(cls, doc_id: str, data: Doc) -> "ShowcaseItem":
+        status = data.get("status")
+        markup = data.get("markup_type")
+
+        def when(name: str) -> datetime | None:
+            value = data.get(name)
+            return value if isinstance(value, datetime) else None
+
+        return cls(
+            id=doc_id,
+            url=str(data.get("url") or ""),
+            status=status if status in SHOWCASE_STATUSES else "draft",
+            shop=_str_or_none(data.get("shop")),
+            brand=_str_or_none(data.get("brand")),
+            model=_str_or_none(data.get("model")),
+            category=_str_or_none(data.get("category")),
+            title=_str_or_none(data.get("title")),
+            photo_url=_str_or_none(data.get("photo_url")),
+            thumbnail_url=_str_or_none(data.get("thumbnail_url")),
+            photos=[dict(p) for p in data.get("photos") or [] if isinstance(p, dict)],
+            shop_price_krw=_int_or_none(data.get("shop_price_krw")),
+            official_price_krw=_int_or_none(data.get("official_price_krw")),
+            official_url=_str_or_none(data.get("official_url")),
+            markup_type=markup if markup in ("krw", "pct") else "krw",
+            markup_value=_int_or_none(data.get("markup_value")) or 0,
+            client_price_override=_int_or_none(data.get("client_price_override")),
+            sizes=[dict(s) for s in data.get("sizes") or [] if isinstance(s, dict)],
+            note=_str_or_none(data.get("note")),
+            refreshed_at=when("refreshed_at"),
+            created_at=when("created_at"),
+            updated_at=when("updated_at"),
+            published_at=when("published_at"),
         )

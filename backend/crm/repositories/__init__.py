@@ -8,6 +8,7 @@ from crm.repositories.orders import OrderRepository
 from crm.repositories.profit import ProfitRepository
 from crm.repositories.settings import SettingsRepository
 from crm.repositories.shipments import ShipmentRepository
+from crm.repositories.showcase import ShowcaseRepository
 
 __all__ = [
     "AuditRepository",
@@ -21,4 +22,5 @@ __all__ = [
     "ProfitRepository",
     "SettingsRepository",
     "ShipmentRepository",
+    "ShowcaseRepository",
 ]

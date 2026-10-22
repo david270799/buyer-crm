@@ -84,6 +84,15 @@ def test_client_recipient_uses_the_client_telegram_id(db, services, admin):
     assert [d.chat_ids for d in services.notifications.due().deliveries] == [(CLIENT_TG,)]
 
 
+def test_both_recipient_sends_to_the_client_and_a_copy_to_the_admins(db, services, admin):
+    seed_order(db, "N5")
+    enable(services, admin, recipient="both", level="all")
+    services.orders.buy(admin, "5", 140_000, 170_000)
+
+    [delivery] = services.notifications.due().deliveries
+    assert delivery.chat_ids == (CLIENT_TG, ADMIN_TG)
+
+
 def test_client_without_telegram_id_gets_nothing(db, services, admin):
     seed(db, "client_info", "main_client", {"name": "Клиент", "balance": 1_000_000})
     seed_order(db, "N5")

@@ -115,7 +115,7 @@ def test_finance_events(db, services, admin):
     services.finance.adjust(admin, -5_000, "Комиссия")
     services.finance.set_rate(admin, Decimal("1350"))
     assert types(db) == ["deposit", "adjustment", "rate"]
-    assert [e["important"] for e in events(db)] == [False, True, False]
+    assert [e["important"] for e in events(db)] == [False, True, True]
 
 
 def test_rebuy_event_is_important_and_explains_the_price(db, services, admin):

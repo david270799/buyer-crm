@@ -1,6 +1,16 @@
 from aiogram import Router
 
-from crm.bot.handlers import common, errors, fallback, finance, intake, orders, shipments
+from crm.bot.handlers import (
+    arrival,
+    common,
+    errors,
+    fallback,
+    finance,
+    intake,
+    orders,
+    shipments,
+    showcase,
+)
 from crm.config import Settings
 from crm.services.container import Services
 
@@ -14,7 +24,9 @@ def build_router(services: Services, settings: Settings) -> Router:
         orders.build(),
         shipments.build(),
         finance.build(),
+        arrival.build(services, settings),  # before the intake: «N5» photos are arrivals
         intake.build(services, settings),
+        showcase.build(services, settings),  # a shop link from the admin → draft
         fallback.build(),
     )
     root.errors.register(errors.on_error)

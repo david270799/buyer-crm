@@ -2,11 +2,15 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tansta
 
 import { api, get, newIdempotencyKey, patch, post, put, query } from "./client";
 import type {
+  ArrivalResult,
+  ShowcaseItem,
+  Category,
   BalanceChange,
   CrmEvent,
   BulkResult,
   DeletePreview,
   DeleteResult,
+  LinkImport,
   PhotoRecognition,
   LedgerItem,
   Me,
@@ -53,6 +57,7 @@ export const useOrders = (filters: OrderFilters) =>
           status: filters.status,
           q: filters.q,
           attention: filters.attention,
+          stuck: filters.stuck,
           sort: filters.sort,
           offset: filters.offset,
           limit: filters.limit,
@@ -101,6 +106,25 @@ export const useProfit = () =>
   useQuery({
     queryKey: ["profit"] as const,
     queryFn: () => get<{ items: ProfitItem[] }>("/api/finance/profit"),
+  });
+
+export interface ProfitLine {
+  amount_krw: number;
+  at: string | null;
+  comment: string | null;
+  order: Order | null;
+}
+
+/** What the dashboard profit is made of: orders' profit + extra profit entries. */
+export const useProfitLines = (period: "month" | "all" | "range", from = "", to = "") =>
+  useQuery({
+    queryKey: ["profit-lines", period, from, to] as const,
+    queryFn: () => {
+      const q = new URLSearchParams({ period });
+      if (period === "range" && from) q.set("from", from);
+      if (period === "range" && to) q.set("to", to);
+      return get<{ total_krw: number; items: ProfitLine[] }>(`/api/finance/profit-lines?${q}`);
+    },
   });
 
 export const useAddProfit = () => {
@@ -174,7 +198,10 @@ export interface NewOrderInput {
   brand?: string | null;
   model?: string | null;
   size?: string | null;
+  size_kr?: string | null;
   source_url?: string | null;
+  shop?: string | null;
+  category?: Category | null;
   photo_url?: string | null;
   thumbnail_url?: string | null;
   purchase_price?: number | null;
@@ -205,7 +232,7 @@ export const useUpdateOrder = (id: string) => {
 export const useBuy = (id: string) => {
   const refresh = useInvalidateAll();
   return useMutation({
-    mutationFn: (body: { purchase_price: number; client_price: number }) =>
+    mutationFn: (body: { purchase_price: number; client_price: number; shop?: string | null }) =>
       post<{ order: Order; already_done: boolean; change: BalanceChange | null }>(
         `/api/orders/${id}/buy`,
         body,
@@ -217,7 +244,13 @@ export const useBuy = (id: string) => {
 export const useRebuy = (id: string) => {
   const refresh = useInvalidateAll();
   return useMutation({
-    mutationFn: (body: { purchase_price: number; client_price: number; source_url?: string | null; reason?: string | null }) =>
+    mutationFn: (body: {
+      purchase_price: number;
+      client_price: number;
+      source_url?: string | null;
+      shop?: string | null;
+      reason?: string | null;
+    }) =>
       post<{ order: Order; already_done: boolean; change: BalanceChange | null }>(
         `/api/orders/${id}/rebuy`,
         body,
@@ -300,6 +333,7 @@ export interface ShipmentInput {
   photo_url?: string | null;
   thumbnail_url?: string | null;
   photos?: { photo_url: string; thumbnail_url: string | null }[];
+  watch_count?: number;
 }
 
 export const useCreateShipment = () => {
@@ -314,7 +348,10 @@ export const useUpdateShipment = (id: string) => {
   const refresh = useInvalidateAll();
   return useMutation({
     mutationFn: (body: ShipmentInput) =>
-      patch<{ shipment: Shipment; change: BalanceChange | null }>(`/api/shipments/${id}`, body),
+      patch<{ shipment: Shipment; change: BalanceChange | null; watch_change: BalanceChange | null }>(
+        `/api/shipments/${id}`,
+        body,
+      ),
     onSuccess: refresh,
   });
 };
@@ -323,6 +360,15 @@ export const useDuplicateOrder = (id: string) => {
   const refresh = useInvalidateAll();
   return useMutation({
     mutationFn: (count: number) => post<{ items: Order[] }>(`/api/orders/${id}/duplicate`, { count }),
+    onSuccess: refresh,
+  });
+};
+
+/** The client's only write: the parcel arrived («Доставлено»). */
+export const useShipmentDelivered = () => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (id: string) => post<{ updated: string[] }>(`/api/shipments/${id}/delivered`, {}),
     onSuccess: refresh,
   });
 };
@@ -356,6 +402,28 @@ export const useSetRate = () => {
   });
 };
 
+/** «Пришло на склад»: the warehouse photo → size check, review, «На складе». */
+export const useArrival = (id: string) => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (body: { photo_url: string; thumbnail_url: string | null }) =>
+      post<ArrivalResult>(`/api/orders/${id}/arrival`, body),
+    onSuccess: refresh,
+  });
+};
+
+/** The shop bubbles of the buy form (admin). */
+export const useShops = () =>
+  useQuery({ queryKey: ["shops"], queryFn: () => get<{ names: string[] }>("/api/settings/shops") });
+
+export const useSetShops = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (names: string[]) => put<{ names: string[] }>("/api/settings/shops", { names }),
+    onSuccess: (data) => client.setQueryData(["shops"], data),
+  });
+};
+
 export const useSetNotifications = () => {
   const client = useQueryClient();
   return useMutation({
@@ -366,6 +434,10 @@ export const useSetNotifications = () => {
 };
 
 /** Gemini reads an uploaded photo; the answer only fills the form, nothing is saved. */
+export function recognizeLink(url: string): Promise<LinkImport> {
+  return post<LinkImport>("/api/recognize-link", { url });
+}
+
 export function recognizePhoto(photo_url: string): Promise<PhotoRecognition> {
   return post<PhotoRecognition>("/api/recognize", { photo_url });
 }
@@ -375,3 +447,134 @@ export async function uploadImage(file: File): Promise<{ photo_url: string; thum
   form.append("file", file);
   return api("/api/images", { method: "POST", body: form });
 }
+
+// --- «Витрина» (test mode: admin only) -----------------------------------------
+
+const showcaseKey = ["showcase"] as const;
+
+export const useShowcase = (status?: ShowcaseItem["status"]) =>
+  useQuery({
+    queryKey: [...showcaseKey, "list", status ?? "all"],
+    queryFn: () => get<{ items: ShowcaseItem[] }>(`/api/showcase${query({ status })}`),
+  });
+
+export const useShowcaseItem = (id: string) =>
+  useQuery({
+    queryKey: [...showcaseKey, "item", id],
+    queryFn: () => get<{ item: ShowcaseItem }>(`/api/showcase/${id}`),
+  });
+
+function useShowcaseRefresh() {
+  const client = useQueryClient();
+  return () => client.invalidateQueries({ queryKey: showcaseKey });
+}
+
+export const useShowcaseAdd = () => {
+  const refresh = useShowcaseRefresh();
+  return useMutation({
+    mutationFn: (url: string) => post<{ item: ShowcaseItem }>("/api/showcase", { url }),
+    onSuccess: refresh,
+  });
+};
+
+export type ShowcasePatch = Partial<
+  Pick<
+    ShowcaseItem,
+    | "shop_price_krw"
+    | "official_price_krw"
+    | "client_price_override"
+    | "markup_type"
+    | "markup_value"
+    | "brand"
+    | "model"
+    | "shop"
+    | "category"
+  >
+>;
+
+export const useShowcasePatch = (id: string) => {
+  const refresh = useShowcaseRefresh();
+  return useMutation({
+    mutationFn: (body: ShowcasePatch) => patch<{ item: ShowcaseItem }>(`/api/showcase/${id}`, body),
+    onSuccess: refresh,
+  });
+};
+
+export const useShowcaseAction = (id: string) => {
+  const refresh = useShowcaseRefresh();
+  return useMutation({
+    mutationFn: (
+      action: "refresh" | "like" | "delete" | "official" | "status/published" | "status/hidden" | "status/draft",
+    ) =>
+      post<{ item?: ShowcaseItem; liked?: boolean; ok?: boolean }>(`/api/showcase/${id}/${action}`),
+    onSuccess: refresh,
+  });
+};
+
+export const useShowcaseOrder = () => {
+  const refresh = useInvalidateAll();
+  return useMutation({
+    mutationFn: (items: { item_id: string; size: string | null; color?: string | null }[]) =>
+      post<{ items: Order[] }>("/api/showcase/order", { items }),
+    onSuccess: refresh,
+  });
+};
+
+export type ShowcaseStatKind = "view" | "like" | "unlike" | "order";
+
+/** «Статистика» витрины: raw rows, the page adds them up and filters. */
+export interface ShowcaseStats {
+  items: Record<string, { title: string; thumbnail_url: string | null }>;
+  /** Per viewer and card: opens and ♥. */
+  cards: { viewer: string; item_id: string; views: number; liked: boolean; last_at: string | null }[];
+  /** Opens, ♥ and orders, newest first. */
+  history: {
+    kind: ShowcaseStatKind;
+    viewer: string | null;
+    item_id: string | null;
+    at: string | null;
+    order_id?: string;
+    size?: string | null;
+  }[];
+  viewers: { viewer: string; label: string }[];
+}
+
+export const useShowcaseStats = () =>
+  useQuery({
+    queryKey: [...showcaseKey, "stats"],
+    queryFn: () => get<ShowcaseStats>("/api/showcase-stats"),
+  });
+
+/** A card was opened (counted for «Статистика»). */
+export function markShowcaseViewed(id: string): void {
+  post(`/api/showcase/${id}/view`).catch(() => undefined);
+}
+
+/* «Обновить CRM» (21.10.2026): the server's updater runs git pull + rebuild. */
+export interface UpdateStatus {
+  installed: boolean;
+  requested?: boolean;
+  state?: "idle" | "running" | "done" | "failed";
+  started_at?: string | null;
+  finished_at?: string | null;
+  before?: string | null;
+  after?: string | null;
+  log?: string;
+}
+
+/** Checked again every few seconds only while an update is under way. */
+export const useUpdateStatus = (watching: boolean) =>
+  useQuery({
+    queryKey: ["system-update"],
+    queryFn: () => get<UpdateStatus>("/api/system/update"),
+    refetchInterval: watching ? 5000 : false,
+    retry: watching ? true : 1,
+  });
+
+export const useRequestUpdate = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => post<UpdateStatus>("/api/system/update"),
+    onSuccess: (data) => qc.setQueryData(["system-update"], data),
+  });
+};

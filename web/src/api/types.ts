@@ -17,8 +17,23 @@ export interface Order {
   client_comment: string | null;
   attention_required: boolean;
   timestamps: Record<string, string>;
+  category?: Category | null;
+  /** The Korean size of the same item (95, 100, 260…), next to the usual one. */
+  size_kr?: string | null;
   // Admin only
   source_url?: string | null;
+  shop?: string | null;
+  /** Ordered from the «Витрина» card with this id. */
+  showcase_id?: string | null;
+  /** Days since the buy-out while still «Выкуплен» after 4 days; else null. */
+  stuck_days?: number | null;
+  arrival_photo_url?: string | null;
+  arrival_thumbnail_url?: string | null;
+  /** More warehouse photos sent in the same series (only the first is checked). */
+  arrival_photos?: { photo_url: string; thumbnail_url: string | null }[];
+  arrival_check?: ArrivalCheck | null;
+  /** Short Korean review for the shop's review points (Gemini). */
+  review_ko?: string | null;
   purchase_price?: number | null;
   profit?: number | null;
   charged_amount_krw?: number;
@@ -46,6 +61,7 @@ export interface Purchase {
   purchase_price: number | null;
   client_price: number | null;
   source_url: string | null;
+  shop?: string | null;
   bought_at: string | null;
   replaced_at?: string | null;
   note?: string | null;
@@ -67,7 +83,8 @@ export type EventType =
   | "shipping_cost"
   | "deposit"
   | "adjustment"
-  | "rate";
+  | "rate"
+  | "debt_warning";
 
 export interface CrmEvent {
   id: string;
@@ -97,10 +114,16 @@ export interface Shipment {
   order_count: number;
   comment: string | null;
   created_at: string | null;
+  /** Watches in the parcel ($10 each, a separate balance line). */
+  watch_count?: number;
   /** Every order delivered → «Доставлена», otherwise «В пути». */
   delivered?: boolean;
   // Admin only
   shipping_charged_krw?: number;
+  watch_charged_krw?: number;
+  watch_price_usd?: number | null;
+  /** The rate fixed when the watches were first charged. */
+  watch_krw_per_usd?: number | null;
 }
 
 export type LedgerType =
@@ -110,6 +133,7 @@ export type LedgerType =
   | "deposit"
   | "adjustment"
   | "shipping_charge"
+  | "watch_charge"
   | "order_discount";
 
 export interface LedgerItem {
@@ -122,6 +146,12 @@ export interface LedgerItem {
   shipment_id: string | null;
   comment: string | null;
   created_at: string | null;
+  /** A re-purchased order's charge line: the first price (crossed out) and when it was bought. */
+  original_amount_krw?: number;
+  rebuy_count?: number;
+  bought_at?: string | null;
+  /** Shipping lines: the parcel's tracking code and photo. */
+  shipment?: { id: string; number: number | null; tracking_code: string | null; thumbnail_url: string | null } | null;
   order: { id: string; title: string | null; thumbnail_url: string | null } | null;
 }
 
@@ -138,6 +168,7 @@ export interface Overview {
     attention_count: number;
     total: number;
     active: number;
+    stuck_count?: number | null;
     profit_total_krw?: number | null;
     profit_month_krw?: number | null;
   };
@@ -162,9 +193,24 @@ export interface PhotoRecognition {
   brand: string | null;
   model: string | null;
   size: string | null;
+  size_kr?: string | null;
   category: string | null;
+  category_code?: Category | null;
   confidence: number;
   not_a_product: boolean;
+}
+
+export interface LinkImport {
+  brand: string | null;
+  model: string | null;
+  category: string | null;
+  category_code?: Category | null;
+  title: string | null;
+  photo_url: string | null;
+  thumbnail_url: string | null;
+  engine: string | null;
+  /** What did not work (no photo, Gemini unsure...). */
+  note: string | null;
 }
 
 export interface DeletePreview {
@@ -191,10 +237,13 @@ export interface ShipResult {
   not_found: string[];
   skipped: { order_id: string; reason: string }[];
   change: BalanceChange | null;
+  watch_change?: BalanceChange | null;
 }
 
 export interface Me {
   role: Role;
+  /** The admin looks at the client's view («Как видит клиент»). */
+  preview?: boolean;
   user: { id: number; first_name: string | null; username: string | null };
 }
 
@@ -207,12 +256,13 @@ export interface OrderFilters {
   status?: OrderStatus | "";
   q?: string;
   attention?: boolean;
-  sort?: "newest" | "oldest" | "price_desc" | "price_asc";
+  stuck?: boolean;
+  sort?: "newest" | "oldest" | "price_desc" | "price_asc" | "status";
   offset?: number;
   limit?: number;
 }
 
-export type NotifyRecipient = "off" | "admins" | "client";
+export type NotifyRecipient = "off" | "admins" | "client" | "both";
 export type NotifyLevel = "important" | "all";
 
 export interface NotificationSettings {
@@ -224,4 +274,63 @@ export interface NotificationSettings {
   last_error_at: string | null;
   client_has_telegram: boolean;
   bot_running: boolean;
+}
+
+export type Category = "shoes" | "clothes" | "watch" | "bag" | "accessory" | "other";
+
+export type ArrivalStatus = "match" | "mismatch" | "unclear" | "skipped";
+
+export interface ArrivalCheck {
+  status: ArrivalStatus;
+  size_seen: string | null;
+  ordered_size: string | null;
+  note: string | null;
+  error: string | null;
+  at: string | null;
+}
+
+export interface ArrivalResult {
+  order: Order;
+  status: ArrivalStatus;
+  size_seen: string | null;
+  review_ko: string | null;
+  note: string | null;
+  moved_to_warehouse: boolean;
+  error: string | null;
+}
+
+export interface ShowcaseSize {
+  name: string;
+  stock: number | null;
+  available: boolean;
+  /** Colour first, then size (Hmall jackets, 20.10.2026). */
+  color?: string | null;
+}
+
+export interface ShowcaseItem {
+  id: string;
+  url: string;
+  status: "draft" | "published" | "hidden";
+  shop: string | null;
+  brand: string | null;
+  model: string | null;
+  title: string | null;
+  title_line: string;
+  category: Category | null;
+  photo_url: string | null;
+  thumbnail_url: string | null;
+  photos: { photo_url: string; thumbnail_url: string | null }[];
+  shop_price_krw: number | null;
+  official_price_krw: number | null;
+  official_url: string | null;
+  markup_type: "krw" | "pct";
+  markup_value: number;
+  client_price_override: number | null;
+  client_price_krw: number | null;
+  sizes: ShowcaseSize[];
+  note: string | null;
+  liked: boolean;
+  refreshed_at: string | null;
+  created_at: string | null;
+  published_at: string | null;
 }

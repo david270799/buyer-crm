@@ -14,6 +14,7 @@ from aiogram.client.session.base import BaseSession
 from aiogram.enums import ParseMode
 from aiogram.methods import DeleteMessage, GetFile, GetMe, LeaveChat, SendMessage, SendPhoto
 from aiogram.types import (
+    CallbackQuery,
     Chat,
     ChatMemberLeft,
     ChatMemberMember,
@@ -29,6 +30,7 @@ from PIL import Image
 
 from crm.bot.app import create_dispatcher
 from crm.config import Settings
+from crm.domain.enums import Role
 from crm.services.container import build_services
 from crm.services.recognition import Recognition, fallback
 from crm.storage.blobs import MemoryBlobStorage
@@ -212,7 +214,23 @@ def env(db, clock):
             )
             await dp.feed_update(bot, Update(update_id=next(_ids), my_chat_member=event))
 
+        async def press(data, user_id=ADMIN_TG):
+            query = CallbackQuery(
+                id=str(next(_ids)),
+                from_user=User(id=user_id, is_bot=False, first_name="U"),
+                chat_instance="1",
+                data=data,
+                message=Message(
+                    message_id=next(_ids),
+                    date=datetime.now(timezone.utc),
+                    chat=Chat(id=user_id, type="private"),
+                    text="?",
+                ),
+            )
+            await dp.feed_update(bot, Update(update_id=next(_ids), callback_query=query))
+
         return {
+            "press": press,
             "services": services,
             "session": session,
             "blobs": blobs,
@@ -277,9 +295,11 @@ async def test_what_is_not_an_order(db, env):
 async def test_admin_in_private_gets_the_order_card(db, env):
     e = env(FakeGemini())
     await e["photo"]("43 https://shop.example.kr/x", user_id=ADMIN_TG, chat_id=ADMIN_TG)
+    assert db.list_ids("orders") == []  # the bot asks first (owner, 16.10)
+    await e["press"](_new_order_button(e))
 
     [order_id] = db.list_ids("orders")
-    [reply] = e["session"].to(ADMIN_TG)
+    reply = [t for t in e["session"].to(ADMIN_TG) if "принят" in t][0]
     assert f"Заказ {order_id} принят" in reply
     assert "🔒 Ссылка" in reply and "Gemini" in reply and "/buy" in reply
 
@@ -348,7 +368,7 @@ async def test_without_gemini_the_caption_is_used(db, env):
 
     [order_id] = db.list_ids("orders")
     order = db.get("orders", order_id)
-    assert order["size"] == "270" and order["brand"] is None
+    assert order["size_kr"] == "270" and order["brand"] is None
     assert order["source_url"] == "https://shop.example.kr/p"
     assert e["session"].to(GROUP) == []
     [question] = e["session"].to(ADMIN_TG)
@@ -420,6 +440,35 @@ async def test_setclient_rules(db, env):
     assert e["session"].to(GROUP) == []
 
 
+async def test_setclient2_adds_a_second_person_on_the_same_account(db, env):
+    # The owner, 20.10.2026: a second person sees the same orders and balance.
+    e = env(FakeGemini())
+    roles = e["services"].roles
+    assert roles.resolve(4004) is None
+    await e["text"]("/setclient2 4004 Мин")
+    assert "Второй человек клиента: Мин" in e["session"].to(ADMIN_TG)[-1]
+    stored = db.get("client_info", "main_client")
+    assert stored["telegram_id"] == CLIENT_TG and stored["second_telegram_id"] == 4004
+    assert roles.resolve(4004) is Role.CLIENT and roles.resolve(CLIENT_TG) is Role.CLIENT
+    await e["text"](f"/setclient2 {CLIENT_TG}")
+    assert "основного клиента" in e["session"].to(ADMIN_TG)[-1]
+    await e["text"]("/setclient2 5005", user_id=CLIENT_TG)  # the client cannot
+    assert db.get("client_info", "main_client")["second_telegram_id"] == 4004
+    await e["text"]("/setclient2 off")
+    assert roles.resolve(4004) is None
+    assert db.get("client_info", "main_client")["balance"] == stored["balance"]
+
+
+def test_notifications_go_to_both_client_people(db, services, admin):
+    from crm.domain.notifications import NotificationSettings, NotifyRecipient
+
+    services.clients.set_second(admin, 4004)
+    chat_ids = services.notifications._chat_ids(
+        NotificationSettings(recipient=NotifyRecipient.CLIENT)
+    )
+    assert set(chat_ids) == {CLIENT_TG, 4004}
+
+
 async def test_assistants_get_no_client_access(db, env):
     e = env(FakeGemini())
     for command in ("/balance", "/history", "/order 1", "/shipments"):
@@ -445,3 +494,206 @@ def test_setclient_creates_a_missing_client_with_zero_balance(db, services, admi
     assert change.before is None
     stored = db.get("client_info", "main_client")
     assert stored["telegram_id"] == 3003 and stored["balance"] == 0
+
+
+async def test_quantity_ta_creates_several_orders(db, env):
+    gemini = FakeGemini()
+    e = env(gemini)
+    await e["photo"]("42 3ta")
+
+    assert sorted(db.list_ids("orders")) == ["N1", "N2", "N3"]
+    assert gemini.calls == ["42"]  # "3ta" is not shown to Gemini as a size
+    sizes = {db.get("orders", i)["size"] for i in ("N1", "N2", "N3")}
+    assert sizes == {"42"}
+    # Only the first order is tied to the message (its reaction).
+    assert db.get("orders", "N1")["source_message_id"] is not None
+    assert db.get("orders", "N2")["source_message_id"] is None
+    assert any("N1, N2, N3" in t for t in e["session"].to(ADMIN_TG))
+
+
+async def test_two_links_two_orders_with_their_sizes(db, env):
+    e = env(FakeGemini())
+    await e["photo"]("https://shop.example.kr/jacket M\nhttps://shop.example.kr/pants 30")
+
+    first, second = db.get("orders", "N1"), db.get("orders", "N2")
+    assert (first["source_url"], first["size"]) == ("https://shop.example.kr/jacket", "M")
+    assert (second["source_url"], second["size"]) == ("https://shop.example.kr/pants", "30")
+    assert first["brand"] is None and second["model"] is None  # several items in one photo
+    assert sorted(db.list_ids("orders")) == ["N1", "N2"]
+
+
+async def test_redelivered_ta_photo_creates_nothing_more(db, env):
+    e = env(FakeGemini())
+    first = await e["photo"]("42 2ta")
+    await e["photo"]("42 2ta", message_id=first.message_id)
+    assert sorted(db.list_ids("orders")) == ["N1", "N2"]
+
+
+class ArrivalGemini(FakeGemini):
+    def check_arrival(self, image, **_):
+        return {
+            "size_seen": "265",
+            "matches": False,
+            "confidence": 0.9,
+            "note": None,
+            "review_ko": "디자인이 예쁘고 착용감이 좋아요",
+        }
+
+
+async def test_admin_photo_with_order_number_is_an_arrival(db, env):
+    from aiogram.methods import EditMessageText
+
+    from crm.domain.enums import Role
+    from crm.services.common import Actor
+
+    e = env(ArrivalGemini())
+    seed_order(db, "N5", size="270")
+    e["services"].orders.buy(Actor.telegram(ADMIN_TG, Role.ADMIN), "5", 100, 200)
+
+    await e["photo"]("N5", user_id=ADMIN_TG, chat_id=ADMIN_TG)
+
+    order = db.get("orders", "N5")
+    assert order["status"] == "warehouse"
+    assert order["arrival_check"]["status"] == "mismatch"
+    assert order["review_ko"] == "디자인이 예쁘고 착용감이 좋아요"
+    assert db.list_ids("orders") == ["N5"]  # not a new order
+    [edited] = [m for m in e["session"].sent if isinstance(m, EditMessageText)]
+    assert "Размер не тот" in edited.text and "<code>디자인이" in edited.text
+
+
+async def test_admin_photo_without_a_number_asks_which_order(db, env):
+    from crm.domain.enums import Role
+    from crm.services.common import Actor
+
+    e = env(ArrivalGemini())
+    seed_order(db, "N5", size="270")
+    e["services"].orders.buy(Actor.telegram(ADMIN_TG, Role.ADMIN), "5", 100, 200)
+
+    await e["photo"]("42", user_id=ADMIN_TG, chat_id=ADMIN_TG)
+    assert db.list_ids("orders") == ["N5"]  # nothing created yet
+    markup = _last_markup(e)
+    pick = markup.inline_keyboard[0][0]
+    assert pick.text.startswith("N5") and pick.callback_data.endswith(":N5")
+    assert markup.inline_keyboard[-1][0].text == "➕ Это новый заказ"
+
+    await e["press"](pick.callback_data)
+    assert db.get("orders", "N5")["status"] == "warehouse"
+    assert db.list_ids("orders") == ["N5"]
+
+
+def _last_markup(e):
+    from aiogram.methods import SendMessage
+
+    asked = [m for m in e["session"].sent if isinstance(m, SendMessage) and m.reply_markup]
+    return asked[-1].reply_markup
+
+
+def _new_order_button(e) -> str:
+    return _last_markup(e).inline_keyboard[-1][0].callback_data
+
+
+async def test_photo_series_first_is_checked_rest_go_to_the_card(db, env):
+    from crm.domain.enums import Role
+    from crm.services.common import Actor
+
+    gemini = ArrivalGemini()
+    calls = []
+    original = gemini.check_arrival
+    gemini.check_arrival = lambda image, **kw: calls.append(1) or original(image, **kw)
+    e = env(gemini)
+    seed_order(db, "N5", size="270")
+    e["services"].orders.buy(Actor.telegram(ADMIN_TG, Role.ADMIN), "5", 100, 200)
+
+    await e["photo"]("N5", user_id=ADMIN_TG, chat_id=ADMIN_TG)
+    await e["photo"](None, user_id=ADMIN_TG, chat_id=ADMIN_TG)
+    await e["photo"](None, user_id=ADMIN_TG, chat_id=ADMIN_TG)
+
+    order = db.get("orders", "N5")
+    assert len(calls) == 1  # only the first photo goes to Gemini
+    assert order["arrival_photo_url"] and len(order["arrival_photos"]) == 2
+    assert db.list_ids("orders") == ["N5"]
+
+
+async def test_photo_series_without_number_asks_once(db, env):
+    from crm.domain.enums import Role
+    from crm.services.common import Actor
+
+    e = env(ArrivalGemini())
+    seed_order(db, "N5", size="270")
+    e["services"].orders.buy(Actor.telegram(ADMIN_TG, Role.ADMIN), "5", 100, 200)
+
+    for _ in range(3):
+        await e["photo"](None, user_id=ADMIN_TG, chat_id=ADMIN_TG)
+    questions = [t for t in e["session"].to(ADMIN_TG) if "Какой это заказ" in t]
+    assert len(questions) == 1
+
+    await e["press"](_last_markup(e).inline_keyboard[0][0].callback_data)
+    order = db.get("orders", "N5")
+    assert order["status"] == "warehouse" and len(order["arrival_photos"]) == 2
+
+
+async def test_album_sent_at_once_is_one_series(db, env):
+    import asyncio
+
+    from crm.domain.enums import Role
+    from crm.services.common import Actor
+
+    gemini = ArrivalGemini()
+    calls = []
+    original = gemini.check_arrival
+    gemini.check_arrival = lambda image, **kw: calls.append(1) or original(image, **kw)
+    e = env(gemini)
+    seed_order(db, "N5", size="270")
+    e["services"].orders.buy(Actor.telegram(ADMIN_TG, Role.ADMIN), "5", 100, 200)
+
+    # An album: Telegram delivers the photos together, they are handled concurrently.
+    await asyncio.gather(
+        e["photo"]("N5", user_id=ADMIN_TG, chat_id=ADMIN_TG),
+        e["photo"](None, user_id=ADMIN_TG, chat_id=ADMIN_TG),
+        e["photo"](None, user_id=ADMIN_TG, chat_id=ADMIN_TG),
+    )
+    order = db.get("orders", "N5")
+    assert len(calls) == 1 and len(order["arrival_photos"]) == 2
+
+
+async def test_album_without_number_asks_once(db, env):
+    import asyncio
+
+    from crm.domain.enums import Role
+    from crm.services.common import Actor
+
+    e = env(ArrivalGemini())
+    seed_order(db, "N5", size="270")
+    e["services"].orders.buy(Actor.telegram(ADMIN_TG, Role.ADMIN), "5", 100, 200)
+    await asyncio.gather(*(e["photo"](None, user_id=ADMIN_TG, chat_id=ADMIN_TG) for _ in range(3)))
+    assert len([t for t in e["session"].to(ADMIN_TG) if "Какой это заказ" in t]) == 1
+    await e["press"](_last_markup(e).inline_keyboard[0][0].callback_data)
+    assert len(db.get("orders", "N5")["arrival_photos"]) == 2
+
+
+async def test_admin_link_in_private_becomes_a_showcase_draft(db, env):
+    from aiogram.methods import EditMessageText
+
+    e = env(FakeGemini())
+
+    class Fetcher:
+        def html(self, url):
+            return "<html><head><title>Item</title></head></html>", url
+
+        def image(self, url):
+            return _jpeg()
+
+    e["services"].showcase._fetcher = Fetcher()
+    await e["text"]("вот https://shop.example.kr/item/9", user_id=ADMIN_TG, chat_id=ADMIN_TG)
+
+    [item] = db.query("showcase")
+    assert item[1]["url"] == "https://shop.example.kr/item/9" and item[1]["status"] == "draft"
+    [edited] = [m for m in e["session"].sent if isinstance(m, EditMessageText)]
+    assert "Черновик витрины" in edited.text
+    # No price on that page: the bot sends the page as a file by itself.
+    from aiogram.methods import SendDocument
+
+    [page] = [m for m in e["session"].sent if isinstance(m, SendDocument)]
+    assert "пока прочитать не может" in page.caption
+    await e["text"]("https://shop.example.kr/item/9", user_id=CLIENT_TG, chat_id=CLIENT_TG)
+    assert len(db.query("showcase")) == 1  # the client cannot add cards

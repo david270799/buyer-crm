@@ -1,0 +1,87 @@
+{
+ "respCode": "dp.clt.00001",
+ "successYn": "Y",
+ "respData": {
+  "respCode": "dp.clt.00001",
+  "respType": "",
+  "viewName": null,
+  "alertMessage": null,
+  "exceptionCode": null,
+  "url": null,
+  "attrTypeMstVOList": [
+   {
+    "slitmCd": "2245070800",
+    "uitmAttrTypeSeq": 1,
+    "uitmAttrTypeNm": "색상",
+    "uitmAttrMstList": [
+     {
+      "uitmSeq": 1,
+      "uitmAttrTypeSeq": 1,
+      "uitmAttrNm": "NJ5JR66A_BLK",
+      "slitmCd": "2245070800"
+     },
+     {
+      "uitmSeq": 2,
+      "uitmAttrTypeSeq": 1,
+      "uitmAttrNm": "NJ5JR66B_CHC",
+      "slitmCd": "2245070800"
+     },
+     {
+      "uitmSeq": 3,
+      "uitmAttrTypeSeq": 1,
+      "uitmAttrNm": "NJ5JR66C_DBE",
+      "slitmCd": "2245070800"
+     }
+    ]
+   },
+   {
+    "slitmCd": "2245070800",
+    "uitmAttrTypeSeq": 2,
+    "uitmAttrTypeNm": "사이즈",
+    "uitmAttrMstList": [
+     {
+      "uitmSeq": 4,
+      "uitmAttrTypeSeq": 2,
+      "uitmAttrNm": "090(S)",
+      "slitmCd": "2245070800"
+     },
+     {
+      "uitmSeq": 5,
+      "uitmAttrTypeSeq": 2,
+      "uitmAttrNm": "095(M)",
+      "slitmCd": "2245070800"
+     },
+     {
+      "uitmSeq": 6,
+      "uitmAttrTypeSeq": 2,
+      "uitmAttrNm": "100(L)",
+      "slitmCd": "2245070800"
+     },
+     {
+      "uitmSeq": 7,
+      "uitmAttrTypeSeq": 2,
+      "uitmAttrNm": "105(XL)",
+      "slitmCd": "2245070800"
+     },
+     {
+      "uitmSeq": 8,
+      "uitmAttrTypeSeq": 2,
+      "uitmAttrNm": "110(XXL)",
+      "slitmCd": "2245070800"
+     }
+    ]
+   }
+  ],
+  "uitmCombDtlList": null,
+  "uitmAttrInfo": {
+   "uitm1AttrTypeNm": "색상",
+   "uitm2AttrTypeNm": "사이즈",
+   "uitm3AttrTypeNm": "",
+   "uitm4AttrTypeNm": "",
+   "uitmCombYn": "Y",
+   "uitmChocPossYn": "Y",
+   "setItemYn": "N"
+  }
+ },
+ "respMsg": "성공"
+}

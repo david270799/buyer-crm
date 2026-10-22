@@ -15,10 +15,11 @@ Money rules (see docs/architecture.md, "Финансовые инвариант�
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
+from crm.domain.categories import check_category
 from crm.domain.enums import (
     CHARGED_STATUSES,
     STATUS_FLOW,
@@ -27,17 +28,19 @@ from crm.domain.enums import (
     OrderStatus,
     Role,
 )
-from crm.domain.errors import ConflictError, NotFoundError, ValidationError
+from crm.domain.errors import ConflictError, NotFoundError, PermissionDeniedError, ValidationError
 from crm.domain.events import Event, EventType
 from crm.domain.ids import make_order_id, normalize_order_id, order_number
 from crm.domain.models import Order, status_timestamp_field
 from crm.domain.money import MAX_AMOUNT_KRW, format_krw
+from crm.domain.size_label import size_text
 from crm.domain.timeutil import to_local
 from crm.repositories import (
     EventRepository,
     IntakeRepository,
     OrderRepository,
     ProfitRepository,
+    SettingsRepository,
     ShipmentRepository,
 )
 from crm.services.common import (
@@ -63,6 +66,7 @@ from crm.storage.blobs import BlobStorage
 logger = logging.getLogger(__name__)
 
 ORDER_COUNTER = "orders"
+STUCK_AFTER = timedelta(days=4)
 _SENT = (OrderStatus.CARGO, OrderStatus.DELIVERED)
 
 _MAX_SHORT_TEXT = 200
@@ -88,7 +92,10 @@ class NewOrder:
     brand: str | None = None
     model: str | None = None
     size: str | None = None
+    size_kr: str | None = None
     source_url: str | None = None
+    shop: str | None = None
+    category: str | None = None
     purchase_price: int | None = None
     client_price: int | None = None
     client_comment: str | None = None
@@ -98,6 +105,17 @@ class NewOrder:
     source_chat_id: int | None = None
     source_message_id: int | None = None
     attention_required: bool = False
+    showcase_id: str | None = None  # ordered from the «Витрина» card
+
+
+@dataclass(frozen=True)
+class ProfitLine:
+    """One line of the profit page: an order's profit or an extra profit entry."""
+
+    amount_krw: int
+    at: datetime | None
+    order: Order | None = None
+    comment: str | None = None
 
 
 @dataclass
@@ -226,7 +244,10 @@ class OrderUpdate:
     brand: str | None = UNSET
     model: str | None = UNSET
     size: str | None = UNSET
+    size_kr: str | None = UNSET
     source_url: str | None = UNSET
+    shop: str | None = UNSET
+    category: str | None = UNSET
     photo_url: str | None = UNSET
     thumbnail_url: str | None = UNSET
     client_comment: str | None = UNSET
@@ -243,7 +264,7 @@ class BulkUpdate:
     attention_required: bool = UNSET
 
 
-SORTS = ("newest", "oldest", "price_desc", "price_asc")
+SORTS = ("newest", "oldest", "price_desc", "price_asc", "status")
 
 
 @dataclass
@@ -251,6 +272,7 @@ class OrderQuery:
     status: OrderStatus | None = None
     search: str | None = None
     attention: bool | None = None
+    stuck: bool | None = None  # admin: bought ≥ STUCK_AFTER ago, not at the warehouse yet
     sort: str = "newest"
     offset: int = 0
     limit: int = 50
@@ -269,16 +291,44 @@ class OrdersOverview:
     total: int
     active: int
     # Admin only (None for the client):
+    stuck_count: int | None = None
     profit_total_krw: int | None = None
     profit_month_krw: int | None = None
     recent: list[Order] = field(default_factory=list)
 
 
+MAX_SHOPS = 60
+DEFAULT_SHOPS = (
+    "Naver",
+    "Musinsa",
+    "29CM",
+    "Nike",
+    "Adidas",
+    "On",
+    "SSG.com",
+    "G-Market",
+    "Coupang",
+    "Lotte Home Shopping",
+    "Shinsegae Mall",
+    "Shinsegae Shopping",
+    "CJ OnStyle",
+    "KREAM",
+)
+
+
+def clean_shop(value: str | None) -> str | None:
+    return _clean_text(value, "Магазин", 60)
+
+
 def _clean_update_fields(values: dict[str, Any]) -> dict[str, Any]:
     cleaned: dict[str, Any] = {}
     for name, value in values.items():
-        if name in ("brand", "model", "size"):
+        if name in ("brand", "model", "size", "size_kr"):
             cleaned[name] = _clean_text(value, name, _MAX_SHORT_TEXT)
+        elif name == "shop":
+            cleaned[name] = clean_shop(value)
+        elif name == "category":
+            cleaned[name] = check_category(value)
         elif name in ("client_comment", "internal_comment"):
             cleaned[name] = _clean_text(value, "Комментарий", _MAX_LONG_TEXT)
         elif name == "source_url":
@@ -303,16 +353,27 @@ def _matches(order: Order, needle: str, admin: bool) -> bool:
         order.brand,
         order.model,
         order.size,
+        order.size_kr,
         order.cargo_code,
         order.shipment_id,
         order.client_comment,
     ]
     if admin:
-        haystack.append(order.internal_comment)
+        haystack.extend((order.internal_comment, order.shop))
     return any(needle in value.lower() for value in haystack if value)
 
 
+# «По статусу»: new → bought → warehouse → cargo → delivered → cancelled (owner, 09.10).
+_STATUS_ORDER = {status: rank for rank, status in enumerate((*STATUS_FLOW, OrderStatus.CANCELLED))}
+
+
 def _sort_key(sort: str):
+    if sort == "status":
+        # Within one status the newest order first.
+        return lambda o: (
+            _STATUS_ORDER.get(o.status, len(_STATUS_ORDER)),
+            -(order_number(o.id) or 0),
+        )
     if sort in ("price_desc", "price_asc"):
         return lambda o: (o.client_price or 0, order_number(o.id) or 0)
     return lambda o: order_number(o.id) or 0
@@ -346,6 +407,7 @@ class OrderService:
         self._blobs = blobs
         self._profit = profit
         self._shipments = ShipmentRepository()
+        self._settings = SettingsRepository()
 
     # --- reads -------------------------------------------------------------
 
@@ -380,6 +442,8 @@ class OrderService:
             orders = [o for o in orders if o.status is query.status]
         if query.attention is not None:
             orders = [o for o in orders if o.attention_required is query.attention]
+        if query.stuck is not None and actor.role is Role.ADMIN:
+            orders = [o for o in orders if (self.stuck_days(o) is not None) is query.stuck]
         needle = (query.search or "").strip().lower()
         if needle:
             admin = actor.role is Role.ADMIN
@@ -388,6 +452,20 @@ class OrderService:
         limit = max(1, min(query.limit, 200))
         offset = max(0, query.offset)
         return OrderPage(items=orders[offset : offset + limit], total=len(orders))
+
+    def showcase_orders(self, actor: Actor) -> list[Order]:
+        """Orders made from the «Витрина» (for its statistics)."""
+        require_admin(actor)
+        return [o for o in self._orders.list_all(self._db) if o.showcase_id]
+
+    def stuck_days(self, order: Order) -> int | None:
+        """Days since the buy-out when the order is still «Выкуплен» after
+        STUCK_AFTER (the owner, 16.10.2026: 4 days for every shop); else None."""
+        bought_at = order.timestamp("bought_at")
+        if order.status is not OrderStatus.BOUGHT or not isinstance(bought_at, datetime):
+            return None
+        waited = self._clock.now() - bought_at
+        return waited.days if waited >= STUCK_AFTER else None
 
     def overview(self, actor: Actor, recent: int = 6) -> OrdersOverview:
         orders = self._orders.list_all(self._db)
@@ -404,6 +482,7 @@ class OrderService:
             recent=sorted(orders, key=_sort_key("newest"), reverse=True)[:recent],
         )
         if actor.role is Role.ADMIN:
+            result.stuck_count = sum(1 for o in orders if self.stuck_days(o) is not None)
             month = to_local(self._clock.now()).strftime("%Y-%m")
             charged = [o for o in orders if o.status in CHARGED_STATUSES and o.profit is not None]
             result.profit_total_krw = sum(o.profit for o in charged)
@@ -419,6 +498,47 @@ class OrderService:
                 if entry.created_at and to_local(entry.created_at).strftime("%Y-%m") == month:
                     result.profit_month_krw += entry.amount_krw
         return result
+
+    def profit_lines(
+        self,
+        actor: Actor,
+        period: str = "all",
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> list[ProfitLine]:
+        """What the profit on the dashboard is made of (same rules as `overview`):
+        each bought order's profit by its purchase date, plus the admin's extra
+        profit entries. `period`: "month" (this month in Seoul), "all", or "range"
+        (`date_from`..`date_to` inclusive, Seoul dates). Newest first."""
+        require_admin(actor)
+        month = to_local(self._clock.now()).strftime("%Y-%m")
+
+        def in_period(when: datetime | None) -> bool:
+            if period == "month":
+                return isinstance(when, datetime) and to_local(when).strftime("%Y-%m") == month
+            if period == "range":
+                if not isinstance(when, datetime):
+                    return False
+                day = to_local(when).date()
+                return (date_from is None or day >= date_from) and (
+                    date_to is None or day <= date_to
+                )
+            return True
+
+        lines: list[ProfitLine] = []
+        for order in self._orders.list_all(self._db):
+            if order.status not in CHARGED_STATUSES or order.profit is None:
+                continue
+            when = order.timestamp("bought_at")
+            when = when if isinstance(when, datetime) else None
+            if in_period(when):
+                lines.append(ProfitLine(order.profit, when, order=order))
+        for entry in self._profit.list_all(self._db) if self._profit else []:
+            if in_period(entry.created_at):
+                lines.append(ProfitLine(entry.amount_krw, entry.created_at, comment=entry.comment))
+        oldest = datetime.min.replace(tzinfo=UTC)
+        lines.sort(key=lambda line: line.at or oldest, reverse=True)
+        return lines
 
     # --- edit (no money) ---------------------------------------------------
 
@@ -537,17 +657,68 @@ class OrderService:
                 order_ids=ids,
             )
 
+    # --- shops (the buy form's bubbles) -------------------------------------
+
+    def shop_names(self, actor: Actor) -> list[str]:
+        require_admin(actor)
+        saved = self._settings.get_shops(self._db)
+        return list(DEFAULT_SHOPS) if saved is None else saved
+
+    def set_shop_names(self, actor: Actor, names: Sequence[str]) -> list[str]:
+        require_admin(actor)
+        cleaned: list[str] = []
+        for name in names:
+            shop = clean_shop(name)
+            if shop and shop.lower() not in {c.lower() for c in cleaned}:
+                cleaned.append(shop)
+        if len(cleaned) > MAX_SHOPS:
+            raise ValidationError(f"Не больше {MAX_SHOPS} магазинов.")
+
+        def fn(tx: Transaction) -> list[str]:
+            before = self._settings.get_shops(tx)
+            now = self._clock.now()
+            self._settings.set_shops(tx, cleaned, now, actor.id)
+            self._auditor.record(
+                tx,
+                actor,
+                now,
+                action="settings.shops",
+                entity_type="settings",
+                entity_id="shops",
+                before={"names": before},
+                after={"names": cleaned},
+            )
+            return cleaned
+
+        return self._db.run_transaction(fn)
+
     # --- create ------------------------------------------------------------
 
     def create_order(self, actor: Actor, new: NewOrder) -> Order:
         require_admin(actor)
+        return self._create(actor, new)
+
+    def create_showcase_order(self, actor: Actor, new: NewOrder) -> Order:
+        """«Заказать» on the «Витрина» (open to the client since 20.10.2026): a
+        plain new order, nothing is charged; the price is the card's, set by the
+        admin (ShowcaseService checks the card)."""
+        if actor.role not in (Role.ADMIN, Role.CLIENT):
+            raise PermissionDeniedError("Заказывать могут только клиент и администратор.")
+        if not new.showcase_id or new.purchase_price is not None:
+            raise ValidationError("Заказ из витрины — только по карточке.")
+        return self._create(actor, new)
+
+    def _create(self, actor: Actor, new: NewOrder) -> Order:
         _check_price(new.purchase_price, "Закупочная цена", allow_zero=True)
         _check_price(new.client_price, "Цена для клиента", allow_zero=True)
         fields = {
             "brand": _clean_text(new.brand, "Бренд", _MAX_SHORT_TEXT),
             "model": _clean_text(new.model, "Модель", _MAX_SHORT_TEXT),
             "size": _clean_text(new.size, "Размер", _MAX_SHORT_TEXT),
+            "size_kr": _clean_text(new.size_kr, "Корейский размер", _MAX_SHORT_TEXT),
             "source_url": _clean_url(new.source_url, "Ссылка"),
+            "shop": clean_shop(new.shop),
+            "category": check_category(new.category),
             "photo_url": _clean_photo_url(new.photo_url, "Фото"),
             "thumbnail_url": _clean_photo_url(new.thumbnail_url, "Миниатюра"),
             "client_comment": _clean_text(new.client_comment, "Комментарий", _MAX_LONG_TEXT),
@@ -579,6 +750,7 @@ class OrderService:
                 "cargo_code": None,
                 "shipment_id": None,
                 "source_chat_id": new.source_chat_id,
+                "showcase_id": new.showcase_id,
                 "source_message_id": new.source_message_id,
                 "attention_required": new.attention_required,
                 "created_at": now,
@@ -625,6 +797,7 @@ class OrderService:
             brand=source.brand,
             model=source.model,
             size=source.size,
+            size_kr=source.size_kr,
             source_url=source.source_url,
             client_comment=source.client_comment,
             internal_comment=f"Копия {source.id}",
@@ -639,9 +812,18 @@ class OrderService:
 
     # --- buy ---------------------------------------------------------------
 
-    def buy(self, actor: Actor, order_id: str, purchase_price: int, client_price: int) -> BuyResult:
+    def buy(
+        self,
+        actor: Actor,
+        order_id: str,
+        purchase_price: int,
+        client_price: int,
+        *,
+        shop: str | None = UNSET,
+    ) -> BuyResult:
         require_admin(actor)
         order_id = normalize_order_id(order_id)
+        shop = clean_shop(shop) if shop is not UNSET else UNSET
         _check_price(purchase_price, "Закупочная цена", allow_zero=True)
         _check_price(client_price, "Цена для клиента", allow_zero=False)
 
@@ -676,6 +858,7 @@ class OrderService:
             client = self._ledger.load_client(tx)
             now = self._clock.now()
             profit = client_price - purchase_price
+            bought_in = order.shop if shop is UNSET else shop
             self._orders.update(
                 tx,
                 order_id,
@@ -685,7 +868,12 @@ class OrderService:
                     "client_price": client_price,
                     "profit": profit,
                     "charged_amount_krw": client_price,
-                    "purchases": [_purchase(purchase_price, client_price, order.source_url, now)],
+                    "shop": bought_in,
+                    "purchases": [
+                        _purchase(
+                            purchase_price, client_price, order.source_url, now, shop=bought_in
+                        )
+                    ],
                     "bought_at": now,
                     "updated_at": now,
                     "updated_by": actor.id,
@@ -730,7 +918,10 @@ class OrderService:
                 client_price=client_price,
                 profit=profit,
                 charged_amount_krw=client_price,
-                purchases=[_purchase(purchase_price, client_price, order.source_url, now)],
+                shop=bought_in,
+                purchases=[
+                    _purchase(purchase_price, client_price, order.source_url, now, shop=bought_in)
+                ],
                 timestamps={**order.timestamps, "bought_at": now, "updated_at": now},
             )
             self._events.record(
@@ -763,15 +954,10 @@ class OrderService:
             order = self._require_order(tx, order_id)
             if order.status is OrderStatus.CANCELLED:
                 return CancelResult(order=order, already_done=True)
-            if order.status in (OrderStatus.CARGO, OrderStatus.DELIVERED):
-                raise ConflictError(
-                    f"Заказ {order_id} уже в статусе «{label(order.status)}». После отправки "
-                    "заказ не отменяется и деньги за него не возвращаются."
-                )
-            if order.shipment_id:
-                raise ConflictError(
-                    f"Заказ {order_id} входит в отправку {order.shipment_id} — отмена невозможна."
-                )
+            # Any status (the owner, 16.10.2026): a delivered pair that did not fit
+            # comes back and its price is returned. The order stays in its shipment
+            # (it really travelled); the shipping cost is not refunded.
+            returned = order.status in _SENT
 
             refund = order.charged_amount_krw
             client = self._ledger.load_client(tx) if refund > 0 else None
@@ -827,7 +1013,7 @@ class OrderService:
                 actor,
                 now,
                 EventType.ORDER_CANCELLED,
-                f"Заказ {order_id} отменён",
+                f"Заказ {order_id}: возврат товара" if returned else f"Заказ {order_id} отменён",
                 body=(
                     f"{_describe(order)}\nВозврат на баланс: {format_krw(refund, signed=True)}"
                     if refund
@@ -861,69 +1047,102 @@ class OrderService:
             raise ValidationError(_STATUS_HAS_OWN_COMMAND[new_status])
         ids = list(dict.fromkeys(normalize_order_id(i) for i in order_ids))
         require_bulk_size(ids)
-        ts_field = status_timestamp_field(new_status)
+        return self._db.run_transaction(lambda tx: self._set_status(tx, actor, ids, new_status))
+
+    def mark_shipment_delivered(self, actor: Actor, shipment_id: str) -> BulkResult:
+        """The client's only action (the owner, 16.10.2026): «Доставлено» on a
+        shipment that arrived. Only its «Отправлен» orders become «Доставлен»;
+        no money moves, nothing else can be changed this way."""
+        if actor.role not in (Role.ADMIN, Role.CLIENT):
+            require_admin(actor)
 
         def fn(tx: Transaction) -> BulkResult:
-            orders = self._orders.get_many(tx, ids)
-            result = BulkResult()
-            to_update: list[Order] = []
-            for order_id in ids:
-                order = orders[order_id]
-                if order is None:
-                    result.not_found.append(order_id)
-                elif order.status is None:
-                    result.skipped.append((order_id, f"неизвестный статус «{order.status_raw}»"))
-                elif order.status is OrderStatus.NEW:
-                    result.skipped.append((order_id, "не выкуплен — сначала /buy"))
-                elif order.status is OrderStatus.CANCELLED:
-                    result.skipped.append((order_id, "отменён"))
-                elif order.status is new_status:
-                    result.unchanged.append(order_id)
-                elif rollback and not (order.status is OrderStatus.WAREHOUSE and order.is_charged):
-                    result.skipped.append(
-                        (order_id, "«Выкуплен» можно вернуть только из «На складе»")
-                    )
-                elif new_status is OrderStatus.CARGO and not order.shipment_id:
-                    result.skipped.append((order_id, "нет отправки — используйте /cargo"))
-                elif new_status is OrderStatus.WAREHOUSE and order.shipment_id:
-                    result.skipped.append((order_id, f"входит в отправку {order.shipment_id}"))
-                else:
-                    to_update.append(order)
-
-            now = self._clock.now()
-            for order in to_update:
-                fields = {"status": new_status.value, "updated_at": now, "updated_by": actor.id}
-                if not rollback:  # keep the real purchase date (profit by month)
-                    fields[ts_field] = now
-                self._orders.update(tx, order.id, fields)
-                self._auditor.record(
-                    tx,
-                    actor,
-                    now,
-                    action="order.status",
-                    entity_type="order",
-                    entity_id=order.id,
-                    before={"status": order.status_raw},
-                    after={"status": new_status.value},
-                )
-                result.updated.append(order.id)
-            if result.updated:
-                event_type, title = (
-                    (EventType.ORDER_STATUS, "Статус возвращён: «Выкуплен»")
-                    if rollback
-                    else _STATUS_EVENTS.get(new_status, (EventType.ORDER_STATUS, "Статус обновлён"))
-                )
-                self._events.record(
-                    tx,
-                    actor,
-                    now,
-                    event_type,
-                    f"{title}: {_ids(result.updated)}",
-                    order_ids=result.updated,
-                )
-            return result
+            shipment = self._shipments.get(tx, shipment_id)
+            if shipment is None:
+                raise NotFoundError(f"Отправка {shipment_id} не найдена.")
+            orders = self._orders.get_many(tx, shipment.order_ids)
+            ids = [
+                i
+                for i in shipment.order_ids
+                if (o := orders.get(i)) is not None
+                and o.status is OrderStatus.CARGO
+                and o.shipment_id == shipment_id
+            ]
+            if not ids:
+                return BulkResult()
+            return self._set_status(tx, actor, ids, OrderStatus.DELIVERED)
 
         return self._db.run_transaction(fn)
+
+    def _set_status(
+        self, tx: Transaction, actor: Actor, ids: list[str], new_status: OrderStatus
+    ) -> BulkResult:
+        rollback = new_status is OrderStatus.BOUGHT
+        ts_field = status_timestamp_field(new_status)
+        orders = self._orders.get_many(tx, ids)
+        result = BulkResult()
+        to_update: list[Order] = []
+        for order_id in ids:
+            order = orders[order_id]
+            if order is None:
+                result.not_found.append(order_id)
+            elif order.status is None:
+                result.skipped.append((order_id, f"неизвестный статус «{order.status_raw}»"))
+            elif order.status is OrderStatus.NEW:
+                result.skipped.append((order_id, "не выкуплен — сначала /buy"))
+            elif order.status is OrderStatus.CANCELLED:
+                result.skipped.append((order_id, "отменён"))
+            elif order.status is new_status:
+                result.unchanged.append(order_id)
+            elif rollback and not (order.status is OrderStatus.WAREHOUSE and order.is_charged):
+                result.skipped.append((order_id, "«Выкуплен» можно вернуть только из «На складе»"))
+            elif new_status is OrderStatus.CARGO and not order.shipment_id:
+                result.skipped.append((order_id, "нет отправки — используйте /cargo"))
+            elif new_status is OrderStatus.WAREHOUSE and order.shipment_id:
+                result.skipped.append((order_id, f"входит в отправку {order.shipment_id}"))
+            else:
+                to_update.append(order)
+
+        now = self._clock.now()
+        # «Доставлен» → «Отправлен» undoes a mistaken tap (the client's button):
+        # the order keeps its real sending date.
+        undo_delivered = new_status is OrderStatus.CARGO and all(
+            o.status is OrderStatus.DELIVERED for o in to_update
+        )
+        for order in to_update:
+            fields = {"status": new_status.value, "updated_at": now, "updated_by": actor.id}
+            # keep the real purchase / sending date (profit by month)
+            if not rollback and order.status is not OrderStatus.DELIVERED:
+                fields[ts_field] = now
+            self._orders.update(tx, order.id, fields)
+            self._auditor.record(
+                tx,
+                actor,
+                now,
+                action="order.status",
+                entity_type="order",
+                entity_id=order.id,
+                before={"status": order.status_raw},
+                after={"status": new_status.value},
+            )
+            result.updated.append(order.id)
+        if result.updated:
+            event_type, title = (
+                (EventType.ORDER_STATUS, "Статус возвращён: «Выкуплен»")
+                if rollback
+                else (EventType.ORDER_STATUS, "Статус возвращён: «Отправлен»")
+                if undo_delivered
+                else _STATUS_EVENTS.get(new_status, (EventType.ORDER_STATUS, "Статус обновлён"))
+            )
+            self._events.record(
+                tx,
+                actor,
+                now,
+                event_type,
+                f"{title}: {_ids(result.updated)}",
+                order_ids=result.updated,
+            )
+        return result
 
     # --- re-purchase ---------------------------------------------------------
 
@@ -936,6 +1155,7 @@ class OrderService:
         *,
         source_url: str | None = UNSET,
         reason: str | None = None,
+        shop: str | None = UNSET,
     ) -> RebuyResult:
         """The shop cancelled a bought order and it was bought elsewhere.
 
@@ -949,6 +1169,7 @@ class OrderService:
         _check_price(client_price, "Цена для клиента", allow_zero=False)
         link = _clean_url(source_url, "Ссылка") if source_url is not UNSET else UNSET
         reason = _clean_text(reason, "Причина", _MAX_LONG_TEXT)
+        shop = clean_shop(shop) if shop is not UNSET else UNSET
 
         def fn(tx: Transaction) -> RebuyResult:
             order = self._require_order(tx, order_id)
@@ -964,10 +1185,12 @@ class OrderService:
                     f"По заказу {order_id} не записано списание — перезаказ невозможен."
                 )
             new_link = order.source_url if link is UNSET else link
+            new_shop = order.shop if shop is UNSET else shop
             if (
                 purchase_price == order.purchase_price
                 and client_price == order.client_price
                 and new_link == order.source_url
+                and new_shop == order.shop
             ):
                 return RebuyResult(order=order, already_done=True)
 
@@ -981,10 +1204,13 @@ class OrderService:
                     order.client_price,
                     order.source_url,
                     order.timestamp("bought_at"),
+                    shop=order.shop,
                 )
             ]
             history = [*history[:-1], {**history[-1], "replaced_at": now}]
-            history.append(_purchase(purchase_price, client_price, new_link, now, reason))
+            history.append(
+                _purchase(purchase_price, client_price, new_link, now, reason, shop=new_shop)
+            )
             profit = client_price - purchase_price
             fields: dict[str, Any] = {
                 "status": OrderStatus.BOUGHT.value,
@@ -1000,6 +1226,8 @@ class OrderService:
             }
             if link is not UNSET:
                 fields["source_url"] = link
+            if shop is not UNSET:
+                fields["shop"] = shop
             self._orders.update(tx, order_id, fields)
 
             change = None
@@ -1060,6 +1288,7 @@ class OrderService:
                 profit=profit,
                 charged_amount_krw=client_price,
                 source_url=new_link,
+                shop=new_shop,
                 purchases=history,
                 rebuy_count=seq,
                 timestamps={**order.timestamps, "bought_at": now, "updated_at": now},
@@ -1403,7 +1632,8 @@ def _ids(ids: Sequence[str], limit: int = 6) -> str:
 
 
 def _describe(order: Order) -> str:
-    parts = [order.title or "Заказ", f"размер {order.size}" if order.size else None]
+    sizes = size_text(order.size, order.size_kr)
+    parts = [order.title or "Заказ", f"размер {sizes}" if sizes else None]
     return " · ".join(p for p in parts if p)
 
 
@@ -1413,11 +1643,13 @@ def _purchase(
     source_url: str | None,
     at: datetime | None,
     note: str | None = None,
+    shop: str | None = None,
 ) -> dict[str, Any]:
     return {
         "purchase_price": purchase_price,
         "client_price": client_price,
         "source_url": source_url,
+        "shop": shop,
         "bought_at": at,
         "note": note,
     }

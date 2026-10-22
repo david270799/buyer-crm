@@ -138,10 +138,11 @@ def create_demo_database(
 
     clock.advance(days=1)
     services.finance.deposit(admin, DEMO_DEPOSIT, "Перевод от клиента")
+    shops = iter(("Musinsa", "Nike", "KREAM", "29CM", "SSG.com", "Coupang", "Naver", "G-Market"))
     for order_id, _brand, _model, _size, purchase, price, _tint in _ORDERS:
         if purchase is not None and price is not None:
             clock.advance(hours=7)
-            services.orders.buy(admin, order_id, purchase, price)
+            services.orders.buy(admin, order_id, purchase, price, shop=next(shops, None))
 
     clock.advance(days=1)
     services.orders.rebuy(
@@ -150,6 +151,7 @@ def create_demo_database(
         212_000,
         249_000,
         source_url="https://store.example.kr/salomon-xt6",
+        shop="Lotte Home Shopping",
         reason="В первом магазине закончился размер 265 — выкупили в другом магазине.",
     )
 
@@ -169,7 +171,32 @@ def create_demo_database(
     assert first.shipment is not None
 
     clock.advance(days=2)
-    services.orders.set_status(admin, ["N6", "N7"], OrderStatus.WAREHOUSE)
+    # N7 stays «Выкуплен»: it shows as «не пришёл на склад» (4+ days).
+    services.orders.set_status(admin, ["N6"], OrderStatus.WAREHOUSE)
+    # What «Пришло на склад» leaves on an order (Gemini is not used in the demo).
+    n6 = db.get("orders", "N6") or {}
+    db.run_transaction(
+        lambda tx: tx.update(
+            "orders",
+            "N6",
+            {
+                "arrival_photo_url": n6.get("photo_url"),
+                "arrival_thumbnail_url": n6.get("thumbnail_url"),
+                "arrival_check": {
+                    "status": "mismatch",
+                    "size_seen": "M",
+                    "ordered_size": n6.get("size"),
+                    "note": None,
+                    "error": None,
+                    "at": clock.now(),
+                },
+                "review_ko": "디자인이 고급스럽고 마감이 깔끔해요. 배송도 빨라서 만족스럽습니다.",
+                "arrival_photos": [
+                    {"photo_url": n6.get("photo_url"), "thumbnail_url": n6.get("thumbnail_url")}
+                ],
+            },
+        )
+    )
     services.shipments.ship_orders(
         admin,
         ["N4", "N5"],
@@ -220,4 +247,84 @@ def create_demo_database(
         ),
     )
     logger.info("Demo data ready: %s orders", len(_ORDERS) + 1)
+
+    def _demo_sizes(item_id: str, sizes: list[tuple[str, int]]) -> list[dict]:
+        rows = [{"name": n, "stock": c, "available": c > 0} for n, c in sizes]
+        if item_id != "sc_demo2":
+            return rows
+        # Colour first, then size (like Hmall jackets): two colours.
+        black = [{**r, "color": "BLACK"} for r in rows]
+        navy = [{**r, "color": "NAVY", "stock": 4, "available": True} for r in rows[:2]]
+        return black + navy + [{**rows[2], "color": "NAVY", "stock": 0, "available": False}]
+
+    # «Витрина» (test mode): two published cards and a draft, no network needed.
+    showcase = [
+        (
+            "sc_demo1",
+            "N6",
+            "published",
+            "Musinsa",
+            199_000,
+            239_000,
+            20_000,
+            [("260", 2), ("265", 0), ("270", 5), ("280", 1)],
+            "shoes",
+        ),
+        (
+            "sc_demo2",
+            "N4",
+            "published",
+            "Hmall",
+            489_000,
+            None,
+            40_000,
+            [("S", 0), ("M", 3), ("L", 9), ("XL", 2)],
+            "clothes",
+        ),
+        (
+            "sc_demo3",
+            "N3",
+            "draft",
+            "29CM",
+            129_000,
+            149_000,
+            0,
+            [("240", 4), ("250", 0), ("260", 7)],
+            "shoes",
+        ),
+    ]
+    for item_id, order_id, status, shop, price, official, markup, sizes, category in showcase:
+        order = db.get("orders", order_id) or {}
+        now = clock.now()
+        # The first card shows several photos (swipe + «Скачать все фото»).
+        extra = ["N1", "N2"] if item_id == "sc_demo1" else []
+        photos = [
+            {"photo_url": o.get("photo_url"), "thumbnail_url": o.get("thumbnail_url")}
+            for o in [order, *(db.get("orders", n) or {} for n in extra)]
+            if o.get("photo_url")
+        ]
+        db.seed(
+            "showcase",
+            item_id,
+            {
+                "url": f"https://shop.example.kr/{item_id}",
+                "status": status,
+                "shop": shop,
+                "brand": order.get("brand"),
+                "model": order.get("model"),
+                "category": category,
+                "photo_url": order.get("photo_url"),
+                "thumbnail_url": order.get("thumbnail_url"),
+                "photos": photos,
+                "shop_price_krw": price,
+                "official_price_krw": official,
+                "markup_type": "krw",
+                "markup_value": markup,
+                "sizes": _demo_sizes(item_id, sizes),
+                "refreshed_at": now,
+                "created_at": now,
+                "updated_at": now,
+                "published_at": now if status == "published" else None,
+            },
+        )
     return db

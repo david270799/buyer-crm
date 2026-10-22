@@ -335,7 +335,7 @@ def test_demo_data_is_consistent_and_realistic():
     assert len(blobs.files) == 2 * 10  # 9 seeded orders + 1 that came in as a photo
     intake = db.get("orders", "N10")
     assert intake["status"] == "new" and intake["recognition"]["brand"] == "New Balance"
-    assert intake["size"] == "270" and intake["source_url"].startswith("https://")
+    assert intake["size_kr"] == "270" and intake["source_url"].startswith("https://")
     assert db.get("client_info", "main_client")["telegram_id"] == CLIENT_TG
 
 

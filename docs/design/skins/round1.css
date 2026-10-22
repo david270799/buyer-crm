@@ -1,0 +1,84 @@
+/* ---------- 1. Neon Seoul ---------- */
+html[data-skin="neon"] {
+  --bg: #0b0b14; --surface: #15152a; --surface-2: #1d1d38; --surface-3: #2a2a4d;
+  --border: #26264a; --border-strong: #3a3a6a; --text: #f3f1ff; --text-2: #a8a5d6; --text-3: #6f6c9e;
+  --accent: #b14dff; --accent-hover: #c46bff; --accent-contrast: #fff; --accent-soft: #2a1f4a;
+  --positive: #3dffb0; --positive-soft: #10372b; --negative: #ff5c8a; --negative-soft: #3d1426;
+  --radius-sm: 14px; --radius: 20px; --radius-lg: 28px;
+  --shadow: 0 0 0 1px rgba(177,77,255,.12), 0 8px 30px rgba(120,60,255,.15);
+  color-scheme: dark;
+}
+html[data-skin="neon"] body { background: radial-gradient(1200px 600px at 80% -10%, #3b1a6b 0%, transparent 60%), #0b0b14; }
+html[data-skin="neon"] .balance-card { background: linear-gradient(135deg, #7b2ff7 0%, #f107a3 100%); color: #fff; border: 0; box-shadow: 0 12px 40px rgba(241,7,163,.35); }
+html[data-skin="neon"] .balance-card * { color: #fff !important; }
+html[data-skin="neon"] .btn.primary { background: linear-gradient(135deg, #7b2ff7, #f107a3); border: 0; color: #fff; }
+html[data-skin="neon"] .tabbar { left: 16px; right: 16px; bottom: 12px; border-radius: 24px; background: rgba(21,21,42,.85); backdrop-filter: blur(14px); border: 1px solid #2f2f5a; height: 64px; }
+html[data-skin="neon"] .tabbar a.active { color: #e9b8ff; }
+html[data-skin="neon"] h1 { letter-spacing: -0.02em; background: linear-gradient(90deg,#fff,#d6a8ff); -webkit-background-clip: text; color: transparent; }
+html[data-skin="neon"] .chip.active { background: linear-gradient(135deg,#7b2ff7,#f107a3); color: #fff; border-color: transparent; }
+
+/* ---------- 2. Minimal ---------- */
+html[data-skin="minimal"] {
+  --bg: #ffffff; --surface: #ffffff; --surface-2: #f5f5f5; --surface-3: #eaeaea;
+  --border: #e6e6e6; --border-strong: #111; --text: #0a0a0a; --text-2: #5c5c5c; --text-3: #9a9a9a;
+  --accent: #0a0a0a; --accent-hover: #000; --accent-contrast: #fff; --accent-soft: #f0f0f0;
+  --radius-sm: 4px; --radius: 6px; --radius-lg: 8px; --shadow: none;
+  --font: "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+html[data-skin="minimal"] body { background: #fff; }
+html[data-skin="minimal"] h1 { font-size: 34px; font-weight: 800; letter-spacing: -0.04em; text-transform: uppercase; }
+html[data-skin="minimal"] .card, html[data-skin="minimal"] .order-card, html[data-skin="minimal"] .kpi { border: 1px solid #111; box-shadow: none; }
+html[data-skin="minimal"] .balance-card { background: #0a0a0a; color: #fff; border-radius: 6px; }
+html[data-skin="minimal"] .balance-card * { color: #fff !important; }
+html[data-skin="minimal"] .tabbar { background: #fff; border-top: 2px solid #0a0a0a; }
+html[data-skin="minimal"] .tabbar a.active { color: #0a0a0a; font-weight: 800; }
+html[data-skin="minimal"] .chip { border-radius: 4px; border: 1px solid #0a0a0a; }
+html[data-skin="minimal"] .chip.active { background: #0a0a0a; color: #fff; }
+html[data-skin="minimal"] .order-card .photo { border-bottom: 1px solid #111; }
+
+/* ---------- 3. Glass ---------- */
+html[data-skin="glass"] {
+  --bg: transparent; --surface: rgba(255,255,255,.14); --surface-2: rgba(255,255,255,.12); --surface-3: rgba(255,255,255,.2);
+  --border: rgba(255,255,255,.22); --border-strong: rgba(255,255,255,.35);
+  --text: #ffffff; --text-2: rgba(255,255,255,.78); --text-3: rgba(255,255,255,.55);
+  --accent: #ffffff; --accent-hover: #f0f0ff; --accent-contrast: #3b2a8f; --accent-soft: rgba(255,255,255,.2);
+  --radius-sm: 16px; --radius: 22px; --radius-lg: 26px;
+  --shadow: 0 8px 32px rgba(31, 20, 90, .25);
+  color-scheme: dark;
+}
+html[data-skin="glass"] body { background: linear-gradient(160deg, #4f46e5 0%, #7c3aed 45%, #db2777 100%) fixed; }
+html[data-skin="glass"] .card, html[data-skin="glass"] .order-card, html[data-skin="glass"] .kpi, html[data-skin="glass"] .balance-card, html[data-skin="glass"] .tile, html[data-skin="glass"] .search, html[data-skin="glass"] .select {
+  background: rgba(255,255,255,.14) !important; backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border: 1px solid rgba(255,255,255,.25) !important; color: #fff;
+}
+html[data-skin="glass"] .balance-card * { color: #fff !important; }
+html[data-skin="glass"] .tabbar { background: rgba(30,20,80,.35); backdrop-filter: blur(20px); border-top: 1px solid rgba(255,255,255,.2); }
+html[data-skin="glass"] .tabbar a { color: rgba(255,255,255,.6); }
+html[data-skin="glass"] .tabbar a.active { color: #fff; }
+html[data-skin="glass"] .chip { background: rgba(255,255,255,.15); color: #fff; border-color: rgba(255,255,255,.25); }
+html[data-skin="glass"] .chip.active { background: #fff; color: #4f2fb0; }
+
+/* ---------- 4. Warm craft ---------- */
+html[data-skin="warm"] {
+  --bg: #f6efe4; --surface: #fffaf2; --surface-2: #f1e6d6; --surface-3: #e8d9c3;
+  --border: #e6d6bf; --border-strong: #cdb592; --text: #2b1d12; --text-2: #7a6450; --text-3: #a8927b;
+  --accent: #c2410c; --accent-hover: #9a3412; --accent-contrast: #fff; --accent-soft: #fbe3d3;
+  --radius-sm: 16px; --radius: 22px; --radius-lg: 30px;
+  --shadow: 0 2px 0 #e6d6bf, 0 10px 24px rgba(120, 72, 30, .08);
+  color-scheme: light;
+}
+html[data-skin="warm"] h1, html[data-skin="warm"] h2, html[data-skin="warm"] h3, html[data-skin="warm"] .model, html[data-skin="warm"] .balance-card .krw { font-family: Georgia, "Times New Roman", serif; }
+html[data-skin="warm"] h1 { font-size: 32px; font-style: italic; }
+html[data-skin="warm"] .balance-card { background: #2b1d12; color: #fbe9d6; }
+html[data-skin="warm"] .balance-card * { color: #fbe9d6 !important; }
+html[data-skin="warm"] .btn.primary { background: #c2410c; color: #fff; }
+html[data-skin="warm"] .tabbar { background: #2b1d12; }
+html[data-skin="warm"] .tabbar a { color: #b59b80; }
+html[data-skin="warm"] .tabbar a.active { color: #fdba74; }
+html[data-skin="warm"] .chip.active { background: #c2410c; color: #fff; border-color: #c2410c; }
+html[data-skin="glass"] .input, html[data-skin="glass"] .search input { background: transparent !important; color: #fff; }
+html[data-skin="glass"] .search { background: rgba(255,255,255,.14) !important; }
+html[data-skin="glass"] .view-toggle { background: rgba(255,255,255,.14); }
+html[data-skin="glass"] .view-toggle .btn.active { background: rgba(255,255,255,.35); color: #fff; }
+html[data-skin="glass"] .btn:not(.primary) { background: rgba(255,255,255,.18); color: #fff; border-color: rgba(255,255,255,.25); }
+html[data-skin="glass"] .order-card .body { background: rgba(40,20,90,.35); }

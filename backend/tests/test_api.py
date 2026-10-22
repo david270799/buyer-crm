@@ -328,6 +328,10 @@ def test_shipment_create_and_cost_change(db, api):
 
     detail = api("GET", "/api/shipments/1").json()
     assert [o["id"] for o in detail["orders"]] == ["N5", "N7"]
+    # Shipping lines in the balance history carry the parcel's tracking code.
+    history = api("GET", "/api/transactions").json()["items"]
+    shipping = [i for i in history if i["type"] == "shipping_charge"]
+    assert shipping and all(i["shipment"]["tracking_code"] == "TRK-1" for i in shipping)
     order = api("GET", "/api/orders/N5").json()
     assert order["shipment"]["id"] == shipment["id"]
 
@@ -480,6 +484,25 @@ def test_rebuy_endpoint_and_history(db, api):
     )
 
 
+def test_rebuy_is_one_balance_row_with_the_old_price_crossed(db, api):
+    seed_order(db, "N5", brand="Nike")
+    seed_order(db, "N6", brand="On")
+    api("POST", "/api/orders/5/buy", json={"purchase_price": 1, "client_price": 169_000})
+    api("POST", "/api/orders/6/buy", json={"purchase_price": 1, "client_price": 240_000})
+    api("POST", "/api/orders/5/rebuy", json={"purchase_price": 1, "client_price": 139_000})
+
+    for who in (ADMIN_TG, CLIENT_TG):  # «Финансы» and the client's «Баланс»
+        rows = api("GET", "/api/transactions", who=who).json()["items"]
+        n5 = [r for r in rows if r["order_id"] == "N5"]
+        assert len(n5) == 1
+        [row] = n5
+        assert row["type"] == "order_charge"
+        assert row["amount_krw"] == -139_000 and row["original_amount_krw"] == -169_000
+        assert row["balance_after"] == balance(db)  # stands where the re-purchase stands
+        assert rows[0]["order_id"] == "N5"  # newest first
+        assert sum(r["amount_krw"] for r in rows) == balance(db) - START_BALANCE
+
+
 def test_notifications_feed_and_read_state(db, api):
     seed_order(db, "N5")
     api("POST", "/api/orders/5/buy", json={"purchase_price": 1, "client_price": 10})
@@ -513,3 +536,183 @@ def test_notification_settings(db, api):
     bad = api("PUT", "/api/settings/notifications", json={"recipient": "everyone"})
     assert bad.status_code == 422 and "error" in bad.json()
     assert db.get("settings", "notifications")["recipient"] == "admins"
+
+
+def test_admin_preview_as_client_sees_only_client_fields(db, api):
+    seed_order(db, "N5", status="new", brand="Nike", source_url="https://shop-a.kr/1")
+    api("POST", "/api/orders/N5/buy", json={"purchase_price": 140_000, "client_price": 170_000})
+    view = {"X-View-As": "client"}
+
+    me = api("GET", "/api/me", headers=dict(view)).json()
+    assert me["role"] == "client" and me["preview"] is True
+    order = api("GET", "/api/orders/N5", headers=dict(view)).json()["order"]
+    assert "purchase_price" not in order and "source_url" not in order
+    # Read-only like the client.
+    response = api("PATCH", "/api/orders/N5", headers=dict(view), json={"brand": "X"})
+    assert response.status_code == 403
+    # The header never lifts a client up.
+    assert api("GET", "/api/me", who=CLIENT_TG, headers=dict(view)).json()["preview"] is False
+    assert api("GET", "/api/me").json()["role"] == "admin"
+
+
+def test_shipment_with_watches_over_the_api(db, api):
+    for order_id in ("N5", "N7"):
+        seed_order(db, order_id, status="warehouse")
+    api("PUT", "/api/settings/rate", json={"krw_per_usd": 1350})
+    created = api(
+        "POST",
+        "/api/shipments",
+        json={"order_ids": ["5", "7"], "shipping_cost_krw": 50_000, "watch_count": 2},
+    ).json()
+    assert created["change"]["amount_krw"] == -50_000
+    assert created["watch_change"]["amount_krw"] == -27_000
+    assert created["shipment"]["watch_count"] == 2
+    patched = api("PATCH", "/api/shipments/1", json={"watch_count": 1}).json()
+    assert patched["watch_change"]["amount_krw"] == 13_500
+    assert balance(db) == START_BALANCE - 50_000 - 13_500
+
+
+def test_client_marks_a_shipment_delivered_and_nothing_else(db, api):
+    for n in (1, 2):
+        seed_order(db, f"N{n}", status="warehouse", client_price=10)
+    seed_order(db, "N3", status="warehouse", client_price=10)
+    shipment = api("POST", "/api/shipments", json={"order_ids": ["N1", "N2"]}).json()["shipment"]
+    api("POST", "/api/orders/N2/cancel")  # returned pair stays cancelled
+
+    response = api("POST", f"/api/shipments/{shipment['id']}/delivered", who=CLIENT_TG)
+
+    assert response.status_code == 200 and response.json()["updated"] == ["N1"]
+    assert db.get("orders", "N1")["status"] == "delivered"
+    assert db.get("orders", "N2")["status"] == "cancelled"
+    assert db.get("orders", "N3")["status"] == "warehouse"
+    assert balance(db) == START_BALANCE
+    again = api("POST", f"/api/shipments/{shipment['id']}/delivered", who=CLIENT_TG)
+    assert again.json()["updated"] == []
+    # Still read-only otherwise; strangers and the admin's preview get nothing.
+    assert api("POST", "/api/orders/N3/cancel", who=CLIENT_TG).status_code == 403
+    assert api("POST", f"/api/shipments/{shipment['id']}/delivered", who=555).status_code == 403
+    preview = api(
+        "POST",
+        f"/api/shipments/{shipment['id']}/delivered",
+        headers={"X-View-As": "client"},
+    )
+    assert preview.status_code == 403
+    # The admin undoes a mistaken tap: back to «Отправлен», the sending date stays.
+    sent_at = db.get("orders", "N1")["cargo_at"]
+    undo = api("POST", "/api/orders/bulk/status", json={"order_ids": ["N1"], "status": "cargo"})
+    assert undo.status_code == 200
+    assert db.get("orders", "N1")["status"] == "cargo"
+    assert db.get("orders", "N1")["cargo_at"] == sent_at
+
+
+def test_arrival_photo_from_the_mini_app(db, api, blobs):
+    seed_order(db, "N5", size="270")
+    api("POST", "/api/orders/N5/buy", json={"purchase_price": 1, "client_price": 2})
+    upload = api(
+        "POST",
+        "/api/images",
+        files={"file": ("p.jpg", _jpeg_bytes(), "image/jpeg")},
+    ).json()
+    response = api(
+        "POST",
+        "/api/orders/N5/arrival",
+        json={"photo_url": upload["photo_url"], "thumbnail_url": upload["thumbnail_url"]},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["moved_to_warehouse"] and body["order"]["status"] == "warehouse"
+    assert body["status"] == "skipped"  # no Gemini in tests
+    client_view = api("GET", "/api/orders/N5", who=CLIENT_TG).json()["order"]
+    assert client_view["arrival_photo_url"] == upload["photo_url"]  # the client sees the photo
+    assert "review_ko" not in client_view and "arrival_check" not in client_view
+    assert (
+        api(
+            "POST",
+            "/api/orders/N5/arrival",
+            who=CLIENT_TG,
+            json=body["order"] | {"photo_url": upload["photo_url"]},
+        ).status_code
+        == 403
+    )
+
+
+def _jpeg_bytes() -> bytes:
+    import io
+
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (64, 48), (200, 30, 30)).save(buffer, format="JPEG")
+    return buffer.getvalue()
+
+
+def _seed_cards(db):
+    from conftest import seed
+
+    base = {
+        "url": "https://www.hmall.com/md/pda/itemPtc?slitmCd=1",
+        "shop": "Hmall",
+        "brand": "Nike",
+        "model": "Air Max 95",
+        "shop_price_krw": 100_000,
+        "official_price_krw": 150_000,
+        "markup_type": "krw",
+        "markup_value": 20_000,
+        "note": "цена не найдена",
+        "sizes": [{"name": "270", "stock": 3, "available": True}],
+    }
+    seed(db, "showcase", "sc1", {**base, "status": "published"})
+    seed(db, "showcase", "sc2", {**base, "status": "draft"})
+
+
+def test_client_sees_published_cards_without_shop_details(db, api, clock):
+    # The owner, 20.10.2026: the showcase is out of test mode, open to the client.
+    _seed_cards(db)
+    assert [i["id"] for i in api("GET", "/api/showcase").json()["items"]] == ["sc1", "sc2"]
+    [card] = api("GET", "/api/showcase", who=CLIENT_TG).json()["items"]
+    assert card["id"] == "sc1" and card["client_price_krw"] == 120_000
+    assert card["official_price_krw"] == 150_000  # crossed out on the card
+    for hidden in ("url", "shop", "shop_price_krw", "markup_value", "note"):
+        assert card[hidden] is None
+    assert api("GET", "/api/showcase/sc2", who=CLIENT_TG).status_code == 404  # a draft
+    db.run_transaction(lambda tx: tx.update("showcase", "sc1", {"refreshed_at": clock.current}))
+    fresh = api("POST", "/api/showcase/sc1/refresh", who=CLIENT_TG).json()["item"]
+    assert fresh["id"] == "sc1" and fresh["url"] is None  # read a moment ago: not asked again
+    assert api("POST", "/api/showcase/sc1/status/hidden", who=CLIENT_TG).status_code == 403
+    assert api("GET", "/api/showcase-stats", who=CLIENT_TG).status_code == 403
+    assert api("GET", "/api/showcase", who=777).status_code == 403  # a helper: no access
+
+
+def test_client_orders_from_the_showcase_without_money(db, api):
+    _seed_cards(db)
+    before = balance(db)
+    assert api("POST", "/api/showcase/sc1/like", who=CLIENT_TG).json() == {"liked": True}
+    r = api(
+        "POST",
+        "/api/showcase/order",
+        who=CLIENT_TG,
+        json={"items": [{"item_id": "sc1", "size": "270"}]},
+    )
+    [order] = r.json()["items"]
+    assert order["status"] == "new" and order["client_price"] == 120_000
+    assert "source_url" not in order and "internal_comment" not in order
+    assert balance(db) == before
+    bad = api(
+        "POST",
+        "/api/showcase/order",
+        who=CLIENT_TG,
+        json={"items": [{"item_id": "sc2", "size": "270"}]},
+    )
+    assert bad.status_code == 404
+    preview = {"X-View-As": "client"}
+    assert api("POST", "/api/showcase/sc1/like", headers=preview).status_code == 403
+
+
+def test_showcase_stats_shape(api):
+    assert api("GET", "/api/showcase-stats", who=CLIENT_TG).status_code == 403
+    assert api("GET", "/api/showcase-stats").json() == {
+        "items": {},
+        "cards": [],
+        "history": [],
+        "viewers": [],
+    }

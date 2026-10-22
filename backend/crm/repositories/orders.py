@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 
 from crm.domain.models import Doc, Order
-from crm.storage import Database, Filter, Reader, Transaction
+from crm.storage import Database, Reader, Transaction
 
 
 class OrderRepository:
@@ -37,7 +37,3 @@ class OrderRepository:
 
     def list_all(self, db: Database) -> list[Order]:
         return [Order.from_doc(doc_id, data) for doc_id, data in db.scan(self.collection)]
-
-    def list_by_shipment(self, reader: Reader, shipment_id: str) -> list[Order]:
-        rows = reader.query(self.collection, [Filter("shipment_id", "==", shipment_id)])
-        return [Order.from_doc(doc_id, data) for doc_id, data in rows]

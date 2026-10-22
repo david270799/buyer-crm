@@ -1,13 +1,25 @@
-import { LayoutGrid, Package, Plus, Settings, Truck, Wallet } from "lucide-react";
+import { BarChart3, ClipboardCheck, Eye, LayoutGrid, Package, Plus, Settings, ShoppingBag, Truck, Wallet } from "lucide-react";
+import {
+  PrepItemPage,
+  PrepPage,
+  ShowcaseCartPage,
+  ShowcaseItemPage,
+  ShowcasePage,
+  ShowcaseStatsPage,
+} from "./Showcase";
+import { CategoryPicker } from "../shared/CategoryPicker";
+import { ShopPicker } from "./ShopPicker";
 import { useState } from "react";
-import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
+import { setClientPreview } from "../api/client";
+import { AppearanceSettings } from "../shared/AppearanceSettings";
 import { useCreateOrder, useOverview, useSetNotifications, useSetRate, useSettings } from "../api/hooks";
-import type { NotificationSettings, NotifyLevel, NotifyRecipient, Shipment } from "../api/types";
+import type { Category, NotificationSettings, NotifyLevel, NotifyRecipient, Shipment } from "../api/types";
 import { type NavItem, PageHead, Shell } from "../components/Layout";
 import { BalanceCard } from "../components/money";
 import { OrderCard } from "../components/orders";
-import { Empty, ErrorState, errorText, Field, Loading, MoneyInput, Switch, useToast } from "../components/ui";
+import { CountUp, Empty, ErrorState, errorText, Field, Loading, MoneyInput, Switch, useToast } from "../components/ui";
 import { dateTime, krw } from "../lib/format";
 import { BalancePage } from "../shared/BalancePage";
 import { StatusTiles } from "../shared/filters";
@@ -15,9 +27,10 @@ import { NotificationsPage } from "../shared/NotificationsPage";
 import { OrderDetailsPage } from "../shared/OrderDetailsPage";
 import { EditButton, ShipmentDetailsPage, ShipmentsPage } from "../shared/ShipmentsPages";
 import { OrderAdminPanel } from "./OrderAdminPanel";
-import { AdminOrdersPage } from "./OrdersPage";
+import { AdminOrdersPage, StuckBanner } from "./OrdersPage";
 import { PinSettings } from "./pin";
-import { ProfitSection } from "./profit";
+import { UpdateCard } from "./UpdateCard";
+import { ProfitPage } from "./profit";
 import { AiFillButton, MoneySheet, NewShipmentFlow, ShipmentDeliveredButton, ShipmentSplitButton, PhotoInput, type PhotoValue, recognizedFields, ShipmentEditSheet, useBalance } from "./sheets";
 
 const NAV: NavItem[] = [
@@ -28,9 +41,36 @@ const NAV: NavItem[] = [
   { to: "/settings", label: "Настройки", icon: Settings },
 ];
 
+// «Витрина» is a separate mode with its own menu (the owner, 20.10.2026): the
+// switch on top of «Сводка» / «Витрина» flips between the two.
+const SHOWCASE_NAV: NavItem[] = [
+  { to: "/showcase", label: "Витрина", icon: ShoppingBag },
+  { to: "/prep", label: "Одобрение", icon: ClipboardCheck },
+  { to: "/stats", label: "Статистика", icon: BarChart3 },
+];
+
+function isShowcasePath(pathname: string): boolean {
+  return ["/showcase", "/prep", "/stats"].some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+function ModeSwitch({ showcase }: { showcase: boolean }) {
+  const navigate = useNavigate();
+  return (
+    <div className="mode-switch" role="tablist" aria-label="Режим">
+      <button role="tab" aria-selected={!showcase} className={showcase ? "" : "active"} onClick={() => navigate("/")}>
+        <LayoutGrid size={15} /> CRM
+      </button>
+      <button role="tab" aria-selected={showcase} className={showcase ? "active" : ""} onClick={() => navigate("/showcase")}>
+        <ShoppingBag size={15} /> Витрина
+      </button>
+    </div>
+  );
+}
+
 function Dashboard() {
   const { data, error, isLoading, refetch } = useOverview();
   const [money, setMoney] = useState(false);
+  const navigate = useNavigate();
   if (isLoading) return <Loading rows={3} height={110} />;
   if (error || !data) return <ErrorState error={error} onRetry={refetch} />;
   const o = data.orders;
@@ -47,14 +87,18 @@ function Dashboard() {
       <div className="stack" style={{ gap: 12 }}>
         <BalanceCard balance={data.balance} to="/finance" label="Баланс клиента" />
         <div className="kpis">
-          <div className="card kpi">
-            <div className="small muted">Прибыль за месяц</div>
-            <div className="value">{krw(o.profit_month_krw ?? 0)}</div>
-          </div>
-          <div className="card kpi">
-            <div className="small muted">Прибыль всего</div>
-            <div className="value">{krw(o.profit_total_krw ?? 0)}</div>
-          </div>
+          <Link to="/profit?period=month" className="card kpi">
+            <div className="small muted">Прибыль за месяц →</div>
+            <div className="value">
+              <CountUp id="profit-month" value={o.profit_month_krw ?? 0} format={krw} />
+            </div>
+          </Link>
+          <Link to="/profit?period=all" className="card kpi">
+            <div className="small muted">Прибыль всего →</div>
+            <div className="value">
+              <CountUp id="profit-total" value={o.profit_total_krw ?? 0} format={krw} />
+            </div>
+          </Link>
           <div className="card kpi">
             <div className="small muted">Активные заказы</div>
             <div className="value">{o.active}</div>
@@ -66,6 +110,7 @@ function Dashboard() {
             </div>
           </Link>
         </div>
+        <StuckBanner active={false} onToggle={() => navigate("/orders?stuck=1")} />
         <StatusTiles counts={o.status_counts} />
         <button className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setMoney(true)}>
           <Wallet size={16} /> Пополнить баланс
@@ -97,10 +142,20 @@ function NewOrderPage() {
   const create = useCreateOrder();
   const balance = useBalance();
   const [photo, setPhoto] = useState<PhotoValue>({ photo_url: null, thumbnail_url: null });
-  const [form, setForm] = useState({ brand: "", model: "", size: "", source_url: "", client_comment: "", internal_comment: "" });
+  const [form, setForm] = useState({
+    brand: "",
+    model: "",
+    size: "",
+    size_kr: "",
+    source_url: "",
+    client_comment: "",
+    internal_comment: "",
+  });
   const [purchase, setPurchase] = useState<number | null>(null);
   const [price, setPrice] = useState<number | null>(null);
   const [buyNow, setBuyNow] = useState(false);
+  const [category, setCategory] = useState<Category | null>(null);
+  const [shop, setShop] = useState<string | null>(null);
   const set = (key: keyof typeof form, value: string) => setForm({ ...form, [key]: value });
   const text = (v: string) => v.trim() || null;
   const canBuy = purchase !== null && price !== null && price > 0;
@@ -110,7 +165,10 @@ function NewOrderPage() {
         brand: text(form.brand),
         model: text(form.model),
         size: text(form.size),
+        size_kr: text(form.size_kr),
         source_url: text(form.source_url),
+        category,
+        shop,
         client_comment: text(form.client_comment),
         internal_comment: text(form.internal_comment),
         purchase_price: purchase,
@@ -141,7 +199,11 @@ function NewOrderPage() {
               Бренд
               <AiFillButton
                 photoUrl={photo.photo_url}
-                onRecognized={(r) => setForm((f) => ({ ...f, ...recognizedFields(r) }))}
+                onRecognized={(r) => {
+                  const { category: found, ...fields } = recognizedFields(r);
+                  setForm((f) => ({ ...f, ...fields }));
+                  if (found) setCategory(found);
+                }}
               />
             </span>
             <input
@@ -156,11 +218,19 @@ function NewOrderPage() {
             <input className="input" value={form.model} onChange={(e) => set("model", e.target.value)} placeholder="Air Max 95" />
           </Field>
           <Field label="Размер">
-            <input className="input" value={form.size} onChange={(e) => set("size", e.target.value)} placeholder="270" />
+            <input className="input" value={form.size} onChange={(e) => set("size", e.target.value)} placeholder="42 или L" />
+          </Field>
+          <Field label="Корейский размер" hint="Если есть: 265, 95, 100">
+            <input className="input" value={form.size_kr} onChange={(e) => set("size_kr", e.target.value)} placeholder="265" />
           </Field>
           <Field label="Ссылка" hint="Видите только вы">
             <input className="input" value={form.source_url} onChange={(e) => set("source_url", e.target.value)} placeholder="https://" />
           </Field>
+          <div className="full">
+            <Field label="Категория" group>
+              <CategoryPicker value={category} onChange={setCategory} />
+            </Field>
+          </div>
           <Field label="Закупка">
             <MoneyInput value={purchase} onChange={setPurchase} />
           </Field>
@@ -175,6 +245,11 @@ function NewOrderPage() {
           <div className="full">
             <Field label="Внутренний комментарий" hint="Клиент не видит">
               <textarea className="textarea" value={form.internal_comment} onChange={(e) => set("internal_comment", e.target.value)} />
+            </Field>
+          </div>
+          <div className="full">
+            <Field label="Магазин" hint="Видите только вы" group>
+              <ShopPicker value={shop} onChange={setShop} />
             </Field>
           </div>
           <div className="full card pad">
@@ -221,7 +296,6 @@ function FinancePage() {
     <>
       <BalancePage
         title="Финансы"
-        extra={<ProfitSection />}
         actions={
           <div className="row" style={{ gap: 6 }}>
             <button className="btn primary small" onClick={() => setSheet("deposit")}>
@@ -242,6 +316,7 @@ const RECIPIENTS: { value: NotifyRecipient; label: string }[] = [
   { value: "off", label: "Выключены" },
   { value: "admins", label: "Только мне" },
   { value: "client", label: "Клиенту" },
+  { value: "both", label: "Мне и клиенту" },
 ];
 
 const LEVELS: { value: NotifyLevel; label: string }[] = [
@@ -267,7 +342,7 @@ function NotificationsCard({ settings }: { settings: NotificationSettings }) {
       </div>
       <div className="stack" style={{ gap: 8 }}>
         <div className="small muted">Кому</div>
-        <div className="chips">
+        <div className="chips" style={{ flexWrap: "wrap" }}>
           {RECIPIENTS.map((r) => (
             <button
               key={r.value}
@@ -300,7 +375,7 @@ function NotificationsCard({ settings }: { settings: NotificationSettings }) {
           </div>
         </div>
       )}
-      {settings.recipient === "client" && !settings.client_has_telegram && (
+      {(settings.recipient === "client" || settings.recipient === "both") && !settings.client_has_telegram && (
         <div className="banner warning small">У клиента не указан Telegram ID — отправлять некому.</div>
       )}
       {on && !settings.bot_running && (
@@ -337,7 +412,15 @@ function SettingsPage({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
     <>
       <PageHead title="Настройки" />
       <div className="stack">
+        <AppearanceSettings />
+        <div className="card pad stack">
+          <h3>Как видит клиент</h3>
+          <button className="btn" style={{ alignSelf: "flex-start" }} onClick={() => setClientPreview(true)}>
+            <Eye size={16} /> Посмотреть как клиент
+          </button>
+        </div>
         <PinSettings />
+        <UpdateCard />
         <div className="card pad stack">
           <h3>Курс KRW / USD</h3>
           <div className="small muted">
@@ -404,8 +487,14 @@ function AdminShipmentDetails() {
 }
 
 export function AdminApp({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
+  const showcase = isShowcasePath(useLocation().pathname);
   return (
-    <Shell nav={NAV} title="Buyer CRM">
+    <Shell
+      nav={showcase ? SHOWCASE_NAV : NAV}
+      title="Buyer CRM"
+      homes={["/", "/showcase"]}
+      switcher={<ModeSwitch showcase={showcase} />}
+    >
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/orders" element={<AdminOrdersPage />} />
@@ -414,6 +503,13 @@ export function AdminApp({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
         <Route path="/shipments" element={<AdminShipmentsPage />} />
         <Route path="/shipments/:id" element={<AdminShipmentDetails />} />
         <Route path="/finance" element={<FinancePage />} />
+        <Route path="/showcase" element={<ShowcasePage />} />
+        <Route path="/showcase/cart" element={<ShowcaseCartPage />} />
+        <Route path="/showcase/:id" element={<ShowcaseItemPage />} />
+        <Route path="/prep" element={<PrepPage />} />
+        <Route path="/prep/:id" element={<PrepItemPage />} />
+        <Route path="/stats" element={<ShowcaseStatsPage />} />
+        <Route path="/profit" element={<ProfitPage />} />
         <Route path="/balance" element={<Navigate to="/finance" replace />} />
         <Route path="/settings" element={<SettingsPage onLeaveDemo={onLeaveDemo} />} />
         <Route path="/notifications" element={<NotificationsPage />} />

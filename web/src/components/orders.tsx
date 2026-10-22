@@ -1,9 +1,9 @@
-import { AlertTriangle, ImageOff } from "lucide-react";
+import { AlertTriangle, Hourglass, ImageOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import type { Order } from "../api/types";
-import { krw, orderTitle, statusLabel } from "../lib/format";
-import { Dots } from "./status";
+import { krw, orderTitle, sizeText } from "../lib/format";
+import { Dots, StatusBadge } from "./status";
 import { Checkbox, useLongPress } from "./ui";
 
 export function Photo({
@@ -29,7 +29,13 @@ export function Photo({
 }
 
 export function Thumb({ src, alt }: { src: string | null | undefined; alt: string }) {
-  return <div className="thumb">{src ? <img src={src} alt={alt} loading="lazy" /> : null}</div>;
+  return (
+    <div className="thumb">
+      {src ? (
+        <img src={src} alt={alt} loading="lazy" className="img-in" onLoad={(e) => e.currentTarget.classList.add("loaded")} />
+      ) : null}
+    </div>
+  );
 }
 
 export function OrderCard({
@@ -39,6 +45,7 @@ export function OrderCard({
   onToggle,
   selecting,
   showCost,
+  compact,
 }: {
   order: Order;
   selectable?: boolean;
@@ -47,6 +54,8 @@ export function OrderCard({
   /** Something is already selected: a tap anywhere on the card toggles it. */
   selecting?: boolean;
   showCost?: boolean;
+  /** «Список»: one compact row instead of a big card. */
+  compact?: boolean;
 }) {
   const navigate = useNavigate();
   const open = () => navigate(`/orders/${order.id}`);
@@ -57,27 +66,87 @@ export function OrderCard({
     },
     () => (canSelect && selecting ? onToggle?.() : open()),
   );
+  const check = selectable && onToggle && (
+    <span className="check" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+      <Checkbox checked={!!selected} onChange={onToggle} label={`Выбрать ${order.id}`} />
+    </span>
+  );
+  if (compact) {
+    return (
+      <article
+        className={`order-row st-${order.status ?? "new"} ${selected ? "selected" : ""} ${canSelect ? "no-callout" : ""}`}
+        {...(canSelect ? press : { onClick: open })}
+      >
+        {check}
+        <Thumb src={order.thumbnail_url ?? order.photo_url} alt={orderTitle(order)} />
+        <div className="grow" style={{ minWidth: 0 }}>
+          <div className="row-title">
+            <span className="num faint">{order.id}</span> {[order.brand, order.model].filter(Boolean).join(" ") || "Без названия"}
+          </div>
+          <div className="tiny faint">
+            {sizeText(order) ? `Размер ${sizeText(order)}` : "Размер —"}
+            {order.stuck_days != null && (
+              <span className="row-stuck">
+                {" "}
+                · <Hourglass size={11} style={{ verticalAlign: -1 }} /> {order.stuck_days} дн.
+                {order.shop ? ` · ${order.shop}` : ""}
+              </span>
+            )}
+            {order.attention_required && (
+              <span className="row-attention">
+                {" "}
+                · <AlertTriangle size={11} style={{ verticalAlign: -1 }} /> внимание
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="row-side">
+          <div className="amount small">{krw(order.client_price)}</div>
+          <StatusBadge status={order.status} />
+        </div>
+      </article>
+    );
+  }
   return (
     <article
-      className={`order-card ${selected ? "selected" : ""} ${canSelect ? "no-callout" : ""}`}
+      className={`order-card st-${order.status ?? "new"} ${selected ? "selected" : ""} ${canSelect ? "no-callout" : ""}`}
       {...(canSelect ? press : { onClick: open })}
     >
-      {order.attention_required && (
-        <span className="badge warn attention">
-          <AlertTriangle size={12} /> Внимание
+      {(order.attention_required ||
+        order.stuck_days != null ||
+        order.arrival_check?.status === "mismatch" ||
+        order.showcase_id) && (
+        <span className="card-flags">
+          {order.showcase_id && <span className="badge sc-from">🛍 Из витрины</span>}
+          {order.arrival_check?.status === "mismatch" && (
+            <span className="badge size-wrong" title="Размер на фото со склада не совпал">
+              <AlertTriangle size={12} /> Размер?
+            </span>
+          )}
+          {order.stuck_days != null && (
+            <span className="badge stuck" title="Не пришёл на склад">
+              <Hourglass size={12} /> {order.stuck_days} дн.
+            </span>
+          )}
+          {order.stuck_days != null && order.shop && (
+            <span className="badge stuck shop" title="Магазин">
+              {order.shop}
+            </span>
+          )}
+          {order.attention_required && (
+            <span className="badge warn">
+              <AlertTriangle size={12} /> Внимание
+            </span>
+          )}
         </span>
       )}
-      {selectable && onToggle && (
-        <span className="check" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
-          <Checkbox checked={!!selected} onChange={onToggle} label={`Выбрать ${order.id}`} />
-        </span>
-      )}
+      {check}
       <Photo src={order.thumbnail_url ?? order.photo_url} alt={orderTitle(order)} />
       <div className="body">
         <div className="brand">{order.brand ?? order.id}</div>
         <div className="model">{order.model ?? orderTitle(order)}</div>
         <div className="meta">
-          {order.size ? `Размер ${order.size}` : <span className="faint">Размер —</span>}
+          {sizeText(order) ? `Размер ${sizeText(order)}` : <span className="faint">Размер —</span>}
         </div>
         <div className="price">{krw(order.client_price)}</div>
         {showCost && order.purchase_price != null && (
@@ -85,7 +154,7 @@ export function OrderCard({
         )}
         <div className="foot">
           <Dots status={order.status} />
-          <span>{statusLabel(order.status)}</span>
+          <StatusBadge status={order.status} />
         </div>
       </div>
     </article>

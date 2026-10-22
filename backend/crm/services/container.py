@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 from crm.repositories import (
     AuditRepository,
@@ -12,7 +13,9 @@ from crm.repositories import (
     ProfitRepository,
     SettingsRepository,
     ShipmentRepository,
+    ShowcaseRepository,
 )
+from crm.services.arrival import ArrivalService
 from crm.services.auth import RoleResolver
 from crm.services.client_service import ClientService
 from crm.services.common import Auditor, Clock, SystemClock
@@ -22,6 +25,7 @@ from crm.services.group_service import GroupService
 from crm.services.image_service import ImageService
 from crm.services.intake_service import IntakeService
 from crm.services.ledger import BalanceLedger
+from crm.services.link_import import LinkImportService
 from crm.services.notifications import NotificationService
 from crm.services.order_service import OrderService
 from crm.services.photo_recognition import PhotoRecognitionService
@@ -31,6 +35,8 @@ from crm.services.recognition import Recognizer
 from crm.services.security_service import SecurityService
 from crm.services.sequences import SequenceAllocator
 from crm.services.shipment_service import ShipmentService
+from crm.services.showcase_service import ShowcaseService
+from crm.services.update_service import UpdateService
 from crm.storage import Database
 from crm.storage.blobs import BlobStorage
 
@@ -50,10 +56,14 @@ class Services:
     # None without GEMINI_API_KEY: orders are still accepted, fields stay empty.
     recognizer: Recognizer | None = None
     photo_recognition: PhotoRecognitionService | None = None
+    link_import: LinkImportService | None = None
     reactions: ReactionService | None = None
     profit: ProfitService | None = None
     security: SecurityService | None = None
     groups: GroupService | None = None
+    arrival: ArrivalService | None = None
+    showcase: ShowcaseService | None = None
+    updates: UpdateService | None = None
 
 
 def build_services(
@@ -63,6 +73,7 @@ def build_services(
     blob_storage: BlobStorage | None = None,
     recognizer: Recognizer | None = None,
     allowed_chat_ids: frozenset[int] = frozenset(),
+    update_dir: Path | None = None,
 ) -> Services:
     clock = clock or SystemClock()
     orders_repo = OrderRepository()
@@ -73,28 +84,37 @@ def build_services(
     profit_repo = ProfitRepository()
 
     auditor = Auditor(db, AuditRepository())
-    ledger = BalanceLedger(clients_repo, ledger_repo)
     sequences = SequenceAllocator(db, CounterRepository())
     events_repo = EventRepository()
     recorder = EventRecorder(db, events_repo)
+    ledger = BalanceLedger(clients_repo, ledger_repo, recorder)
     roles = RoleResolver(db, clients_repo, admin_ids)
 
+    order_service = OrderService(
+        db,
+        clock,
+        orders_repo,
+        ledger,
+        sequences,
+        auditor,
+        recorder,
+        event_repo=events_repo,
+        intake=IntakeRepository(),
+        blobs=blob_storage,
+        profit=profit_repo,
+    )
     return Services(
-        orders=OrderService(
+        orders=order_service,
+        shipments=ShipmentService(
             db,
             clock,
             orders_repo,
-            ledger,
+            shipments_repo,
             sequences,
+            ledger,
             auditor,
             recorder,
-            event_repo=events_repo,
-            intake=IntakeRepository(),
-            blobs=blob_storage,
-            profit=profit_repo,
-        ),
-        shipments=ShipmentService(
-            db, clock, orders_repo, shipments_repo, sequences, ledger, auditor, recorder
+            settings=settings_repo,
         ),
         finance=FinanceService(
             db, clock, clients_repo, ledger_repo, settings_repo, ledger, auditor, recorder
@@ -111,8 +131,22 @@ def build_services(
         images=ImageService(blob_storage, clock) if blob_storage is not None else None,
         recognizer=recognizer,
         photo_recognition=PhotoRecognitionService(blob_storage, recognizer),
+        link_import=LinkImportService(
+            ImageService(blob_storage, clock) if blob_storage is not None else None, recognizer
+        ),
         reactions=ReactionService(db, clock, orders_repo, recorder),
         profit=ProfitService(db, clock, profit_repo, auditor),
         security=SecurityService(db, clock, auditor),
         groups=GroupService(db, clock, auditor, allowed_chat_ids),
+        arrival=ArrivalService(db, clock, orders_repo, order_service, auditor, recognizer),
+        showcase=ShowcaseService(
+            db,
+            clock,
+            ShowcaseRepository(),
+            order_service,
+            auditor,
+            ImageService(blob_storage, clock) if blob_storage is not None else None,
+            recognizer,
+        ),
+        updates=UpdateService(db, clock, auditor, update_dir),
     )

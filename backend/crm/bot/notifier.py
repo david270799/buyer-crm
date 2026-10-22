@@ -131,7 +131,8 @@ class TelegramNotifier:
         if not self._mini_app_url:
             return None
         button = InlineKeyboardButton(
-            text="Открыть в CRM", web_app=WebAppInfo(url=open_url(self._mini_app_url, event))
+            text="Открыть в CRM",
+            web_app=WebAppInfo(url=open_url(self._mini_app_url, event)),
         )
         return InlineKeyboardMarkup(inline_keyboard=[[button]])
 

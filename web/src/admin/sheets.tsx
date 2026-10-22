@@ -1,4 +1,6 @@
 import { Camera, CheckCheck, Loader2, Plus, Sparkles, Split, Undo2, X } from "lucide-react";
+import { CategoryPicker } from "../shared/CategoryPicker";
+import { ShopPicker } from "./ShopPicker";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -22,11 +24,12 @@ import {
   useUpdateShipment,
   useSplitShipment,
   useDuplicateOrder,
+  recognizeLink,
 } from "../api/hooks";
-import type { BulkResult, Order, OrderStatus, PhotoRecognition, Shipment } from "../api/types";
+import type { BulkResult, Category, LinkImport, Order, OrderStatus, PhotoRecognition, Shipment } from "../api/types";
 import { Thumb } from "../components/orders";
 import { Checkbox, Confirm, errorText, Field, MoneyInput, Sheet, Switch, useToast } from "../components/ui";
-import { krw, STATUS_LABEL, todayKey } from "../lib/format";
+import { STATUS_LABEL, krw, sizeText, todayKey } from "../lib/format";
 
 // --- helpers ------------------------------------------------------------------
 
@@ -70,11 +73,19 @@ export interface PhotoValue {
 }
 
 /** Fields Gemini is sure about, for filling a form; empty strings are left out. */
-export function recognizedFields(r: PhotoRecognition): { brand?: string; model?: string; size?: string } {
-  const fields: { brand?: string; model?: string; size?: string } = {};
+export function recognizedFields(r: PhotoRecognition): {
+  brand?: string;
+  model?: string;
+  size?: string;
+  size_kr?: string;
+  category?: Category;
+} {
+  const fields: { brand?: string; model?: string; size?: string; size_kr?: string; category?: Category } = {};
   if (r.brand) fields.brand = r.brand;
   if (r.model) fields.model = r.model;
   if (r.size) fields.size = r.size;
+  if (r.size_kr) fields.size_kr = r.size_kr;
+  if (r.category_code) fields.category = r.category_code;
   return fields;
 }
 
@@ -254,6 +265,7 @@ export function BuySheet({ order, onClose }: { order: Order; onClose: () => void
   const buy = useBuy(order.id);
   const [purchase, setPurchase] = useState<number | null>(order.purchase_price ?? null);
   const [price, setPrice] = useState<number | null>(order.client_price || null);
+  const [shop, setShop] = useState<string | null>(order.shop ?? null);
   const valid = purchase !== null && purchase >= 0 && price !== null && price > 0;
   const profit = valid ? price - purchase : null;
   return (
@@ -270,7 +282,7 @@ export function BuySheet({ order, onClose }: { order: Order; onClose: () => void
             disabled={!valid || buy.isPending}
             onClick={() =>
               buy.mutate(
-                { purchase_price: purchase!, client_price: price! },
+                { purchase_price: purchase!, client_price: price!, shop },
                 {
                   onSuccess: (r) => {
                     toast(r.already_done ? "Уже выкуплен с этими ценами — повторного списания нет" : `Выкуплен. Списано ${krw(price)}`);
@@ -293,6 +305,11 @@ export function BuySheet({ order, onClose }: { order: Order; onClose: () => void
         <Field label="Цена для клиента">
           <MoneyInput value={price} onChange={setPrice} />
         </Field>
+        <div className="full">
+          <Field label="Магазин" hint="Видите только вы" group>
+            <ShopPicker value={shop} onChange={setShop} />
+          </Field>
+        </div>
       </div>
       {profit !== null && (
         <div className={`small num ${profit < 0 ? "negative" : "muted"}`} style={{ marginTop: 10 }}>
@@ -311,6 +328,7 @@ export function RebuySheet({ order, onClose }: { order: Order; onClose: () => vo
   const [purchase, setPurchase] = useState<number | null>(null);
   const [price, setPrice] = useState<number | null>(order.client_price ?? null);
   const [link, setLink] = useState(order.source_url ?? "");
+  const [shop, setShop] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const charged = order.charged_amount_krw ?? 0;
   const valid = purchase !== null && purchase >= 0 && price !== null && price > 0;
@@ -334,6 +352,7 @@ export function RebuySheet({ order, onClose }: { order: Order; onClose: () => vo
                   purchase_price: purchase!,
                   client_price: price!,
                   source_url: link.trim() || null,
+                  ...(shop ? { shop } : {}),
                   reason: reason.trim() || null,
                 },
                 {
@@ -368,6 +387,11 @@ export function RebuySheet({ order, onClose }: { order: Order; onClose: () => vo
         <Field label="Цена для клиента">
           <MoneyInput value={price} onChange={setPrice} />
         </Field>
+        <div className="full">
+          <Field label="Новый магазин" hint="Видите только вы" group>
+            <ShopPicker value={shop} onChange={setShop} />
+          </Field>
+        </div>
         <div className="full">
           <Field label="Ссылка на новый магазин" hint="Видите только вы">
             <input className="input" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://" />
@@ -405,10 +429,11 @@ export function CancelConfirm({ order, onClose }: { order: Order; onClose: () =>
   const toast = useToast();
   const cancel = useCancel(order.id);
   const refund = order.charged_amount_krw ?? 0;
+  const shipped = order.status === "cargo" || order.status === "delivered";
   return (
     <Confirm
-      title={`Отменить ${order.id}?`}
-      confirmLabel={refund ? `Отменить и вернуть ${krw(refund)}` : "Отменить заказ"}
+      title={shipped ? `Возврат ${order.id}?` : `Отменить ${order.id}?`}
+      confirmLabel={refund ? `${shipped ? "Возврат" : "Отменить"} и вернуть ${krw(refund)}` : "Отменить заказ"}
       danger
       busy={cancel.isPending}
       onClose={onClose}
@@ -422,7 +447,10 @@ export function CancelConfirm({ order, onClose }: { order: Order; onClose: () =>
         })
       }
     >
-      <div className="muted small">Статус станет «Отменён». Отменить отмену нельзя.</div>
+      <div className="muted small">
+        Статус станет «Отменён». Отменить отмену нельзя.
+        {shipped && " Товар вернули: клиенту вернётся цена заказа, доставка не возвращается."}
+      </div>
       {refund > 0 ? (
         <BalancePreview delta={refund} label="Вернётся на баланс" />
       ) : (
@@ -545,14 +573,16 @@ export function BulkStatusSheet({ ids, onClose, onDone }: { ids: string[]; onClo
         {BULK_STATUSES.map((option) => (
           <button
             key={option.status}
-            className={`card pad row ${status === option.status ? "selected" : ""}`}
-            style={{ textAlign: "left", borderColor: status === option.status ? "var(--accent)" : undefined }}
+            className={`card pad row choice ${status === option.status ? "selected" : ""}`}
+            style={{ textAlign: "left" }}
+            aria-pressed={status === option.status}
             onClick={() => setStatus(option.status)}
           >
             <div className="grow">
               <div style={{ fontWeight: 600 }}>{STATUS_LABEL[option.status]}</div>
               <div className="small muted">{option.hint}</div>
             </div>
+            {status === option.status && <CheckCheck size={18} />}
           </button>
         ))}
         <div className="tiny faint">
@@ -661,9 +691,92 @@ interface ShipmentFormValue {
   shipment_date: string;
   comment: string;
   photos: PhotoValue[];
+  watch_count: number;
 }
 
-function ShipmentFields({ value, onChange }: { value: ShipmentFormValue; onChange: (v: ShipmentFormValue) => void }) {
+const WATCH_PRICE_USD = 10;
+
+/** Watches in the parcel: − n +, priced in $ at the rate (owner, 12.10). */
+function WatchesField({ count, onChange, rate, price }: { count: number; onChange: (n: number) => void; rate: number | null; price: number }) {
+  const usd = count * price;
+  return (
+    <div className="full field">
+      <span>
+        Часы ⌚ <span className="tiny faint">· доставка ${price} за штуку</span>
+      </span>
+      <div className="row" style={{ gap: 10, alignItems: "center" }}>
+        <button type="button" className="btn icon-only" disabled={count <= 0} onClick={() => onChange(count - 1)} aria-label="Меньше часов">
+          −
+        </button>
+        <b className="num" style={{ fontSize: 22, minWidth: 28, textAlign: "center" }}>
+          {count}
+        </b>
+        <button type="button" className="btn icon-only" disabled={count >= 50} onClick={() => onChange(count + 1)} aria-label="Больше часов">
+          +
+        </button>
+        <div className="grow" style={{ textAlign: "right" }}>
+          {count > 0 &&
+            (rate ? (
+              <>
+                <div className="num" style={{ fontWeight: 600 }}>
+                  ${usd} = {krw(Math.round(usd * rate))}
+                </div>
+                <div className="tiny faint num">по курсу 1 $ = {rate.toLocaleString("en-US")} ₩</div>
+              </>
+            ) : (
+              <div className="small" style={{ color: "var(--negative)" }}>
+                Задайте курс $ в «Настройках»
+              </div>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** What the balance will see: shipping and watches as two lines, then the total. */
+function ShipmentChargeSummary({ shipping, watches, watchCount }: { shipping: number; watches: number; watchCount: number }) {
+  const balance = useBalance();
+  if (!shipping && !watches) return null;
+  const total = shipping + watches;
+  const line = (label: string, delta: number) => (
+    <div className="row between">
+      <span>{label}</span>
+      <b className="num">{krw(delta, true)}</b>
+    </div>
+  );
+  return (
+    <div className="card pad stack" style={{ gap: 6, marginTop: 14 }}>
+      <div className="small muted">Баланс клиента:</div>
+      {shipping ? line(shipping < 0 ? "Доставка" : "Возврат за доставку", shipping) : null}
+      {watches ? line(watches < 0 ? `Доставка часов (${watchCount} шт.)` : "Возврат за часы", watches) : null}
+      <div className="divider" />
+      <div className="row between">
+        <b>Итого</b>
+        <b className="num" style={{ color: total < 0 ? "var(--negative)" : "var(--positive)" }}>
+          {krw(total, true)}
+        </b>
+      </div>
+      {balance !== null && (
+        <div className="small num muted">
+          Баланс: {krw(balance)} → <b>{krw(balance + total)}</b>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ShipmentFields({
+  value,
+  onChange,
+  rate,
+  watchPrice = WATCH_PRICE_USD,
+}: {
+  value: ShipmentFormValue;
+  onChange: (v: ShipmentFormValue) => void;
+  rate: number | null;
+  watchPrice?: number;
+}) {
   const set = <K extends keyof ShipmentFormValue>(key: K, v: ShipmentFormValue[K]) => onChange({ ...value, [key]: v });
   return (
     <div className="form-grid two">
@@ -679,6 +792,7 @@ function ShipmentFields({ value, onChange }: { value: ShipmentFormValue; onChang
       <Field label="Стоимость доставки" hint="Спишется с баланса клиента">
         <MoneyInput value={value.shipping_cost_krw} onChange={(v) => set("shipping_cost_krw", v)} />
       </Field>
+      <WatchesField count={value.watch_count} onChange={(n) => set("watch_count", n)} rate={rate} price={watchPrice} />
       <Field label="Дата отправки">
         <input className="input" type="date" value={value.shipment_date} onChange={(e) => set("shipment_date", e.target.value)} />
       </Field>
@@ -795,19 +909,54 @@ export function DiscountSheet({ orders, onClose, onDone }: { orders: Order[]; on
 }
 
 /** "Доставлена" on a shipment page: every order of the shipment → delivered. */
+/** Admin only: undo «Доставлено» (the client may have tapped it by mistake). No money moves. */
+function ShipmentUndeliverButton({ orders }: { orders: Order[] }) {
+  const toast = useToast();
+  const setStatus = useBulkStatus();
+  const [confirming, setConfirming] = useState(false);
+  const delivered = orders.filter((o) => o.status === "delivered");
+  if (!delivered.length) return null;
+  return (
+    <>
+      <button className="btn small" onClick={() => setConfirming(true)}>
+        <Undo2 size={14} /> В пути
+      </button>
+      {confirming && (
+        <Confirm
+          title="Вернуть «В пути»?"
+          confirmLabel="Вернуть «Отправлен»"
+          busy={setStatus.isPending}
+          onClose={() => setConfirming(false)}
+          onConfirm={() =>
+            setStatus.mutate(
+              { order_ids: delivered.map((o) => o.id), status: "cargo" },
+              {
+                onSuccess: (r) => {
+                  toast(bulkSummary(r, "Снова «Отправлен»"));
+                  setConfirming(false);
+                },
+                onError: (e) => toast(errorText(e), "error"),
+              },
+            )
+          }
+        >
+          <div className="small">
+            Отмена отметки «Доставлено» (например, клиент нажал по ошибке). Заказы снова станут «Отправлен»:{" "}
+            {delivered.map((o) => o.id).join(", ")}. Деньги не меняются.
+          </div>
+        </Confirm>
+      )}
+    </>
+  );
+}
+
 export function ShipmentDeliveredButton({ orders }: { orders: Order[] }) {
   const toast = useToast();
   const setStatus = useBulkStatus();
   const [confirming, setConfirming] = useState(false);
   const pending = orders.filter((o) => o.status !== "delivered" && o.status !== "cancelled");
   if (!orders.length) return null;
-  if (!pending.length) {
-    return (
-      <button className="btn small" disabled>
-        <CheckCheck size={14} /> Доставлена
-      </button>
-    );
-  }
+  if (!pending.length) return <ShipmentUndeliverButton orders={orders} />;
   return (
     <>
       <button className="btn small primary" onClick={() => setConfirming(true)}>
@@ -895,7 +1044,7 @@ export function NewShipmentFlow({ onClose }: { onClose: () => void }) {
                   </div>
                   <div className="small muted">
                     {o.status_label ?? ""}
-                    {o.size ? ` · размер ${o.size}` : ""}
+                    {sizeText(o) ? ` · размер ${sizeText(o)}` : ""}
                   </div>
                 </div>
               </div>
@@ -919,8 +1068,12 @@ export function ShipmentSheet({ ids, onClose, onDone }: { ids: string[]; onClose
     shipment_date: todayKey(),
     comment: "",
     photos: [],
+    watch_count: 0,
   });
   const weight = parseWeight(form.weight_kg);
+  const rate = useSettings().data?.krw_per_usd ?? null;
+  const watchCost = rate ? Math.round(form.watch_count * WATCH_PRICE_USD * rate) : 0;
+  const noRate = form.watch_count > 0 && !rate;
   return (
     <Sheet
       title="Новая отправка"
@@ -932,7 +1085,7 @@ export function ShipmentSheet({ ids, onClose, onDone }: { ids: string[]; onClose
           </button>
           <button
             className="btn primary"
-            disabled={create.isPending || weight === "invalid"}
+            disabled={create.isPending || weight === "invalid" || noRate}
             onClick={() =>
               create.mutate(
                 {
@@ -944,6 +1097,7 @@ export function ShipmentSheet({ ids, onClose, onDone }: { ids: string[]; onClose
                   shipment_date: form.shipment_date || null,
                   comment: form.comment.trim() || null,
                   photos: photoList(form.photos),
+                  watch_count: form.watch_count,
                 },
                 {
                   onSuccess: (r) => {
@@ -969,8 +1123,8 @@ export function ShipmentSheet({ ids, onClose, onDone }: { ids: string[]; onClose
       <div className="small muted" style={{ marginBottom: 12 }}>
         Заказы: {ids.join(", ")}. Их статус станет «Отправлен».
       </div>
-      <ShipmentFields value={form} onChange={setForm} />
-      {form.shipping_cost_krw ? <BalancePreview delta={-form.shipping_cost_krw} label="Спишется за доставку" /> : null}
+      <ShipmentFields value={form} onChange={setForm} rate={rate} />
+      <ShipmentChargeSummary shipping={-(form.shipping_cost_krw ?? 0)} watches={-watchCost} watchCount={form.watch_count} />
     </Sheet>
   );
 }
@@ -986,10 +1140,18 @@ export function ShipmentEditSheet({ shipment, onClose }: { shipment: Shipment; o
     shipment_date: toSeoulDay(shipment.shipment_date),
     comment: shipment.comment ?? "",
     photos: shipmentPhotos(shipment),
+    watch_count: shipment.watch_count ?? 0,
   });
   const weight = parseWeight(form.weight_kg);
   const charged = shipment.shipping_charged_krw ?? 0;
   const delta = -((form.shipping_cost_krw ?? 0) - charged);
+  // Watches keep the rate fixed when they were first charged.
+  const currentRate = useSettings().data?.krw_per_usd ?? null;
+  const rate = shipment.watch_krw_per_usd ?? currentRate;
+  const watchPrice = shipment.watch_price_usd ?? WATCH_PRICE_USD;
+  const watchCost = rate ? Math.round(form.watch_count * watchPrice * rate) : 0;
+  const watchDelta = form.watch_count === (shipment.watch_count ?? 0) ? 0 : -(watchCost - (shipment.watch_charged_krw ?? 0));
+  const noRate = form.watch_count > 0 && !rate;
   return (
     <Sheet
       title="Изменить отправку"
@@ -1001,7 +1163,7 @@ export function ShipmentEditSheet({ shipment, onClose }: { shipment: Shipment; o
           </button>
           <button
             className="btn primary"
-            disabled={update.isPending || weight === "invalid"}
+            disabled={update.isPending || weight === "invalid" || noRate}
             onClick={() =>
               update.mutate(
                 {
@@ -1012,10 +1174,12 @@ export function ShipmentEditSheet({ shipment, onClose }: { shipment: Shipment; o
                   shipment_date: form.shipment_date || null,
                   comment: form.comment.trim() || null,
                   photos: photoList(form.photos),
+                  watch_count: form.watch_count,
                 },
                 {
                   onSuccess: (r) => {
-                    toast(r.change ? `Сохранено. Баланс: ${krw(r.change.amount_krw, true)}` : "Сохранено");
+                    const moved = (r.change?.amount_krw ?? 0) + (r.watch_change?.amount_krw ?? 0);
+                    toast(r.change || r.watch_change ? `Сохранено. Баланс: ${krw(moved, true)}` : "Сохранено");
                     onClose();
                   },
                   onError: (e) => toast(errorText(e), "error"),
@@ -1028,8 +1192,8 @@ export function ShipmentEditSheet({ shipment, onClose }: { shipment: Shipment; o
         </>
       }
     >
-      <ShipmentFields value={form} onChange={setForm} />
-      <BalancePreview delta={delta} label={delta < 0 ? "Доплата за доставку" : "Возврат за доставку"} />
+      <ShipmentFields value={form} onChange={setForm} rate={rate} watchPrice={watchPrice} />
+      <ShipmentChargeSummary shipping={delta} watches={watchDelta} watchCount={form.watch_count} />
     </Sheet>
   );
 }
@@ -1089,7 +1253,10 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
     brand: order.brand ?? "",
     model: order.model ?? "",
     size: order.size ?? "",
+    size_kr: order.size_kr ?? "",
     source_url: order.source_url ?? "",
+    shop: order.shop ?? null,
+    category: (order.category ?? null) as Category | null,
     client_comment: order.client_comment ?? "",
     internal_comment: order.internal_comment ?? "",
     attention_required: order.attention_required,
@@ -1117,7 +1284,10 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
                   brand: text(form.brand),
                   model: text(form.model),
                   size: text(form.size),
+                  size_kr: text(form.size_kr),
                   source_url: text(form.source_url),
+                  shop: form.shop,
+                  category: form.category,
                   client_comment: text(form.client_comment),
                   internal_comment: text(form.internal_comment),
                   attention_required: form.attention_required,
@@ -1162,9 +1332,30 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
         <Field label="Размер">
           <input className="input" value={form.size} onChange={(e) => set("size", e.target.value)} />
         </Field>
+        <Field label="Корейский размер" hint="Если есть: 265, 95, 100">
+          <input className="input" value={form.size_kr} onChange={(e) => set("size_kr", e.target.value)} />
+        </Field>
         <Field label="Ссылка" hint="Видите только вы">
           <input className="input" value={form.source_url} onChange={(e) => set("source_url", e.target.value)} placeholder="https://" />
         </Field>
+        <div className="full">
+          <Field label="Категория" group>
+            <CategoryPicker value={form.category} onChange={(category) => set("category", category)} />
+          </Field>
+        </div>
+        <div className="full">
+          <Field label="Магазин" hint="Видите только вы" group>
+            <ShopPicker value={form.shop} onChange={(shop) => set("shop", shop)} />
+          </Field>
+        </div>
+        <LinkFill
+          url={form.source_url}
+          onBrandModel={(brand, model) =>
+            setForm((f) => ({ ...f, brand: brand ?? f.brand, model: model ?? f.model }))
+          }
+          onPhoto={(photo) => setForm((f) => ({ ...f, photo }))}
+          onCategory={(category) => setForm((f) => ({ ...f, category }))}
+        />
         {editablePrices && (
           <>
             <Field label="Закупка (черновик)">
@@ -1382,5 +1573,69 @@ export function DuplicateConfirm({ order, onClose }: { order: Order; onClose: ()
         </div>
       </div>
     </Confirm>
+  );
+}
+
+/** «Из ссылки»: the server opens the shop page; Gemini gives brand and model in English.
+ * Only fills the form — nothing is saved until «Сохранить». */
+function LinkFill({
+  url,
+  onBrandModel,
+  onPhoto,
+  onCategory,
+}: {
+  url: string;
+  onBrandModel: (brand: string | null, model: string | null) => void;
+  onPhoto: (photo: PhotoValue) => void;
+  onCategory?: (category: Category) => void;
+}) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [found, setFound] = useState<LinkImport | null>(null);
+  const run = async () => {
+    if (!url.trim()) {
+      toast("Сначала впишите ссылку", "error");
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await recognizeLink(url.trim());
+      setFound(r);
+      onBrandModel(r.brand, r.model);
+      if (r.category_code) onCategory?.(r.category_code);
+      toast(r.brand || r.model ? `Со страницы: ${[r.brand, r.model].filter(Boolean).join(" ")}` : "Название не определено");
+    } catch (error) {
+      toast(errorText(error), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="full stack" style={{ gap: 8 }}>
+      <button type="button" className="btn small" onClick={run} disabled={busy}>
+        {busy ? <Loader2 className="spin" size={14} /> : <Sparkles size={14} />} Из ссылки: название и фото
+      </button>
+      {found && (
+        <div className="card pad stack" style={{ gap: 8 }}>
+          {found.title && <div className="small muted">На сайте: {found.title}</div>}
+          {found.note && <div className="small muted">⚠️ {found.note}</div>}
+          {found.photo_url && (
+            <div className="row" style={{ gap: 10 }}>
+              <Thumb src={found.thumbnail_url ?? found.photo_url} alt="Фото с сайта" />
+              <button
+                type="button"
+                className="btn small"
+                onClick={() => {
+                  onPhoto({ photo_url: found.photo_url, thumbnail_url: found.thumbnail_url });
+                  toast("Фото с сайта поставлено — сохраните заказ");
+                }}
+              >
+                Поставить это фото
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

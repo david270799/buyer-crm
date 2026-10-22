@@ -1,5 +1,5 @@
 import { AlertTriangle, Copy, MessageSquare, Package } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { useOrder } from "../api/hooks";
@@ -7,9 +7,10 @@ import type { Order, Shipment } from "../api/types";
 import { PageHead } from "../components/Layout";
 import { OrderHistory } from "../components/events";
 import { Photo } from "../components/orders";
+import { Lightbox } from "../components/PhotoCarousel";
 import { StatusBadge, Stepper } from "../components/status";
 import { ErrorState, Loading, useToast } from "../components/ui";
-import { date, dateTime, items, krw, orderTitle } from "../lib/format";
+import { CATEGORY_LABEL, date, dateTime, items, krw, orderTitle, sizeText } from "../lib/format";
 
 export function CopyText({ text }: { text: string }) {
   const toast = useToast();
@@ -26,6 +27,60 @@ export function CopyText({ text }: { text: string }) {
     >
       {text} <Copy size={13} />
     </button>
+  );
+}
+
+/** The order photo; a tap opens it full screen (pinch to zoom). When the
+ * warehouse photo exists, a swipe shows it next — admin and client (owner, 16–17.10). */
+function OrderPhoto({ order }: { order: Order }) {
+  const [open, setOpen] = useState<number | null>(null);
+  const [index, setIndex] = useState(0);
+  const main = order.photo_url ?? order.thumbnail_url;
+  const arrival = order.arrival_photo_url ?? order.arrival_thumbnail_url;
+  const slides = [
+    main ? { photo_url: main, thumbnail_url: order.thumbnail_url ?? null, label: "Фото заказа" } : null,
+    arrival ? { photo_url: arrival, thumbnail_url: order.arrival_thumbnail_url ?? null, label: "Пришло на склад" } : null,
+    ...(order.arrival_photos ?? []).map((p) => ({
+      photo_url: p.photo_url,
+      thumbnail_url: p.thumbnail_url ?? null,
+      label: "Пришло на склад",
+    })),
+  ].filter((s): s is { photo_url: string; thumbnail_url: string | null; label: string } => s !== null);
+  if (slides.length < 2) {
+    return (
+      <>
+        <button type="button" className="photo-button" onClick={() => main && setOpen(0)} aria-label="Открыть фото">
+          <Photo src={main} alt={orderTitle(order)} className="large contain" />
+        </button>
+        {open !== null && main && (
+          <Lightbox photos={[{ photo_url: main, thumbnail_url: order.thumbnail_url }]} start={0} onClose={() => setOpen(null)} />
+        )}
+      </>
+    );
+  }
+  return (
+    <>
+      <div
+        className="photo-swipe"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          setIndex(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)));
+        }}
+      >
+        {slides.map((slide, i) => (
+          <button key={`${i}-${slide.photo_url}`} type="button" className="photo-button" onClick={() => setOpen(i)} aria-label={slide.label}>
+            <Photo src={slide.photo_url} alt={slide.label} className="large contain" />
+            <span className="photo-swipe-label">{slide.label}</span>
+          </button>
+        ))}
+      </div>
+      <div className="photo-dots" aria-hidden>
+        {slides.map((slide, i) => (
+          <i key={`${i}-${slide.photo_url}`} className={i === index ? "active" : ""} />
+        ))}
+      </div>
+      {open !== null && <Lightbox photos={slides} start={open} onClose={() => setOpen(null)} />}
+    </>
   );
 }
 
@@ -90,7 +145,7 @@ export function OrderDetailsPage({ adminPanel }: { adminPanel?: (order: Order) =
       />
       <div className="details">
         <div className="stack">
-          <Photo src={order.photo_url ?? order.thumbnail_url} alt={orderTitle(order)} className="large contain" />
+          <OrderPhoto order={order} />
         </div>
         <div className="stack">
           {order.attention_required && (
@@ -114,7 +169,13 @@ export function OrderDetailsPage({ adminPanel }: { adminPanel?: (order: Order) =
             </div>
             <dl className="kv">
               <dt>Размер</dt>
-              <dd>{order.size ?? "—"}</dd>
+              <dd>{sizeText(order) ?? "—"}</dd>
+              {order.category && (
+                <>
+                  <dt>Категория</dt>
+                  <dd>{CATEGORY_LABEL[order.category]}</dd>
+                </>
+              )}
               {order.cargo_code && (
                 <>
                   <dt>Трек-номер</dt>

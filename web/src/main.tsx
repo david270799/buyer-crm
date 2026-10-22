@@ -9,6 +9,9 @@ import { ApiError } from "./api/client";
 import { App } from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ToastProvider } from "./components/ui";
+import { keepKeyboardOnReturn } from "./lib/keepKeyboard";
+
+keepKeyboardOnReturn();
 
 const queryClient = new QueryClient({
   defaultOptions: {

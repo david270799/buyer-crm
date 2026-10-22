@@ -37,6 +37,7 @@ const ICONS: Record<EventType, LucideIcon> = {
   deposit: ArrowDownLeft,
   adjustment: SlidersHorizontal,
   rate: SlidersHorizontal,
+  debt_warning: AlertTriangle,
 };
 
 export function BellButton() {
@@ -55,7 +56,7 @@ function target(event: CrmEvent): string | null {
   if (event.order_ids.length === 1) return `/orders/${event.order_ids[0]}`;
   if (event.shipment_id) return `/shipments/${event.shipment_id}`;
   if (event.order_ids.length > 1) return `/orders/${event.order_ids[0]}`;
-  if (event.type === "deposit" || event.type === "adjustment") return "/balance";
+  if (event.type === "deposit" || event.type === "adjustment" || event.type === "debt_warning") return "/balance";
   return null;
 }
 

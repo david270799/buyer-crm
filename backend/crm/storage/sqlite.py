@@ -199,10 +199,6 @@ class SqliteDatabase(InMemoryDatabase):
                     self._conn.execute("ROLLBACK")
                 raise StorageError(f"Не удалось записать изменения в базу: {exc}") from exc
 
-    def document_count(self) -> int:
-        with self._sql_lock:
-            return self._conn.execute("SELECT count(*) FROM documents").fetchone()[0]
-
     def close(self) -> None:
         with self._sql_lock:
             self._conn.close()

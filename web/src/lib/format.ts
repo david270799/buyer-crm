@@ -1,4 +1,4 @@
-import type { LedgerType, OrderStatus } from "../api/types";
+import type { Category, LedgerType, OrderStatus } from "../api/types";
 
 const TZ = "Asia/Seoul";
 const NBSP = " ";
@@ -52,6 +52,16 @@ export function dateTime(value: string | null | undefined): string {
   return value ? `${date(value)}, ${timeFmt.format(new Date(value))}` : "—";
 }
 
+/** Short moment: «сегодня, 21:33», «вчера, 09:10», «18 окт., 14:05». */
+export function moment(value: string | null | undefined): string {
+  if (!value) return "—";
+  const day = dayKey(value);
+  const today = dayKey(new Date().toISOString());
+  const yesterday = dayKey(new Date(Date.now() - 86_400_000).toISOString());
+  const label = day === today ? "сегодня" : day === yesterday ? "вчера" : shortDate(value);
+  return `${label}, ${timeFmt.format(new Date(value))}`;
+}
+
 /** Seoul calendar day, for grouping (YYYY-MM-DD). */
 export function dayKey(value: string | null | undefined): string {
   return value ? dayKeyFmt.format(new Date(value)) : "";
@@ -102,6 +112,7 @@ export const LEDGER_LABEL: Record<LedgerType, string> = {
   deposit: "Пополнение",
   adjustment: "Корректировка",
   shipping_charge: "Доставка",
+  watch_charge: "Доставка часов",
   order_discount: "Скидка",
 };
 
@@ -123,4 +134,19 @@ export function orderTitle(order: { brand: string | null; model: string | null; 
 
 export function timeOnly(value: string | null | undefined): string {
   return value ? timeFmt.format(new Date(value)) : "";
+}
+
+/** Product categories (same codes as crm/domain/categories.py). */
+export const CATEGORY_LABEL: Record<Category, string> = {
+  shoes: "Обувь",
+  clothes: "Одежда",
+  watch: "Часы",
+  bag: "Сумки",
+  accessory: "Аксессуары",
+  other: "Другое",
+};
+
+/** «L · KR 80», «KR 270», «42»: the usual and the Korean size together. */
+export function sizeText(order: { size?: string | null; size_kr?: string | null }): string | null {
+  return [order.size, order.size_kr ? `KR ${order.size_kr}` : null].filter(Boolean).join(" · ") || null;
 }

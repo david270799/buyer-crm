@@ -212,17 +212,22 @@ def test_cancel_of_cancelled_order_refunds_nothing(db, services, admin):
 
 
 @pytest.mark.parametrize("status", ["cargo", "delivered"])
-def test_cancel_shipped_order_is_refused(db, services, admin, status):
-    seed_order(db, "N5", status=status, client_price=10)
-    with pytest.raises(ConflictError, match="не возвращаются"):
-        services.orders.cancel(admin, "5")
+def test_shipped_order_can_be_returned_and_stays_in_its_shipment(db, services, admin, status):
+    seed_order(db, "N5")
+    services.orders.buy(admin, "5", 140_000, 170_000)
+    db.run_transaction(
+        lambda tx: tx.update("orders", "N5", {"status": status, "shipment_id": "SHP-2026-001"})
+    )
+
+    result = services.orders.cancel(admin, "5")
+
+    assert result.refunded_krw == 170_000
     assert balance(db) == START_BALANCE
-
-
-def test_cancel_order_inside_shipment_is_refused(db, services, admin):
-    seed_order(db, "N5", status="warehouse", client_price=10, shipment_id="SHP-2026-001")
-    with pytest.raises(ConflictError, match="SHP-2026-001"):
-        services.orders.cancel(admin, "5")
+    order = db.get("orders", "N5")
+    assert order["status"] == "cancelled" and order["shipment_id"] == "SHP-2026-001"
+    assert ledger_entries(db)["order_refund_N5"]["amount_krw"] == 170_000
+    assert services.orders.cancel(admin, "5").already_done
+    assert balance(db) == START_BALANCE
 
 
 # --- /status ---------------------------------------------------------------
@@ -535,3 +540,16 @@ def test_duplicate_copies_the_item_without_prices(db, services, admin, client_ac
     assert balance(db) == before
     with pytest.raises(PermissionDeniedError):
         services.orders.duplicate(client_actor, source.id)
+
+
+def test_list_sorted_by_status(db, services, admin):
+    from crm.services.order_service import OrderQuery
+
+    seed_order(db, "N1", status="delivered")
+    seed_order(db, "N2", status="new")
+    seed_order(db, "N3", status="cancelled")
+    seed_order(db, "N4", status="warehouse")
+    seed_order(db, "N5", status="new")
+    seed_order(db, "N6", status="bought")
+    page = services.orders.list_orders(admin, OrderQuery(sort="status"))
+    assert [o.id for o in page.items] == ["N5", "N2", "N6", "N4", "N1", "N3"]

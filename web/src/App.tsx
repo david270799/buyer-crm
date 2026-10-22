@@ -1,23 +1,32 @@
-import { LogIn, ShieldAlert, UserRound } from "lucide-react";
+import { Eye, LogIn, ShieldAlert, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { PinGate } from "./admin/pin";
 import { AdminApp } from "./admin/AdminApp";
-import { ApiError, hasCredentials, setDemoRole } from "./api/client";
+import { ApiError, hasCredentials, setClientPreview, setDemoRole } from "./api/client";
 import { useConfig, useMe } from "./api/hooks";
 import { ClientApp } from "./client/ClientApp";
 import { takeDeepLink } from "./lib/deeplink";
+import { applyMotion, applySkin, savedMotion, savedSkin, savedThemeMode, THEME_EVENT } from "./lib/skin";
 import { colorScheme, setupTelegram, syncChrome } from "./telegram";
 
 function useTheme() {
-  const [scheme, setScheme] = useState(colorScheme());
+  const pick = () => {
+    const mode = savedThemeMode();
+    return mode === "auto" ? colorScheme() : mode;
+  };
+  const [scheme, setScheme] = useState(pick());
   useEffect(() => {
-    setupTelegram(setScheme);
+    setupTelegram(() => setScheme(pick()));
     const media = window.matchMedia?.("(prefers-color-scheme: dark)");
-    const onChange = () => setScheme(colorScheme());
+    const onChange = () => setScheme(pick());
     media?.addEventListener?.("change", onChange);
-    return () => media?.removeEventListener?.("change", onChange);
+    window.addEventListener(THEME_EVENT, onChange);
+    return () => {
+      media?.removeEventListener?.("change", onChange);
+      window.removeEventListener(THEME_EVENT, onChange);
+    };
   }, []);
   useEffect(() => {
     document.documentElement.dataset.theme = scheme;
@@ -79,6 +88,14 @@ export function App() {
   const [credentials, setCredentials] = useState(hasCredentials());
   const config = useConfig();
   const me = useMe(credentials);
+  // Each person's own look (stored on their phone); «Как видит клиент» shows the standard one.
+  const ownLook = Boolean(me.data) && !me.data?.preview;
+  useEffect(() => {
+    applySkin(ownLook ? savedSkin() : null);
+  }, [ownLook]);
+  useEffect(() => {
+    applyMotion(savedMotion());
+  }, []);
 
   const pickDemo = (role: "admin" | "client") => {
     setDemoRole(role);
@@ -116,6 +133,19 @@ export function App() {
           ) : undefined
         }
       />
+    );
+  }
+  if (me.data.preview) {
+    return (
+      <>
+        <div className="preview-bar">
+          <Eye size={16} /> <span className="grow">Вы смотрите как клиент</span>
+          <button className="btn small" onClick={() => setClientPreview(false)}>
+            Выйти
+          </button>
+        </div>
+        <ClientApp />
+      </>
     );
   }
   return me.data.role === "admin" ? (

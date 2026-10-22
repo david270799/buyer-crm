@@ -74,3 +74,31 @@ def test_client_never_sees_profit_over_http(db, clock):
     for path in ("/api/overview", "/api/transactions", "/api/events"):
         text = json.dumps(call("GET", path, who=CLIENT_TG).json(), ensure_ascii=False)
         assert "секретный" not in text and "70000" not in text and "profit" not in text
+
+
+def test_profit_lines_by_period(db, services, admin, client_actor, clock):
+    from datetime import date, timedelta
+
+    import pytest as _pytest
+
+    from crm.domain.errors import PermissionDeniedError
+    from crm.services.order_service import NewOrder
+
+    old = services.orders.create_order(admin, NewOrder(brand="Nike"))
+    services.orders.buy(admin, old.id, 100_000, 130_000)  # 27.09: profit 30 000
+    clock.current += timedelta(days=10)  # October
+    new = services.orders.create_order(admin, NewOrder(brand="Adidas"))
+    services.orders.buy(admin, new.id, 50_000, 60_000)  # profit 10 000
+    services.profit.add(admin, 5_000, "кэшбэк", "k1")
+
+    every = services.orders.profit_lines(admin, "all")
+    assert sum(line.amount_krw for line in every) == 45_000
+    assert every[0].comment == "кэшбэк" and every[-1].order.id == old.id
+    month = services.orders.profit_lines(admin, "month")
+    assert sum(line.amount_krw for line in month) == 15_000
+    september = services.orders.profit_lines(admin, "range", date(2026, 9, 1), date(2026, 9, 30))
+    assert [line.order.id for line in september] == [old.id]
+    overview = services.orders.overview(admin)
+    assert overview.profit_total_krw == 45_000 and overview.profit_month_krw == 15_000
+    with _pytest.raises(PermissionDeniedError):
+        services.orders.profit_lines(client_actor)

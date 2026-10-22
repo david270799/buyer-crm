@@ -1,15 +1,26 @@
-import { AlertTriangle, MessageSquare, Percent, Plus, Search, Tag, Trash2, Truck, X } from "lucide-react";
+import { AlertTriangle, Hourglass, MessageSquare, Percent, Plus, Tag, Trash2, Truck, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { useOrders } from "../api/hooks";
-import type { Order, OrderFilters } from "../api/types";
+import { useOrders, useOverview } from "../api/hooks";
+import type { Order } from "../api/types";
 import { PageHead } from "../components/Layout";
 import { OrderCard, Thumb } from "../components/orders";
 import { StatusBadge } from "../components/status";
 import { Checkbox, Empty, ErrorState, Loading, useDebounced, useLongPress, useSelection } from "../components/ui";
-import { krw, plural, shortDate } from "../lib/format";
-import { StatusChips, useOrderFilters } from "../shared/filters";
+import { krw, plural, shortDate, sizeText } from "../lib/format";
+import {
+  AttentionButton,
+  SearchButton,
+  SearchField,
+  SortSelect,
+  StatusChips,
+  useOrderFilters,
+  useOrderSort,
+  useOrdersView,
+  useSearchToggle,
+  ViewToggle,
+} from "../shared/filters";
 import { AttentionSheet, BulkStatusSheet, CommentSheet, DeleteConfirm, DiscountSheet, ShipmentSheet } from "./sheets";
 
 type Bulk = "status" | "ship" | "comment" | "attention" | "discount" | "delete" | null;
@@ -35,12 +46,17 @@ function OrderRow({ order, selection }: { order: Order; selection: ReturnType<ty
       <td className="num" style={{ fontWeight: 600 }}>
         {order.id}
         {order.attention_required && <AlertTriangle size={13} style={{ marginLeft: 6, verticalAlign: -1, color: "var(--warning)" }} />}
+        {order.stuck_days != null && (
+          <div className="badge stuck" style={{ marginTop: 4 }} title="Не пришёл на склад">
+            <Hourglass size={11} /> {order.stuck_days} дн.{order.shop ? ` · ${order.shop}` : ""}
+          </div>
+        )}
       </td>
       <td>
         <div style={{ fontWeight: 500 }}>{order.brand ?? "—"}</div>
         <div className="small muted">{order.model ?? ""}</div>
       </td>
-      <td>{order.size ?? "—"}</td>
+      <td>{sizeText(order) ?? "—"}</td>
       <td>
         <StatusBadge status={order.status} />
       </td>
@@ -91,19 +107,22 @@ function OrdersTable({ orders, selection }: { orders: Order[]; selection: Return
 
 export function AdminOrdersPage() {
   const filters = useOrderFilters();
+  const [view, setView] = useOrdersView();
   const q = useDebounced(filters.q);
-  const [sort, setSort] = useState<NonNullable<OrderFilters["sort"]>>("newest");
+  const [sort, setSort] = useOrderSort(filters);
+  const [searching, setSearching] = useSearchToggle(filters.q);
   const [limit, setLimit] = useState(PAGE);
   const selection = useSelection();
   const [bulk, setBulk] = useState<Bulk>(null);
   useEffect(() => {
     setLimit(PAGE);
-  }, [filters.status, q, sort, filters.attention]);
+  }, [filters.status, q, sort, filters.attention, filters.stuck]);
 
   const { data, error, isLoading, isFetching, refetch } = useOrders({
     status: filters.status,
     q,
     attention: filters.attention || undefined,
+    stuck: filters.stuck || undefined,
     sort,
     limit,
   });
@@ -126,30 +145,27 @@ export function AdminOrdersPage() {
       />
       <div className="stack">
         <div className="filters">
-          <div className="search">
-            <Search size={16} />
-            <input
-              className="input"
-              placeholder="Поиск: номер, бренд, модель, трек, комментарий"
-              value={filters.q}
-              onChange={(e) => filters.update({ q: e.target.value })}
-            />
-          </div>
-          <select className="select" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} aria-label="Сортировка">
-            <option value="newest">Сначала новые</option>
-            <option value="oldest">Сначала старые</option>
-            <option value="price_desc">Дороже</option>
-            <option value="price_asc">Дешевле</option>
-          </select>
+          <SortSelect value={sort} onChange={setSort} />
+          <ViewToggle value={view} onChange={setView} />
+          <SearchButton open={searching} onToggle={() => setSearching(!searching)} />
+          <AttentionButton
+            active={filters.attention}
+            onToggle={() => filters.update({ attention: filters.attention ? null : "1" })}
+          />
         </div>
+        {searching && (
+          <SearchField
+            value={filters.q}
+            onChange={(q) => filters.update({ q })}
+            onClose={() => setSearching(false)}
+            placeholder="Поиск: номер, бренд, модель, трек, комментарий"
+          />
+        )}
         <StatusChips value={filters.status} onChange={(s) => filters.update({ status: s || null })} />
-        <button
-          className={`chip ${filters.attention ? "active" : ""}`}
-          style={{ alignSelf: "flex-start" }}
-          onClick={() => filters.update({ attention: filters.attention ? null : "1" })}
-        >
-          <AlertTriangle size={12} style={{ verticalAlign: -1 }} /> Требуют внимания
-        </button>
+        <StuckBanner
+          active={filters.stuck}
+          onToggle={() => filters.update(filters.stuck ? { stuck: null } : { stuck: "1", status: null })}
+        />
       </div>
 
       <div className="section">
@@ -161,16 +177,19 @@ export function AdminOrdersPage() {
           <Empty title="Ничего не найдено" />
         ) : (
           <>
-            <div className="only-desktop">
-              <OrdersTable orders={data.items} selection={selection} />
-            </div>
-            <div className="only-mobile order-grid">
+            {view === "list" && (
+              <div className="only-desktop">
+                <OrdersTable orders={data.items} selection={selection} />
+              </div>
+            )}
+            <div className={view === "list" ? "only-mobile order-rows card" : "order-grid"}>
               {data.items.map((order) => (
                 <OrderCard
                   key={order.id}
                   order={order}
                   selectable
                   showCost
+                  compact={view === "list"}
                   selected={selection.has(order.id)}
                   selecting={ids.length > 0}
                   onToggle={() => selection.toggle(order.id)}
@@ -233,5 +252,23 @@ export function AdminOrdersPage() {
         />
       )}
     </>
+  );
+}
+
+/** «Не пришли на склад»: bought 4+ days ago and still «Выкуплен» (owner, 16.10). */
+export function StuckBanner({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+  const { data } = useOverview();
+  const count = data?.orders.stuck_count ?? 0;
+  if (!count && !active) return null;
+  return (
+    <button type="button" className={`stuck-banner ${active ? "active" : ""}`} onClick={onToggle}>
+      <Hourglass size={16} />
+      <span className="grow">
+        {active
+          ? "Показаны заказы, не пришедшие на склад"
+          : `${count} ${plural(count, "заказ не пришёл", "заказа не пришли", "заказов не пришли")} на склад за 4 дня`}
+      </span>
+      <b>{active ? "Сбросить" : "Показать"}</b>
+    </button>
   );
 }

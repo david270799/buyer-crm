@@ -646,11 +646,20 @@ h3 {
   color: var(--text-2);
 }
 
-.order-card .attention {
+.order-card .attention,
+.order-card .card-flags {
   position: absolute;
   top: 8px;
   left: 8px;
   z-index: 2;
+}
+
+.order-card .card-flags {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: calc(100% - 48px);
 }
 
 .order-card .check {
@@ -1553,6 +1562,19 @@ table.orders .r {
   object-fit: contain;
 }
 
+.lightbox-slide .zoomable {
+  transform-origin: center;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.lightbox-hint {
+  margin-left: 8px;
+  opacity: 0.6;
+  font-size: 12px;
+}
+
 .lightbox-bar {
   position: absolute;
   top: calc(12px + var(--safe-top, 0px));
@@ -1680,6 +1702,11 @@ table.orders .r {
   font-weight: 600;
   letter-spacing: 0.02em;
 }
+
+/* «CRM | Витрина» on top of the two home pages (the owner, 20.10). */
+.mode-switch { display: inline-flex; margin-right: auto; padding: 3px; gap: 2px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); }
+.mode-switch button { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: transparent; color: var(--text-2); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; transition: background 0.2s ease, color 0.2s ease; }
+.mode-switch button.active { background: var(--text); color: var(--bg); }
 
 @media (min-width: 960px) {
   .topbar {
@@ -1892,3 +1919,842 @@ table.orders .r {
   display: grid;
   place-items: center;
 }
+
+/* «Как видит клиент»: a strip on top so the admin never forgets the mode. */
+.preview-bar {
+  position: relative;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--info-soft);
+  color: var(--info);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.photo-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+
+/* Status colours (owner, 09.10: statuses must catch the eye). Each status has
+ * its own colour, used by badges, the dots on cards and the filter chips. */
+:root {
+  --st-new: #6b4fd8;
+  --st-new-soft: #ece8fb;
+  --st-bought: #1f6fd1;
+  --st-bought-soft: #e2edfb;
+  --st-warehouse: #b86e00;
+  --st-warehouse-soft: #fbefd9;
+  --st-cargo: #0a8a96;
+  --st-cargo-soft: #dcf2f4;
+  --st-delivered: #23824f;
+  --st-delivered-soft: #dff1e6;
+  --st-cancelled: #c23b2a;
+  --st-cancelled-soft: #f8e1dd;
+}
+
+:root[data-theme="dark"] {
+  --st-new: #b6a4ff;
+  --st-new-soft: #2b2545;
+  --st-bought: #8ab8ff;
+  --st-bought-soft: #1c2b42;
+  --st-warehouse: #ffc266;
+  --st-warehouse-soft: #3a2c14;
+  --st-cargo: #6fdbe5;
+  --st-cargo-soft: #15343a;
+  --st-delivered: #7ee0a4;
+  --st-delivered-soft: #183424;
+  --st-cancelled: #ff9686;
+  --st-cancelled-soft: #3d1f1a;
+}
+
+.badge.s-new,
+.badge.s-bought,
+.badge.s-warehouse,
+.badge.s-cargo,
+.badge.s-delivered,
+.badge.s-cancelled {
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.badge.s-new { background: var(--st-new-soft); color: var(--st-new); }
+.badge.s-bought { background: var(--st-bought-soft); color: var(--st-bought); }
+.badge.s-warehouse { background: var(--st-warehouse-soft); color: var(--st-warehouse); }
+.badge.s-cargo { background: var(--st-cargo-soft); color: var(--st-cargo); }
+.badge.s-delivered { background: var(--st-delivered-soft); color: var(--st-delivered); }
+.badge.s-cancelled { background: var(--st-cancelled-soft); color: var(--st-cancelled); }
+
+.badge .status-dot,
+.chip .status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.dots.s-new span.on { background: var(--st-new); }
+.dots.s-bought span.on { background: var(--st-bought); }
+.dots.s-warehouse span.on { background: var(--st-warehouse); }
+.dots.s-cargo span.on { background: var(--st-cargo); }
+.dots.s-delivered span.on { background: var(--st-delivered); }
+
+.chip .status-dot { display: inline-block; margin-right: 6px; vertical-align: 1px; }
+.chip.c-new .status-dot { background: var(--st-new); }
+.chip.c-bought .status-dot { background: var(--st-bought); }
+.chip.c-warehouse .status-dot { background: var(--st-warehouse); }
+.chip.c-cargo .status-dot { background: var(--st-cargo); }
+.chip.c-delivered .status-dot { background: var(--st-delivered); }
+.chip.c-cancelled .status-dot { background: var(--st-cancelled); }
+
+/* A card with a status: a coloured line on the left edge. */
+.order-card.st-new { box-shadow: inset 3px 0 0 var(--st-new); }
+.order-card.st-bought { box-shadow: inset 3px 0 0 var(--st-bought); }
+.order-card.st-warehouse { box-shadow: inset 3px 0 0 var(--st-warehouse); }
+.order-card.st-cargo { box-shadow: inset 3px 0 0 var(--st-cargo); }
+.order-card.st-delivered { box-shadow: inset 3px 0 0 var(--st-delivered); }
+.order-card.st-cancelled { box-shadow: inset 3px 0 0 var(--st-cancelled); }
+
+/* «Карточки / Список» in «Заказы». */
+.view-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  flex: none;
+}
+
+.view-toggle .btn {
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-3);
+}
+
+.view-toggle .btn.active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+}
+
+.order-rows {
+  padding: 0;
+  overflow: hidden;
+}
+
+.order-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.order-row:last-child {
+  border-bottom: 0;
+}
+
+.order-row.selected {
+  background: var(--accent-soft);
+}
+
+.order-row .check {
+  position: static;
+  flex: none;
+}
+
+.order-row .row-title {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.order-row .row-attention {
+  color: var(--warning);
+}
+
+.order-row .row-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex: none;
+}
+
+.order-row.st-new { box-shadow: inset 3px 0 0 var(--st-new); }
+.order-row.st-bought { box-shadow: inset 3px 0 0 var(--st-bought); }
+.order-row.st-warehouse { box-shadow: inset 3px 0 0 var(--st-warehouse); }
+.order-row.st-cargo { box-shadow: inset 3px 0 0 var(--st-cargo); }
+.order-row.st-delivered { box-shadow: inset 3px 0 0 var(--st-delivered); }
+.order-row.st-cancelled { box-shadow: inset 3px 0 0 var(--st-cancelled); }
+
+/* Shipping lines in the balance history stand out (owner, 09.10). */
+.shipping-word {
+  color: var(--st-delivered);
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   Floating tab bar (owner, 10.10: like the new Telegram — a pill above the
+   screen; the active section has a soft capsule that slides between tabs).
+   ========================================================================== */
+
+:root {
+  --nav-gap: 12px; /* the bar floats this far above the bottom edge */
+}
+
+.main {
+  padding-bottom: calc(var(--nav-height) + var(--nav-gap) + var(--safe-bottom) + 28px);
+}
+
+.selection-bar {
+  bottom: calc(var(--nav-height) + var(--nav-gap) + var(--safe-bottom) + 10px);
+}
+
+.tabbar {
+  inset: auto 14px calc(var(--nav-gap) + var(--safe-bottom)) 14px;
+  height: var(--nav-height);
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.tabbar a {
+  position: relative;
+  z-index: 1;
+  border-radius: 999px;
+  transition: color 0.25s ease;
+}
+
+.tabbar a.active {
+  color: var(--tab-active, var(--accent));
+  font-weight: 600;
+}
+
+.tab-pill {
+  position: absolute;
+  top: 5px;
+  bottom: 5px;
+  left: 5px;
+  width: calc((100% - 10px) / var(--tab-count));
+  border-radius: 999px;
+  background: var(--tab-pill, var(--accent-soft));
+  transform: translateX(calc(var(--tab-index) * 100%));
+  /* A little overshoot, like iOS. */
+  transition: transform 0.42s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.tabbar a.active svg {
+  animation: tab-pop 0.35s ease;
+}
+
+@keyframes tab-pop {
+  40% { transform: scale(1.18); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-pill { transition: none; }
+  .tabbar a.active svg { animation: none; }
+}
+
+/* «Оформление» picker in «Настройки». */
+.skin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.skin-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.skin-option.active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.skin-swatch {
+  display: flex;
+  width: 100%;
+  height: 28px;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.skin-swatch i {
+  flex: 1;
+}
+
+/* ==========================================================================
+   Looks (data-skin on <html>), see lib/skin.ts. Each has a light and a dark
+   variant (data-theme): the light rules come first, the dark ones override.
+   ========================================================================== */
+
+:root[data-skin="minimal"],
+:root[data-skin="sport"] {
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --shadow: none;
+  --font: "Helvetica Neue", Arial, sans-serif;
+  --positive: #2e6a4e; --positive-soft: #e3eee8;
+  --negative: #a13a2b; --negative-soft: #f5e5e1;
+  --warning: #93650f; --warning-soft: #f6eedb;
+  --info: #3a5874; --info-soft: #e3eaf1;
+  --st-new: #6b4fd8; --st-new-soft: #ece8fb;
+  --st-bought: #1f6fd1; --st-bought-soft: #e2edfb;
+  --st-warehouse: #b86e00; --st-warehouse-soft: #fbefd9;
+  --st-cargo: #0a8a96; --st-cargo-soft: #dcf2f4;
+  --st-delivered: #23824f; --st-delivered-soft: #dff1e6;
+  --st-cancelled: #c23b2a; --st-cancelled-soft: #f8e1dd;
+  color-scheme: light;
+}
+
+:root[data-skin] h1 {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+}
+
+:root[data-skin] .chip {
+  border-radius: 4px;
+}
+
+:root[data-skin] .tabbar {
+  border: 0;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  --tab-pill: rgba(255, 255, 255, 0.14);
+}
+
+:root[data-skin] .tabbar a {
+  color: #8a8a8a;
+}
+
+:root[data-skin] .tabbar a.active {
+  color: var(--tab-active);
+}
+
+/* Минимал: white and black. */
+:root[data-skin="minimal"] {
+  --bg: #ffffff; --surface: #ffffff; --surface-2: #f5f5f5; --surface-3: #eaeaea;
+  --border: #e6e6e6; --border-strong: #111111;
+  --text: #0a0a0a; --text-2: #5c5c5c; --text-3: #9a9a9a;
+  --accent: #0a0a0a; --accent-hover: #000000; --accent-contrast: #ffffff; --accent-soft: #f0f0f0;
+}
+
+:root[data-skin="minimal"] body { background: #ffffff; }
+:root[data-skin="minimal"] .card,
+:root[data-skin="minimal"] .order-card,
+:root[data-skin="minimal"] .kpi { border: 1px solid #111111; box-shadow: none; }
+:root[data-skin="minimal"] .balance-card { background: #0a0a0a; border: 0; }
+:root[data-skin="minimal"] .balance-card * { color: #ffffff !important; }
+:root[data-skin="minimal"] .tabbar { background: #0a0a0a; --tab-active: #0a0a0a; --tab-pill: #ffffff; }
+:root[data-skin="minimal"] .chip { border: 1px solid #0a0a0a; }
+:root[data-skin="minimal"] .chip.active { background: #0a0a0a; color: #ffffff; }
+
+/* Спорт: grey, black and lime. */
+:root[data-skin="sport"] {
+  --bg: #ececec; --surface: #ffffff; --surface-2: #f4f4f4; --surface-3: #e4e4e4;
+  --border: #e2e2e2; --border-strong: #111111;
+  --text: #111111; --text-2: #5e5e5e; --text-3: #9b9b9b;
+  --accent: #111111; --accent-hover: #000000; --accent-contrast: #d7ff3a; --accent-soft: #f0f0f0;
+}
+
+:root[data-skin="sport"] body { background: #ececec; }
+:root[data-skin="sport"] .card,
+:root[data-skin="sport"] .order-card,
+:root[data-skin="sport"] .kpi { border: 0; }
+:root[data-skin="sport"] .balance-card { background: #d7ff3a; border: 0; }
+:root[data-skin="sport"] .balance-card * { color: #111111 !important; }
+:root[data-skin="sport"] .btn.primary { background: #111111; color: #d7ff3a; }
+:root[data-skin="sport"] .tabbar { background: #111111; --tab-active: #111111; --tab-pill: #d7ff3a; }
+:root[data-skin="sport"] .chip { border: 0; background: #ffffff; }
+:root[data-skin="sport"] .chip.active { background: #111111; color: #d7ff3a; }
+
+/* Dark bars of the looks: a solid capsule (white / lime) with a dark icon, and
+ * the other icons light enough to read. */
+:root[data-skin] .tabbar a { color: #b5b5b5; }
+:root[data-skin] .tab-pill { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); }
+:root[data-skin="sport"] .tab-pill { box-shadow: 0 0 18px rgba(215, 255, 58, 0.45); }
+
+/* --- Dark variants of the looks ------------------------------------------ */
+
+:root[data-skin="minimal"][data-theme="dark"],
+:root[data-skin="sport"][data-theme="dark"] {
+  --positive: #83c3a0; --positive-soft: #1f2d26;
+  --negative: #ff6b5a; --negative-soft: #3a1714;
+  --warning: #dcb567; --warning-soft: #332a18;
+  --info: #9dbad6; --info-soft: #1e2833;
+  --st-new: #b6a4ff; --st-new-soft: #2b2545;
+  --st-bought: #8ab8ff; --st-bought-soft: #1c2b42;
+  --st-warehouse: #ffc266; --st-warehouse-soft: #3a2c14;
+  --st-cargo: #6fdbe5; --st-cargo-soft: #15343a;
+  --st-delivered: #7ee0a4; --st-delivered-soft: #183424;
+  --st-cancelled: #ff9686; --st-cancelled-soft: #3d1f1a;
+  color-scheme: dark;
+}
+
+/* Минимал, dark: black with white lines; white balance card and white bar. */
+:root[data-skin="minimal"][data-theme="dark"] {
+  --bg: #000000; --surface: #000000; --surface-2: #111111; --surface-3: #1c1c1c;
+  --border: #2a2a2a; --border-strong: #ffffff;
+  --text: #ffffff; --text-2: #a6a6a6; --text-3: #6b6b6b;
+  --accent: #ffffff; --accent-hover: #e6e6e6; --accent-contrast: #000000; --accent-soft: #1a1a1a;
+}
+:root[data-skin="minimal"][data-theme="dark"] body { background: #000000; }
+:root[data-skin="minimal"][data-theme="dark"] .card,
+:root[data-skin="minimal"][data-theme="dark"] .order-card,
+:root[data-skin="minimal"][data-theme="dark"] .kpi { border: 1px solid #ffffff; }
+:root[data-skin="minimal"][data-theme="dark"] .balance-card { background: #ffffff; }
+:root[data-skin="minimal"][data-theme="dark"] .balance-card * { color: #000000 !important; }
+:root[data-skin="minimal"][data-theme="dark"] .tabbar { background: #ffffff; --tab-pill: #000000; --tab-active: #ffffff; }
+:root[data-skin="minimal"][data-theme="dark"] .tabbar a { color: #4d4d4d; }
+:root[data-skin="minimal"][data-theme="dark"] .chip { border: 1px solid #ffffff; background: #000000; color: #ffffff; }
+:root[data-skin="minimal"][data-theme="dark"] .chip.active { background: #ffffff; color: #000000; }
+
+/* Спорт, dark: near-black, graphite cards, lime accents. */
+:root[data-skin="sport"][data-theme="dark"] {
+  --bg: #0b0b0b; --surface: #171717; --surface-2: #1f1f1f; --surface-3: #2a2a2a;
+  --border: #262626; --border-strong: #d7ff3a;
+  --text: #f2f2f2; --text-2: #a3a3a3; --text-3: #6e6e6e;
+  --accent: #d7ff3a; --accent-hover: #e4ff73; --accent-contrast: #111111; --accent-soft: #263006;
+}
+:root[data-skin="sport"][data-theme="dark"] body { background: #0b0b0b; }
+:root[data-skin="sport"][data-theme="dark"] .btn.primary { background: #d7ff3a; color: #111111; }
+:root[data-skin="sport"][data-theme="dark"] .tabbar { background: #000000; border: 1px solid #262626; }
+:root[data-skin="sport"][data-theme="dark"] .chip { background: #171717; color: #f2f2f2; }
+:root[data-skin="sport"][data-theme="dark"] .chip.active { background: #d7ff3a; color: #111111; }
+
+/* --- Debt (negative balance) must catch the eye in every look ----------- */
+
+:root[data-skin] .balance-card.debt .debt-badge {
+  background: #e5241b !important;
+  color: #ffffff !important;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  animation: debt-pulse 2s ease-in-out infinite;
+}
+
+@keyframes debt-pulse {
+  50% { box-shadow: 0 0 0 6px rgba(229, 36, 27, 0.18); }
+}
+
+/* Минимал: the card keeps its colours, the amount turns red, a red bar on the left. */
+:root[data-skin="minimal"] .balance-card.debt { box-shadow: inset 6px 0 0 #e5241b; }
+:root[data-skin="minimal"] .balance-card.debt .krw { color: #ff5a4f !important; }
+:root[data-skin="minimal"][data-theme="dark"] .balance-card.debt .krw { color: #d11a10 !important; }
+
+/* Спорт: like Минимал — the lime card turns black, the amount red, a red bar on the left. */
+:root[data-skin="sport"] .balance-card.debt { background: #111111; box-shadow: inset 6px 0 0 #e5241b; }
+:root[data-skin="sport"] .balance-card.debt * { color: #ffffff !important; }
+:root[data-skin="sport"] .balance-card.debt .krw { color: #ff5a4f !important; }
+:root[data-skin="sport"] .balance-card.debt .usd { opacity: 0.8; }
+:root[data-skin="sport"][data-theme="dark"] .balance-card.debt { background: #000000; border: 1px solid #2a2a2a; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-skin] .balance-card.debt .debt-badge { animation: none; }
+}
+
+/* Обычная, dark: a light capsule with a dark icon (the dark-grey one was hard to see). */
+:root[data-theme="dark"]:not([data-skin]) .tabbar {
+  --tab-pill: #e9ecf2;
+  --tab-active: #15171b;
+}
+
+/* The active tab always takes the capsule's text colour, in every look and mode. */
+:root[data-skin][data-theme] .tabbar a.active {
+  color: var(--tab-active);
+}
+
+/* Search behind a magnifier (Заказы). */
+.search-toggle.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.search-open {
+  animation: search-in 0.2s ease;
+}
+
+.search-open .input {
+  padding-right: 44px;
+}
+
+.search-open .search-close {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  background: transparent;
+  box-shadow: none;
+}
+
+.search-open .search-close svg {
+  position: static;
+  transform: none;
+  color: var(--text-2);
+}
+
+@keyframes search-in {
+  from { opacity: 0; transform: translateY(-4px); }
+}
+
+.attention-toggle.active {
+  background: var(--warning-soft);
+  color: var(--warning);
+  box-shadow: inset 0 0 0 1px var(--warning);
+}
+
+/* Sort, view, search and attention fit in one row on a phone. */
+.filters {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.filters .select {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+}
+
+.filters > .btn,
+.filters > .view-toggle {
+  flex: none;
+}
+
+/* A picked option (e.g. «Статус» sheet): clearly marked in every look. */
+.choice.selected {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+:root[data-skin] .choice.selected {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: none;
+}
+
+:root[data-skin] .choice.selected .muted {
+  color: inherit;
+  opacity: 0.75;
+}
+
+/* «Доставлено» on a shipment: the client's only status button (16.10.2026). */
+.btn.small.delivered-btn {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  gap: 4px;
+  color: var(--st-delivered);
+  border-color: var(--st-delivered);
+  background: var(--st-delivered-soft);
+}
+
+/* ==========================================================================
+   Motion (16.10.2026): soft, short animations. «Оформление» → «Анимации: Выкл»
+   (data-motion="off") or the phone's «reduce motion» turns them all off.
+   ========================================================================== */
+
+:root:not([data-motion="off"]) .page-anim {
+  animation: page-in 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(10px); }
+}
+
+/* Lists no longer slide in item by item (the owner, 16.10: it got tiresome):
+   the whole list just fades in once with the page, quickly and without movement. */
+:root:not([data-motion="off"]) :is(.card.list, .order-grid, .order-rows, .kpis) {
+  animation: fade 0.18s ease;
+}
+
+/* Pressing feels physical. */
+:root:not([data-motion="off"]) :is(.btn, .chip, .list-item, .kpi, .balance-card, .order-row, .skin-option) {
+  transition: transform 0.14s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+:root:not([data-motion="off"]) :is(.btn, .chip, .kpi, .balance-card, .skin-option):active:not(:disabled, .search-close) {
+  transform: scale(0.96);
+}
+:root:not([data-motion="off"]) :is(.list-item, .order-row):active {
+  transform: scale(0.99);
+}
+
+/* Sheets slide up with a little spring; toasts drop in from the top. */
+:root:not([data-motion="off"]) .overlay { animation: fade 0.2s ease; }
+:root:not([data-motion="off"]) .sheet { animation: sheet-up 0.36s cubic-bezier(0.2, 0.9, 0.25, 1.08); }
+:root:not([data-motion="off"]) .toast { animation: toast-in 0.42s cubic-bezier(0.34, 1.5, 0.64, 1); }
+
+@keyframes sheet-up {
+  from { transform: translateY(60%); opacity: 0.4; }
+}
+@keyframes toast-in {
+  from { transform: translateY(-120%) scale(0.92); opacity: 0; }
+}
+
+/* A status that changes pops a little (badges are re-created on change). */
+/* Only on the order page, not in lists (in a list every badge popped at once). */
+:root:not([data-motion="off"]) .page-head .badge { animation: badge-pop 0.3s cubic-bezier(0.34, 1.6, 0.64, 1) backwards; }
+@keyframes badge-pop {
+  from { transform: scale(0.7); opacity: 0; }
+}
+
+/* Photos fade in when loaded instead of popping. */
+:root:not([data-motion="off"]) img.img-in { opacity: 0; transform: scale(1.04); transition: opacity 0.3s ease, transform 0.4s ease; }
+:root:not([data-motion="off"]) img.img-in.loaded { opacity: 1; transform: none; }
+
+/* The balance changed since last seen: a soft shine and «+₩ 50,000» that fades away. */
+:root:not([data-motion="off"]) .balance-card.changed { position: relative; overflow: hidden; }
+:root:not([data-motion="off"]) .balance-card.changed::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.22) 50%, transparent 70%);
+  transform: translateX(-100%);
+  animation: shine 1.1s 0.35s ease forwards;
+  pointer-events: none;
+}
+@keyframes shine {
+  to { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root *, :root *::after { animation: none !important; transition: none !important; }
+  :root img.img-in { opacity: 1 !important; transform: none !important; }
+}
+
+.balance-delta {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  vertical-align: middle;
+  background: rgba(127, 127, 127, 0.22);
+  animation: delta-fade 4.5s ease forwards;
+}
+.balance-delta.up { color: #7ee2a8; }
+.balance-delta.down { color: #ff9a9a; }
+@keyframes delta-fade {
+  0% { opacity: 0; transform: translateY(6px); }
+  12%, 75% { opacity: 1; transform: none; }
+  100% { opacity: 0; }
+}
+
+/* Shop bubbles in the buy form: wrap, never scroll sideways. */
+.shop-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.shop-chips .chip {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* «Не пришёл на склад» (bought 4+ days ago): orange, with the shop. */
+.badge.stuck {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff1e0;
+  color: #b45309;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:root[data-theme="dark"] .badge.stuck { background: rgba(245, 158, 11, 0.18); color: #fbbf24; }
+.order-row .row-stuck { color: #b45309; font-weight: 600; }
+:root[data-theme="dark"] .order-row .row-stuck { color: #fbbf24; }
+
+.stuck-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #f5c98b;
+  border-radius: var(--radius);
+  background: #fff7ed;
+  color: #9a3412;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.stuck-banner.active { background: #9a3412; border-color: #9a3412; color: #fff; }
+:root[data-theme="dark"] .stuck-banner { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.4); color: #fbbf24; }
+:root[data-theme="dark"] .stuck-banner.active { background: #b45309; color: #fff; }
+
+/* Profit by month (no chart: a bar per month and the change to the month before). */
+.month-rows { display: flex; flex-direction: column; gap: 8px; }
+.month-row {
+  display: grid;
+  grid-template-columns: 96px 1fr auto 44px;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.month-row.current { font-weight: 700; }
+.month-name { text-transform: capitalize; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.month-bar { height: 8px; border-radius: 999px; background: var(--surface-2, rgba(127, 127, 127, 0.12)); overflow: hidden; }
+.month-bar i { display: block; height: 100%; border-radius: inherit; background: var(--positive); opacity: 0.75; }
+.month-row.current .month-bar i { opacity: 1; }
+.month-sum { text-align: right; white-space: nowrap; }
+.month-delta { text-align: right; }
+.month-change { font-size: 12px; font-weight: 700; }
+.month-change.up { color: var(--positive); }
+.month-change.down { color: var(--negative); }
+
+/* «Склад» block: warehouse photo, size check and the Korean review. */
+.arrival-thumb { width: 56px; height: 56px; border-radius: 10px; object-fit: cover; border: 1px solid var(--border); }
+.arrival-ok { color: var(--positive); }
+.arrival-bad { color: var(--negative); font-weight: 600; }
+.arrival-muted { color: var(--text-2); }
+.review-block {
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.review-text { font-size: 14px; line-height: 1.45; word-break: keep-all; }
+.badge.size-wrong { background: var(--negative); color: #fff; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
+
+/* Order photo + warehouse photo: swipe between them (owner, 16.10). */
+.photo-swipe {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  border-radius: var(--radius-lg);
+}
+.photo-swipe::-webkit-scrollbar { display: none; }
+.photo-swipe .photo-button {
+  position: relative;
+  flex: 0 0 100%;
+  scroll-snap-align: center;
+}
+.photo-swipe-label {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+.photo-dots { display: flex; justify-content: center; gap: 6px; margin-top: 8px; }
+.photo-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--border); transition: width 0.2s ease, background 0.2s ease; }
+.photo-dots i.active { width: 16px; border-radius: 3px; background: var(--text); }
+
+/* A re-purchased order in the balance history: the first price crossed out above the final one. */
+.amount-was {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-3);
+  text-align: right;
+}
+
+/* ==========================================================================
+   «Витрина» (20.10.2026): tiles 2 in a row, a big product card, cart, «Подготовка».
+   ========================================================================== */
+.sc-test { font-size: 12px; font-weight: 700; color: var(--warning); }
+.sc-search { position: relative; display: block; }
+.sc-search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-3); }
+.sc-search .input { padding-left: 38px; }
+.sc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (min-width: 720px) { .sc-grid { grid-template-columns: repeat(4, 1fr); } }
+.sc-tile { display: block; overflow: hidden; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); color: inherit; text-decoration: none; }
+.sc-photo { position: relative; aspect-ratio: 1 / 1; background: #fff; }
+.sc-photo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.sc-photo.big { border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border); }
+.sc-swipe { display: flex; width: 100%; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.sc-swipe::-webkit-scrollbar { display: none; }
+.sc-swipe img { flex: 0 0 100%; scroll-snap-align: center; }
+.sc-shop { position: absolute; left: 8px; top: 8px; padding: 3px 9px; border-radius: 999px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 11px; font-weight: 700; }
+.sc-heart { position: absolute; right: 8px; top: 8px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.5); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.sc-heart.on { color: #ff4d6d; }
+.sc-body { padding: 10px; }
+.sc-brand { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
+.sc-model { font-size: 14px; font-weight: 700; margin: 2px 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-title { font-size: 20px; margin: 2px 0 6px; }
+.sc-price b { font-size: 15px; }
+.sc-price s { display: block; font-size: 12px; color: var(--text-3); }
+.sc-price.big b { font-size: 24px; }
+.sc-price.big s { display: inline; margin-left: 8px; }
+.sc-sizes { display: flex; flex-wrap: wrap; gap: 6px; }
+.sc-sizes.small { gap: 4px; margin-top: 6px; }
+.sc-size { display: inline-flex; align-items: baseline; gap: 5px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: transparent; color: var(--text); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+.sc-sizes.small .sc-size { padding: 2px 6px; font-size: 11px; border-radius: 7px; cursor: inherit; }
+.sc-size i { font-style: normal; font-size: 11px; color: var(--positive); }
+.sc-size.low i { color: var(--warning); }
+.sc-size.out { color: var(--text-3); text-decoration: line-through; border-style: dashed; cursor: default; }
+.sc-size.sel { background: var(--text); color: var(--bg); border-color: var(--text); }
+.sc-size.sel i { color: inherit; opacity: 0.7; }
+.sc-detail { padding-bottom: 90px; }
+/* A solid strip under the bottom buttons (the owner, 20.10): the page no
+ * longer shows through them; it fades out just above the strip. */
+.sc-cta { position: sticky; bottom: calc(var(--nav-height) + var(--nav-gap, 0px) + var(--safe-bottom, 0px)); display: flex; gap: 8px; margin: 16px -16px 0; padding: 10px 16px; background: var(--bg); z-index: 5; }
+.sc-cta::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 18px; background: linear-gradient(to bottom, transparent, var(--bg)); pointer-events: none; }
+.sc-cta .btn:disabled { opacity: 1; background: var(--surface-3); color: var(--text-3, var(--text-2)); }
+@media (min-width: 960px) { .sc-cta { bottom: 0; } }
+.sc-cta .btn { flex: 1; min-height: 48px; }
+.sc-cta .btn.danger { flex: none; width: 52px; }
+.sc-count { margin-left: 4px; min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--negative); color: #fff; font-size: 11px; font-weight: 800; }
+.sc-preview { display: block; width: 180px; padding: 8px; border: 1px dashed var(--border); border-radius: var(--radius-lg); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.sc-preview-open { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 8px; padding: 8px; border-radius: var(--radius); background: var(--surface-2); color: var(--text); font-size: 13px; font-weight: 700; }
+.sc-full { position: fixed; inset: 0; z-index: 60; overflow-y: auto; padding: 0 16px; background: var(--bg); animation: rise 0.18s ease; }
+.sc-full-bar { position: sticky; top: 0; z-index: 6; display: flex; align-items: center; justify-content: space-between; margin: 0 -16px 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--bg); font-weight: 700; }
+.sc-full-bar span { display: inline-flex; align-items: center; gap: 8px; }
+.sc-full .sc-cta { bottom: 0; padding-bottom: calc(10px + var(--safe-bottom, 0px)); }
+.sc-full .sc-detail { max-width: 560px; margin: 0 auto; padding-bottom: 8px; }
+.badge.sc-bad { background: var(--negative); color: #fff; }
+.badge.sc-from { background: #2b1f4d; color: #c9b8ff; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
+:root[data-theme="light"] .badge.sc-from { background: #ece6ff; color: #5b3fd6; }
+.btn.sc-back-to-prep { width: 100%; margin-bottom: 12px; }
+.btn.sc-shop-link { width: 100%; margin-bottom: 12px; text-decoration: none; }
+.btn.sc-download { width: 100%; min-height: 50px; margin-top: 14px; font-size: 16px; font-weight: 800; background: var(--text); color: var(--bg); border: 0; }
+.sc-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.sc-stats button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; text-align: center; cursor: pointer; transition: background 0.2s ease, color 0.2s ease; }
+.sc-stats button.active { background: var(--text); color: var(--bg); border-color: var(--text); }
+.sc-stats b { font-size: 20px; }
+.sc-stats span { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--text-3); }
+.sc-stats button.active span { color: inherit; opacity: 0.75; }
+.sc-views { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--text-2); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* «Обновить CRM»: the tail of the server's update log when it failed. */
+.update-log { max-height: 220px; overflow: auto; margin: 0; padding: 10px; border-radius: var(--radius); background: var(--surface-2); font-size: 11px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }

@@ -1,6 +1,8 @@
+import { AlertTriangle, LayoutGrid, List, Search, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import type { OrderStatus } from "../api/types";
+import type { OrderFilters, OrderStatus } from "../api/types";
 import { StatusIcon } from "../components/status";
 import { STATUS_FLOW, STATUS_PLURAL } from "../lib/format";
 
@@ -30,9 +32,10 @@ export function StatusChips({ value, onChange }: { value: OrderStatus | ""; onCh
           key={status || "all"}
           role="tab"
           aria-selected={value === status}
-          className={`chip ${value === status ? "active" : ""}`}
+          className={`chip ${status ? `c-${status}` : ""} ${value === status ? "active" : ""}`}
           onClick={() => onChange(status)}
         >
+          {status && <span className="status-dot" />}
           {status ? STATUS_PLURAL[status] : "Все"}
         </button>
       ))}
@@ -40,8 +43,44 @@ export function StatusChips({ value, onChange }: { value: OrderStatus | ""; onCh
   );
 }
 
+const FILTERS_KEY = "crm-order-filters";
+// Kept across restarts (owner, 11.10): status, sort and «внимание»; the search text is not.
+const KEPT = ["status", "sort", "attention"];
+let restored = false; // restore once per app start; later a bare /orders means «cleared»
+
+function readSaved(): URLSearchParams | null {
+  try {
+    const raw = localStorage.getItem(FILTERS_KEY);
+    return raw ? new URLSearchParams(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function useOrderFilters() {
   const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (!restored) {
+      restored = true;
+      const saved = readSaved();
+      if (saved && !KEPT.some((k) => params.has(k)) && [...saved.keys()].length) {
+        const merged = new URLSearchParams(params);
+        saved.forEach((value, key) => merged.set(key, value));
+        setParams(merged, { replace: true });
+        return;
+      }
+    }
+    const keep = new URLSearchParams();
+    for (const key of KEPT) {
+      const value = params.get(key);
+      if (value) keep.set(key, value);
+    }
+    try {
+      localStorage.setItem(FILTERS_KEY, keep.toString());
+    } catch {
+      /* storage unavailable */
+    }
+  }, [params, setParams]);
   const status = (params.get("status") ?? "") as OrderStatus | "";
   const attention = params.get("attention") === "1";
   const update = (next: Record<string, string | null>) => {
@@ -52,5 +91,137 @@ export function useOrderFilters() {
     }
     setParams(merged, { replace: true });
   };
-  return { status, attention, q: params.get("q") ?? "", update };
+  const stuck = params.get("stuck") === "1";
+  return { status, attention, stuck, q: params.get("q") ?? "", sort: params.get("sort") ?? "", update };
+}
+
+export type OrderSort = NonNullable<OrderFilters["sort"]>;
+
+/** Sort kept in the URL like the filters (survives opening an order and coming back). */
+export function useOrderSort(filters: ReturnType<typeof useOrderFilters>): [OrderSort, (v: OrderSort) => void] {
+  const sort = (filters.sort || "newest") as OrderSort;
+  return [sort, (value) => filters.update({ sort: value === "newest" ? null : value })];
+}
+
+export function SortSelect({ value, onChange }: { value: OrderSort; onChange: (v: OrderSort) => void }) {
+  return (
+    <select className="select" value={value} onChange={(e) => onChange(e.target.value as OrderSort)} aria-label="Сортировка">
+      <option value="newest">Сначала новые</option>
+      <option value="oldest">Сначала старые</option>
+      <option value="price_desc">Дороже</option>
+      <option value="price_asc">Дешевле</option>
+      <option value="status">По статусу</option>
+    </select>
+  );
+}
+
+export type OrdersView = "cards" | "list";
+
+const VIEW_KEY = "crm-orders-view";
+
+/** «Карточки» or «Список», remembered on this phone. Default: cards on a
+ * phone, the table on a wide screen. */
+export function useOrdersView(): [OrdersView, (v: OrdersView) => void] {
+  const [view, setView] = useState<OrdersView>(() => {
+    try {
+      const saved = localStorage.getItem(VIEW_KEY);
+      if (saved === "cards" || saved === "list") return saved;
+    } catch {
+      /* storage unavailable */
+    }
+    return window.matchMedia?.("(min-width: 960px)").matches ? "list" : "cards";
+  });
+  const set = (v: OrdersView) => {
+    setView(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      /* storage unavailable */
+    }
+  };
+  return [view, set];
+}
+
+export function ViewToggle({ value, onChange }: { value: OrdersView; onChange: (v: OrdersView) => void }) {
+  return (
+    <div className="view-toggle" role="group" aria-label="Вид">
+      <button className={`btn icon-only ${value === "cards" ? "active" : ""}`} onClick={() => onChange("cards")} aria-label="Карточки" title="Карточки">
+        <LayoutGrid size={16} />
+      </button>
+      <button className={`btn icon-only ${value === "list" ? "active" : ""}`} onClick={() => onChange("list")} aria-label="Список" title="Список">
+        <List size={16} />
+      </button>
+    </div>
+  );
+}
+
+/** Search behind a magnifier button (owner, 10.10: the always-open field took
+ * too much room). Stays open while there is a query. */
+export function useSearchToggle(q: string): [boolean, (open: boolean) => void] {
+  const [open, setOpen] = useState(Boolean(q));
+  return [open || Boolean(q), setOpen];
+}
+
+export function SearchButton({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      className={`btn icon-only search-toggle ${open ? "active" : ""}`}
+      onClick={onToggle}
+      aria-label="Поиск"
+      title="Поиск"
+    >
+      <Search size={16} />
+    </button>
+  );
+}
+
+export function SearchField({
+  value,
+  onChange,
+  onClose,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onClose: () => void;
+  placeholder: string;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    input.current?.focus();
+  }, []);
+  return (
+    <div className="search search-open">
+      <Search size={16} />
+      <input ref={input} className="input" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+      <button
+        type="button"
+        className="btn icon-only small search-close"
+        onClick={() => {
+          onChange("");
+          onClose();
+        }}
+        aria-label="Закрыть поиск"
+      >
+        <X size={16} />
+      </button>
+    </div>
+  );
+}
+
+/** «Требуют внимания» as an icon next to the magnifier (owner, 10.10). */
+export function AttentionButton({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      className={`btn icon-only attention-toggle ${active ? "active" : ""}`}
+      onClick={onToggle}
+      aria-pressed={active}
+      aria-label="Требуют внимания"
+      title="Требуют внимания"
+    >
+      <AlertTriangle size={16} />
+    </button>
+  );
 }

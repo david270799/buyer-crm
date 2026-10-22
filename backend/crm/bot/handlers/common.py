@@ -41,6 +41,11 @@ async def start(message: Message, role: Role | None, settings: Settings | None =
     private = message.chat.type == ChatType.PRIVATE
     keyboard = _open_app_keyboard(settings) if private else None
     if role is Role.ADMIN:
+        if private:
+            from crm.bot.handlers.arrival import ARRIVAL_BUTTON
+
+            rows = [[ARRIVAL_BUTTON], *(keyboard.inline_keyboard if keyboard else [])]
+            keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
         await message.answer(fmt.ADMIN_HELP, reply_markup=keyboard)
     elif role is Role.CLIENT:
         await message.answer(fmt.CLIENT_HELP, reply_markup=keyboard)
@@ -78,6 +83,36 @@ async def setclient(
         await answer_privately(message, f"❌ {fmt.e(exc.user_message)}")
         return
     await answer_privately(message, fmt.client_set(change))
+
+
+SETCLIENT2_USAGE = (
+    "Второй человек клиента (тот же баланс и заказы): ответьте /setclient2 на его сообщение\n"
+    "или укажите ID: <code>/setclient2 123456789 Имя</code>. Убрать: <code>/setclient2 off</code>"
+)
+
+
+async def setclient2(
+    message: Message, command: CommandObject, services: Services, actor: Actor
+) -> None:
+    """/setclient2 <id> [имя] | in reply | off — the second person on the account."""
+    target = message.reply_to_message
+    args = (command.args or "").strip()
+    if target is not None and target.from_user is not None and not args:
+        telegram_id, name = target.from_user.id, target.from_user.full_name
+    elif args.lower() in ("off", "нет", "удалить"):
+        telegram_id, name = None, None
+    else:
+        parts = args.split(maxsplit=1)
+        if not parts or not parts[0].isdigit():
+            await answer_privately(message, SETCLIENT2_USAGE)
+            return
+        telegram_id, name = int(parts[0]), parts[1] if len(parts) > 1 else None
+    try:
+        client = await asyncio.to_thread(services.clients.set_second, actor, telegram_id, name)
+    except CRMError as exc:
+        await answer_privately(message, f"❌ {fmt.e(exc.user_message)}")
+        return
+    await answer_privately(message, fmt.second_client_set(client))
 
 
 def _groups_text(chats: dict[int, str]) -> str:
@@ -173,6 +208,7 @@ def build() -> Router:
     router.message.register(start, Command("help"))
     router.message.register(whoami, Command("whoami"), F.from_user)
     router.message.register(setclient, Command("setclient"), HasRole(Role.ADMIN))
+    router.message.register(setclient2, Command("setclient2"), HasRole(Role.ADMIN))
     router.message.register(pin, Command("pin"), HasRole(Role.ADMIN))
     router.message.register(backup, Command("backup"), HasRole(Role.ADMIN))
     router.message.register(setgroup, Command("setgroup"), HasRole(Role.ADMIN))

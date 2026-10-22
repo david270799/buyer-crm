@@ -13,7 +13,7 @@ from crm.domain.enums import (
     Role,
 )
 from crm.domain.events import Event, EventType
-from crm.domain.models import LedgerEntry, Order, Shipment
+from crm.domain.models import ClientInfo, LedgerEntry, Order, Shipment
 from crm.domain.money import format_krw, format_usd
 from crm.domain.notifications import (
     LEVEL_LABELS,
@@ -21,6 +21,7 @@ from crm.domain.notifications import (
     NotificationSettings,
     NotifyRecipient,
 )
+from crm.domain.size_label import size_text
 from crm.domain.timeutil import format_date, format_datetime
 from crm.domain.views import order_view
 from crm.services.client_service import ClientChange
@@ -76,8 +77,8 @@ def order_details(order: Order, role: Role) -> str:
     title = " ".join(part for part in (view["brand"], view["model"]) if part)
     if title:
         lines.append(e(title))
-    if view["size"]:
-        lines.append(f"Размер: {e(view['size'])}")
+    if size_text(view["size"], view.get("size_kr")):
+        lines.append(f"Размер: {e(size_text(view['size'], view.get('size_kr')))}")
     lines.append(f"Цена: {_money(view['client_price'])}")
     if role is Role.ADMIN:
         lines.append(
@@ -125,7 +126,8 @@ def buy_result(result: BuyResult, audience: Role) -> str:
         )
     lines = [f"✅ Заказ <b>{e(order.id)}</b> выкуплен"]
     if order.title:
-        lines.append(e(order.title) + (f" · {e(order.size)}" if order.size else ""))
+        sizes = size_text(order.size, order.size_kr)
+        lines.append(e(order.title) + (f" · {e(sizes)}" if sizes else ""))
     if audience is Role.ADMIN:
         lines += [
             f"Закупка: {_money(order.purchase_price)}",
@@ -402,6 +404,7 @@ EVENT_ICONS = {
     EventType.DEPOSIT: "💰",
     EventType.ADJUSTMENT: "⚖️",
     EventType.RATE: "💱",
+    EventType.DEBT_WARNING: "⚠️",
 }
 
 
@@ -422,15 +425,32 @@ def notify_settings(settings: NotificationSettings, client_has_telegram: bool) -
         f"Кому: {RECIPIENT_LABELS[settings.recipient]}",
         f"Что: {LEVEL_LABELS[settings.level]}",
     ]
-    if settings.recipient is NotifyRecipient.CLIENT and not client_has_telegram:
+    if (
+        settings.recipient in (NotifyRecipient.CLIENT, NotifyRecipient.BOTH)
+        and not client_has_telegram
+    ):
         lines.append("⚠️ У клиента не указан Telegram ID — отправлять некому.")
     if settings.has_recent_error and settings.last_error:
         lines.append(f"⚠️ Последняя отправка не удалась: {e(settings.last_error)}")
     lines.append(
         "\n/notify off — выключить\n/notify me — только мне (проверка)\n"
-        "/notify client — клиенту\n/notify important | all — только важные или все"
+        "/notify client — клиенту\n/notify both — мне и клиенту\n"
+        "/notify important | all — только важные или все"
     )
     return "\n".join(lines)
+
+
+def second_client_set(client: ClientInfo) -> str:
+    if client.second_telegram_id is None:
+        return "✅ Второй человек клиента убран: в CRM снова входит только основной клиент."
+    who = f"<code>{client.second_telegram_id}</code>"
+    if client.second_name:
+        who = f"{e(client.second_name)} ({who})"
+    return (
+        f"✅ Второй человек клиента: {who}\n"
+        "Видит то же, что клиент: заказы, баланс, отправки, витрину; получает те же уведомления. "
+        "Чтобы открыть CRM, ему нужно написать боту /start."
+    )
 
 
 def client_set(change: ClientChange) -> str:
@@ -462,7 +482,8 @@ def intake_accepted(order: Order, audience: Role) -> str:
     lines = [f"🆕 <b>Заказ {e(order.id)} принят</b>"]
     title = " ".join(part for part in (view["brand"], view["model"]) if part)
     lines.append(e(title) if title else "Модель уточнит администратор")
-    lines.append(f"Размер: {e(view['size'])}" if view["size"] else "Размер: не указан")
+    sizes = size_text(view["size"], view.get("size_kr"))
+    lines.append(f"Размер: {e(sizes)}" if sizes else "Размер: не указан")
     if view["client_comment"]:
         lines.append(f"💬 {e(view['client_comment'])}")
     if audience is Role.ADMIN:
@@ -499,8 +520,8 @@ def intake_questions(
     lines += [f"• {e(q)}" for q in questions]
     if title:
         lines.append(e(title))
-    if view["size"]:
-        lines.append(f"Размер: {e(view['size'])}")
+    if size_text(view["size"], view.get("size_kr")):
+        lines.append(f"Размер: {e(size_text(view['size'], view.get('size_kr')))}")
     if caption:
         short = caption if len(caption) <= 200 else caption[:200] + "…"
         lines.append(f"Подпись: «{e(short)}»")
@@ -546,7 +567,7 @@ def group_left_for_admin(title: str, anonymous: bool) -> str:
 
 ADMIN_HELP = """<b>Команды администратора</b>
 /buy 5 140000 170000 — выкуп: закупка, цена клиенту (списывает баланс один раз)
-/cancel 5 — отмена (возвращает списанное один раз; после отправки отмены нет)
+/cancel 5 — отмена или возврат в любом статусе (возвращает списанное один раз, доставку — нет)
 /rebuy 5 150000 185000 [ссылка] [причина] — перезаказ в другом магазине (разница по цене)
 /status warehouse 5 7 12 — статус нескольких заказов (warehouse, cargo, delivered)
 /delete 7 или /delete 1-5 — удалить ошибочные заказы отовсюду (с подтверждением; списанное вернётся)
@@ -563,7 +584,12 @@ ADMIN_HELP = """<b>Команды администратора</b>
 /pin — PIN-код для Mini App; /pin off — сбросить забытый
 /add — ответом на фото: принять его как заказ
 /setclient — ответом на сообщение клиента: указать, кто клиент
-Фото товара в личку боту (или пересланное) — новый заказ
+/setclient2 ID [имя] — второй человек клиента (тот же баланс и заказы); /setclient2 off — убрать
+/pagefile ссылка — страница магазина файлом (как её видит сервер; для подключения нового магазина)
+Фото в личку боту — бот спросит, какой это заказ (сверит размер со складом), или «➕ новый заказ»
+/arrived или кнопка «📦 Пришло на склад»; фото с подписью «N5» — сразу проверка N5: размер, \
+«На складе», отзыв на корейском
+Ссылка на товар магазина в личку — черновик витрины («Витрина» → «Одобрение» в Mini App)
 /whoami — ваш Telegram ID"""
 
 CLIENT_HELP = """<b>Новый заказ</b> — фото товара, в подписи размер (и ссылка, если есть).

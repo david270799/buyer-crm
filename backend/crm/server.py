@@ -75,6 +75,8 @@ def build_app(settings: Settings, demo: bool):
         blob_storage=blobs,
         recognizer=recognizer,
         allowed_chat_ids=settings.allowed_chat_ids,
+        # «Обновить CRM» in the Mini App: request files for the server's updater.
+        update_dir=None if demo else settings.data_dir / "update",
     )
     web_dist = Path(os.environ.get("WEB_DIST") or DEFAULT_WEB_DIST)
     if not (web_dist / "index.html").is_file():
