@@ -1057,7 +1057,11 @@ table.orders .r {
 
 .chip {
   flex: none;
-  padding: 7px 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 7px 14px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
