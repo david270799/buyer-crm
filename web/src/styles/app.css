@@ -636,10 +636,16 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 
+/* No price yet (a new order): a calm hint instead of a lone dash. */
+.order-card .price.empty {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-3);
+}
+
 .order-card .foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 6px;
   margin-top: 8px;
   font-size: 12px;
@@ -721,22 +727,6 @@ h3 {
 }
 
 /* Status */
-
-.dots {
-  display: inline-flex;
-  gap: 4px;
-}
-
-.dots span {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--surface-3);
-}
-
-.dots span.on {
-  background: var(--accent);
-}
 
 .badge {
   display: inline-flex;
@@ -2012,11 +2002,6 @@ table.orders .r {
   flex: none;
 }
 
-.dots.s-new span.on { background: var(--st-new); }
-.dots.s-bought span.on { background: var(--st-bought); }
-.dots.s-warehouse span.on { background: var(--st-warehouse); }
-.dots.s-cargo span.on { background: var(--st-cargo); }
-.dots.s-delivered span.on { background: var(--st-delivered); }
 
 .chip .status-dot { display: inline-block; margin-right: 6px; vertical-align: 1px; }
 .chip.c-new .status-dot { background: var(--st-new); }
