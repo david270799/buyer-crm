@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 
 import { useBulkStatus } from "../api/hooks";
 import type { Order, OrderStatus, Recognition } from "../api/types";
-import { errorText, useToast } from "../components/ui";
+import { errorText, MoreMenu, useToast } from "../components/ui";
 import { date, krw } from "../lib/format";
 import { bulkSummary, BuySheet, CancelConfirm, DeleteConfirm, DuplicateConfirm, EditOrderSheet, RebuySheet, ShipmentSheet } from "./sheets";
 
@@ -75,9 +75,19 @@ export function OrderAdminPanel({ order }: { order: Order }) {
       <div className="card pad stack">
         <div className="row between">
           <h3>Для администратора</h3>
-          <button className="btn small ghost" onClick={() => setDialog("edit")}>
-            <Pencil size={14} /> Изменить
-          </button>
+          <div className="row" style={{ gap: 4 }}>
+            <button className="btn small ghost" onClick={() => setDialog("edit")}>
+              <Pencil size={14} /> Изменить
+            </button>
+            {/* Rare actions (the owner, 22.10.2026): out of the main row. */}
+            <MoreMenu
+              label="Ещё действия с заказом"
+              items={[
+                { label: "Копия заказа", icon: Copy, onClick: () => setDialog("copy") },
+                { label: "Удалить заказ", icon: Trash2, onClick: () => setDialog("delete"), danger: true },
+              ]}
+            />
+          </div>
         </div>
         <dl className="kv">
           <dt>Закупка</dt>
@@ -164,12 +174,6 @@ export function OrderAdminPanel({ order }: { order: Order }) {
               <Ban size={16} /> {shipped ? "Возврат" : "Отменить"}
             </button>
           )}
-          <button className="btn" onClick={() => setDialog("copy")}>
-            <Copy size={16} /> Копия
-          </button>
-          <button className="btn ghost" onClick={() => setDialog("delete")}>
-            <Trash2 size={16} /> Удалить
-          </button>
         </div>
       </div>
       {dialog === "buy" && <BuySheet order={order} onClose={() => setDialog(null)} />}

@@ -1,4 +1,4 @@
-import { AlertCircle, Check, Inbox, RefreshCw, X } from "lucide-react";
+import { AlertCircle, Check, Inbox, type LucideIcon, MoreHorizontal, RefreshCw, X } from "lucide-react";
 import {
   createContext,
   type ReactNode,
@@ -398,4 +398,65 @@ export function useSeenAmount(id: string, value: number): { shown: number; delta
 export function CountUp({ id, value, format }: { id: string; value: number; format: (n: number) => string }) {
   const { shown } = useSeenAmount(id, value);
   return <>{format(shown)}</>;
+}
+
+export interface MenuItem {
+  label: string;
+  icon: LucideIcon;
+  onClick: () => void;
+  danger?: boolean;
+}
+
+/** «⋯» button with a small menu for rare actions (copy, delete), so they do
+ * not stand next to the everyday buttons. Closes on a tap outside or Esc. */
+export function MoreMenu({ items, label = "Ещё" }: { items: MenuItem[]; label?: string }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const outside = (e: PointerEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+  return (
+    <div className="more-menu" ref={box}>
+      <button
+        type="button"
+        className="btn small ghost icon-only"
+        aria-label={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <MoreHorizontal size={18} />
+      </button>
+      {open && (
+        <div className="more-pop" role="menu">
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              className={item.danger ? "danger" : ""}
+              onClick={() => {
+                setOpen(false);
+                item.onClick();
+              }}
+            >
+              <item.icon size={16} /> {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
