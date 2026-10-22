@@ -169,6 +169,7 @@ export interface Overview {
     total: number;
     active: number;
     stuck_count?: number | null;
+    problem_count?: number | null;
     profit_total_krw?: number | null;
     profit_month_krw?: number | null;
   };
@@ -257,6 +258,7 @@ export interface OrderFilters {
   q?: string;
   attention?: boolean;
   stuck?: boolean;
+  problem?: boolean;
   sort?: "newest" | "oldest" | "price_desc" | "price_asc" | "status";
   offset?: number;
   limit?: number;

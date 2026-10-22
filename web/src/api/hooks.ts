@@ -58,6 +58,7 @@ export const useOrders = (filters: OrderFilters) =>
           q: filters.q,
           attention: filters.attention,
           stuck: filters.stuck,
+          problem: filters.problem,
           sort: filters.sort,
           offset: filters.offset,
           limit: filters.limit,
