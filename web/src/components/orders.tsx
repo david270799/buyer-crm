@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import type { Order } from "../api/types";
 import { krw, orderTitle, sizeText } from "../lib/format";
-import { Dots, StatusBadge } from "./status";
+import { StatusBadge } from "./status";
 import { Checkbox, useLongPress } from "./ui";
 
 export function Photo({
@@ -148,12 +148,15 @@ export function OrderCard({
         <div className="meta">
           {sizeText(order) ? `Размер ${sizeText(order)}` : <span className="faint">Размер —</span>}
         </div>
-        <div className="price">{krw(order.client_price)}</div>
+        {order.client_price != null || order.status !== "new" ? (
+          <div className="price">{krw(order.client_price)}</div>
+        ) : (
+          <div className="price empty">Цена после выкупа</div>
+        )}
         {showCost && order.purchase_price != null && (
           <div className="tiny faint num">закупка {krw(order.purchase_price)}</div>
         )}
         <div className="foot">
-          <Dots status={order.status} />
           <StatusBadge status={order.status} />
         </div>
       </div>

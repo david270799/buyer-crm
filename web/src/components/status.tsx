@@ -26,18 +26,6 @@ export function StatusBadge({ status }: { status: OrderStatus | null }) {
   );
 }
 
-/** Compact `● ● ● ○ ○` progress for cards. */
-export function Dots({ status }: { status: OrderStatus | null }) {
-  const reached = status ? STATUS_FLOW.indexOf(status) : -1;
-  return (
-    <span className={`dots s-${status ?? "new"}`} aria-label={statusLabel(status)}>
-      {STATUS_FLOW.map((step, i) => (
-        <span key={step} className={i <= reached ? "on" : ""} />
-      ))}
-    </span>
-  );
-}
-
 /** Full stepper: Заказ → Выкуплен → Склад → Карго → Доставлен, with dates. */
 export function Stepper({ status, timestamps }: { status: OrderStatus | null; timestamps: Record<string, string> }) {
   if (status === "cancelled") {
