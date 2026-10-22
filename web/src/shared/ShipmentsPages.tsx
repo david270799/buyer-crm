@@ -117,14 +117,21 @@ export function ShipmentDetailsPage({
               ) : null}
               {shipment.shipping_charged_krw !== undefined && (
                 <>
-                  <dt>Списано за доставку</dt>
-                  <dd>{krw(shipment.shipping_charged_krw)}</dd>
+                  {/* Only when it differs from «Доставка» (the owner, 22.10.2026). */}
+                  {(shipment.shipping_charged_krw ?? 0) !== (shipment.shipping_cost_krw ?? 0) && (
+                    <>
+                      <dt>Списано за доставку</dt>
+                      <dd>{krw(shipment.shipping_charged_krw)}</dd>
+                    </>
+                  )}
                   {shipment.watch_charged_krw ? (
                     <>
                       <dt>Списано за часы</dt>
                       <dd>{krw(shipment.watch_charged_krw)}</dd>
                     </>
                   ) : null}
+                  <dt className="kv-total">Итого списано</dt>
+                  <dd className="kv-total">{krw((shipment.shipping_charged_krw ?? 0) + (shipment.watch_charged_krw ?? 0))}</dd>
                 </>
               )}
             </dl>
