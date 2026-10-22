@@ -4,7 +4,6 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { useOrders, useOverview } from "../api/hooks";
 import type { Order } from "../api/types";
-import { PageHead } from "../components/Layout";
 import { OrderCard, Thumb } from "../components/orders";
 import { StatusBadge } from "../components/status";
 import { Checkbox, Empty, ErrorState, Loading, useDebounced, useLongPress, useSelection } from "../components/ui";
@@ -135,19 +134,14 @@ export function AdminOrdersPage() {
 
   return (
     <>
-      <PageHead
-        title="Заказы"
-        sub={data ? `${data.total} ${plural(data.total, "заказ", "заказа", "заказов")}` : undefined}
-        action={
-          <Link to="/orders/new" className="btn primary small">
-            <Plus size={16} /> Заказ
-          </Link>
-        }
-      />
+      {/* No heading (the owner, 22.10.2026): the list starts at the top; «+» sits in the toolbar. */}
       <div className="stack">
         <div className="filters">
           <SortSelect value={sort} onChange={setSort} />
           <ViewToggle value={view} onChange={setView} />
+          <Link to="/orders/new" className="btn primary icon-only" aria-label="Новый заказ" title="Новый заказ">
+            <Plus size={18} />
+          </Link>
           <SearchButton open={searching} onToggle={() => setSearching(!searching)} />
           <AttentionButton
             active={filters.attention}
