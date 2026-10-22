@@ -107,10 +107,10 @@ function ProfitSheet({ onClose }: { onClose: () => void }) {
     >
       <div className="stack">
         <Field label="Сумма (минус — исправить ошибку)">
-          <MoneyInput value={amount} onChange={setAmount} allowNegative autoFocus placeholder="50,000" />
+          <MoneyInput value={amount} onChange={setAmount} allowNegative autoFocus placeholder="напр. 50,000" />
         </Field>
         <Field label="Комментарий" hint="Видите только вы">
-          <input className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Кэшбэк магазина" />
+          <input className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="напр. Кэшбэк магазина" />
         </Field>
       </div>
     </Sheet>

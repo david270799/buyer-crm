@@ -403,7 +403,7 @@ export function RebuySheet({ order, onClose }: { order: Order; onClose: () => vo
               className="textarea"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Магазин отменил заказ: товара нет в наличии"
+              placeholder="напр. Магазин отменил заказ: товара нет в наличии"
             />
           </Field>
         </div>
@@ -781,13 +781,13 @@ function ShipmentFields({
   return (
     <div className="form-grid two">
       <Field label="Трек-номер">
-        <input className="input" value={value.tracking_code} onChange={(e) => set("tracking_code", e.target.value.toUpperCase())} placeholder="TRACK123" />
+        <input className="input" value={value.tracking_code} onChange={(e) => set("tracking_code", e.target.value.toUpperCase())} placeholder="напр. TRACK123" />
       </Field>
       <Field label="Номер коробки">
-        <input className="input" value={value.box_number} onChange={(e) => set("box_number", e.target.value)} placeholder="B-18" />
+        <input className="input" value={value.box_number} onChange={(e) => set("box_number", e.target.value)} placeholder="напр. B-18" />
       </Field>
       <Field label="Вес, кг">
-        <input className="input num" inputMode="decimal" value={value.weight_kg} onChange={(e) => set("weight_kg", e.target.value.replace(",", "."))} placeholder="12.5" />
+        <input className="input num" inputMode="decimal" value={value.weight_kg} onChange={(e) => set("weight_kg", e.target.value.replace(",", "."))} placeholder="напр. 12.5" />
       </Field>
       <Field label="Стоимость доставки" hint="Спишется с баланса клиента">
         <MoneyInput value={value.shipping_cost_krw} onChange={(v) => set("shipping_cost_krw", v)} />
