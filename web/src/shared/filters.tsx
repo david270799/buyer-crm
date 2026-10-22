@@ -3,22 +3,35 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import type { OrderFilters, OrderStatus } from "../api/types";
-import { StatusIcon } from "../components/status";
 import { STATUS_FLOW, STATUS_PLURAL } from "../lib/format";
 
-export function StatusTiles({ counts }: { counts: Record<OrderStatus, number> }) {
+/** «Заказы в работе»: one bar split by stage instead of side-scrolling tiles
+ * (the owner, 22.10.2026). «Доставлен» is left out: it only grows and would
+ * squeeze the stages that need work. A tap on a stage opens its orders. */
+export function StatusPipeline({ counts }: { counts: Record<OrderStatus, number> }) {
   const navigate = useNavigate();
+  const stages = STATUS_FLOW.filter((status) => status !== "delivered");
+  const total = stages.reduce((sum, status) => sum + (counts[status] ?? 0), 0);
   return (
-    <div className="tiles">
-      {STATUS_FLOW.map((status) => (
-        <button key={status} className="tile" onClick={() => navigate(`/orders?status=${status}`)}>
-          <span className="count">{counts[status] ?? 0}</span>
-          <span className="name">
-            <StatusIcon status={status} size={14} />
+    <div className="pipeline">
+      <div className="pipeline-head">
+        <span>Заказы в работе</span>
+        <b className="num">{total}</b>
+      </div>
+      <div className="pipeline-bar" aria-hidden="true">
+        {stages.map((status) =>
+          counts[status] ? <span key={status} className={`c-${status}`} style={{ flexGrow: counts[status] }} /> : null,
+        )}
+      </div>
+      <div className="pipeline-legend">
+        {stages.map((status) => (
+          <button key={status} type="button" className={`c-${status}`} onClick={() => navigate(`/orders?status=${status}`)}>
+            <span className="status-dot" />
             {STATUS_PLURAL[status]}
-          </span>
-        </button>
-      ))}
+            <b className="num">{counts[status] ?? 0}</b>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

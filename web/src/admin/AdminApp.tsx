@@ -22,7 +22,7 @@ import { OrderCard } from "../components/orders";
 import { CountUp, Empty, ErrorState, errorText, Field, Loading, MoneyInput, Switch, useToast } from "../components/ui";
 import { dateTime, krw } from "../lib/format";
 import { BalancePage } from "../shared/BalancePage";
-import { StatusTiles } from "../shared/filters";
+import { StatusPipeline } from "../shared/filters";
 import { NotificationsPage } from "../shared/NotificationsPage";
 import { OrderDetailsPage } from "../shared/OrderDetailsPage";
 import { EditButton, ShipmentDetailsPage, ShipmentsPage } from "../shared/ShipmentsPages";
@@ -99,7 +99,7 @@ function Dashboard() {
           </Link>
         </div>
         <ProblemBanner />
-        <StatusTiles counts={o.status_counts} />
+        <StatusPipeline counts={o.status_counts} />
       </div>
       <div className="section">
         <div className="section-head">

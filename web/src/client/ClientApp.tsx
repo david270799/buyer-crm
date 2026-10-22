@@ -16,7 +16,7 @@ import {
   SearchField,
   SortSelect,
   StatusChips,
-  StatusTiles,
+  StatusPipeline,
   useOrderFilters,
   useOrderSort,
   useOrdersView,
@@ -70,7 +70,7 @@ function ClientHome() {
           </div>
         </Link>
       )}
-      <StatusTiles counts={data.orders.status_counts} />
+      <StatusPipeline counts={data.orders.status_counts} />
       <div className="section" style={{ marginTop: 8 }}>
         <div className="section-head">
           <h2>Заказы</h2>
