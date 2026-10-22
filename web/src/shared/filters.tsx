@@ -189,14 +189,16 @@ export function useOrdersView(): [OrdersView, (v: OrdersView) => void] {
 
 export function ViewToggle({ value, onChange }: { value: OrdersView; onChange: (v: OrdersView) => void }) {
   return (
-    <div className="view-toggle" role="group" aria-label="Вид">
-      <button className={`btn icon-only ${value === "cards" ? "active" : ""}`} onClick={() => onChange("cards")} aria-label="Карточки" title="Карточки">
-        <LayoutGrid size={16} />
-      </button>
-      <button className={`btn icon-only ${value === "list" ? "active" : ""}`} onClick={() => onChange("list")} aria-label="Список" title="Список">
-        <List size={16} />
-      </button>
-    </div>
+    // One button (the owner, 22.10.2026): a tap switches; it shows the view it switches to.
+    <button
+      type="button"
+      className="btn icon-only"
+      onClick={() => onChange(value === "cards" ? "list" : "cards")}
+      aria-label={value === "cards" ? "Показать списком" : "Показать карточками"}
+      title={value === "cards" ? "Списком" : "Карточками"}
+    >
+      {value === "cards" ? <List size={16} /> : <LayoutGrid size={16} />}
+    </button>
   );
 }
 
