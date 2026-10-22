@@ -35,8 +35,15 @@ const NAV: NavItem[] = [
   { to: "/showcase", label: "Витрина", icon: ShoppingBag },
   { to: "/shipments", label: "Отправки", icon: Truck },
   { to: "/balance", label: "Баланс", icon: Wallet },
-  { to: "/settings", label: "Настройки", icon: Settings },
 ];
+
+// Settings hold only the look, so they sit behind a gear in the top bar: the
+// bottom bar keeps five tabs (more do not fit an iPhone width comfortably).
+const settingsGear = (
+  <Link to="/settings" className="bell" aria-label="Настройки">
+    <Settings size={20} strokeWidth={1.8} />
+  </Link>
+);
 
 function ClientSettings() {
   return (
@@ -135,7 +142,7 @@ function ClientOrders() {
 
 export function ClientApp() {
   return (
-    <Shell nav={NAV} title="Мои заказы">
+    <Shell nav={NAV} title="Мои заказы" topActions={settingsGear}>
       <ShowcaseClientMode value={true}>
       <Routes>
         <Route path="/" element={<ClientHome />} />
