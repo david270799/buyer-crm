@@ -421,8 +421,12 @@ h3 {
   color: #ffb4a6;
 }
 
-:root[data-theme="dark"] .balance-card.debt .krw {
-  color: #a13a2b;
+/* Dark theme: the card stays a deep navy instead of turning into a bright
+ * white block that outshines the whole screen. */
+:root[data-theme="dark"] .balance-card {
+  background: #1f2a3a;
+  color: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 .debt-badge {
