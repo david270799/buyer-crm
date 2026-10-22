@@ -1,7 +1,7 @@
 import { ClipboardList, PackageCheck, ShoppingBag, Truck, Warehouse, XCircle } from "lucide-react";
 
 import type { OrderStatus } from "../api/types";
-import { STATUS_FLOW, STEP_LABEL, shortDate, statusLabel } from "../lib/format";
+import { STATUS_FLOW, STEP_LABEL, shortDate, statusLabel, timeOnly } from "../lib/format";
 
 const ICONS = {
   new: ClipboardList,
@@ -51,7 +51,13 @@ export function Stepper({ status, timestamps }: { status: OrderStatus | null; ti
               <StatusIcon status={step} size={17} />
             </div>
             <div className="name">{STEP_LABEL[step]}</div>
-            {when && i <= reached && <div className="when">{shortDate(when)}</div>}
+            {when && i <= reached && (
+              <div className="when">
+                {shortDate(when)}
+                <br />
+                {timeOnly(when)}
+              </div>
+            )}
           </div>
         );
       })}

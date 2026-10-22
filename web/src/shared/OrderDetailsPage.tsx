@@ -198,9 +198,13 @@ export function OrderDetailsPage({ adminPanel }: { adminPanel?: (order: Order) =
           {shipment && <ShipmentLink shipment={shipment} />}
           {adminPanel?.(order)}
           <OrderHistory events={history} />
-          <div className="card pad">
-            <Timestamps order={order} />
-          </div>
+          {/* The dates are on the stepper (the owner, 22.10.2026); a cancelled
+              order has no stepper, so it keeps the list. */}
+          {order.status === "cancelled" && (
+            <div className="card pad">
+              <Timestamps order={order} />
+            </div>
+          )}
         </div>
       </div>
     </>
