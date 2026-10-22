@@ -85,13 +85,13 @@ function Dashboard() {
       <div className="stack" style={{ gap: 12 }}>
         <BalanceCard balance={data.balance} to="/finance" label="Баланс клиента" />
         <div className="kpis">
-          <Link to="/profit?period=month" className="card kpi">
+          <Link to="/profit?period=month" className="card kpi profit">
             <div className="small muted">Прибыль за месяц →</div>
             <div className="value">
               <CountUp id="profit-month" value={o.profit_month_krw ?? 0} format={krw} />
             </div>
           </Link>
-          <Link to="/profit?period=all" className="card kpi">
+          <Link to="/profit?period=all" className="card kpi profit">
             <div className="small muted">Прибыль всего →</div>
             <div className="value">
               <CountUp id="profit-total" value={o.profit_total_krw ?? 0} format={krw} />
