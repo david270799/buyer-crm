@@ -75,6 +75,7 @@ firestore.rules, storage.rules, firebase.json, firestore.indexes.json   толь
 docs/
   architecture.md            слои, модель данных (все поля), инварианты денег, уведомления, фото
   deploy.md                  сервер, копии и восстановление, Firestore-вариант
+  home-server.md             (22.10) перенос на домашний мини-ПК: Ubuntu Server, данные с VPS, Cloudflare Tunnel
   guide.pdf                  пошаговая инструкция для владельца (13 стр., со скриншотами)
   guide/                     исходник guide.pdf (guide.html, img/, render.mjs)
   design/                    palettes.css (ранние цветовые схемы), skins/*.css — наброски тем (10.10)
