@@ -67,7 +67,7 @@ export function OrderCard({
     () => (canSelect && selecting ? onToggle?.() : open()),
   );
   const check = selectable && onToggle && (
-    <span className="check" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+    <span className={`check ${selecting ? "" : "idle"}`} onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
       <Checkbox checked={!!selected} onChange={onToggle} label={`Выбрать ${order.id}`} />
     </span>
   );
