@@ -2887,3 +2887,17 @@ table.orders .r {
 
 /* The profit cards keep their green line in every look. */
 :root[data-skin] .kpi.profit { border-left: 4px solid var(--positive); }
+
+/* «Итого» under a list of amounts: a line above, bold. */
+.kv .kv-total {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.kv dd.kv-total {
+  margin-left: -16px;
+  padding-left: 16px;
+}
