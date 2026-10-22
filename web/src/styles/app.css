@@ -213,7 +213,7 @@ h3 {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-3);
 }
@@ -858,8 +858,8 @@ h3 {
 
 .step .when {
   margin-top: -4px;
-  font-size: 11px;
-  color: var(--text-3);
+  font-size: 12px;
+  color: var(--text-2);
 }
 
 /* Admin table */
@@ -1309,7 +1309,7 @@ table.orders .r {
     gap: 2px;
     min-height: 46px;
     padding: 4px 6px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
   }
 
@@ -2709,7 +2709,7 @@ table.orders .r {
 .sc-heart { position: absolute; right: 8px; top: 8px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.5); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .sc-heart.on { color: #ff4d6d; }
 .sc-body { padding: 10px; }
-.sc-brand { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
+.sc-brand { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
 .sc-model { font-size: 14px; font-weight: 700; margin: 2px 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sc-title { font-size: 20px; margin: 2px 0 6px; }
 .sc-price b { font-size: 15px; }
@@ -2752,7 +2752,7 @@ table.orders .r {
 .sc-stats button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; text-align: center; cursor: pointer; transition: background 0.2s ease, color 0.2s ease; }
 .sc-stats button.active { background: var(--text); color: var(--bg); border-color: var(--text); }
 .sc-stats b { font-size: 20px; }
-.sc-stats span { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--text-3); }
+.sc-stats span { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--text-3); }
 .sc-stats button.active span { color: inherit; opacity: 0.75; }
 .sc-views { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--text-2); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
