@@ -2570,6 +2570,20 @@ table.orders .r {
   background: var(--st-delivered-soft);
 }
 
+/* In the shipments list: a full row under the shipment, easy to hit. */
+.list-item.has-action {
+  flex-wrap: wrap;
+}
+
+.btn.small.delivered-btn.wide {
+  flex-basis: 100%;
+  justify-content: center;
+  min-height: 42px;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 /* ==========================================================================
    Motion (16.10.2026): soft, short animations. «Оформление» → «Анимации: Выкл»
    (data-motion="off") or the phone's «reduce motion» turns them all off.

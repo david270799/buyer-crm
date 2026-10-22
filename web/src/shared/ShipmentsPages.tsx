@@ -27,7 +27,7 @@ export function ShipmentsPage({ action }: { action?: ReactNode }) {
       ) : (
         <div className="card list">
           {data.items.map((s) => (
-            <Link key={s.id} to={`/shipments/${s.id}`} className="list-item">
+            <Link key={s.id} to={`/shipments/${s.id}`} className={`list-item ${s.delivered ? "" : "has-action"}`}>
               {s.thumbnail_url || s.photo_url ? (
                 <Thumb src={s.thumbnail_url ?? s.photo_url} alt={s.tracking_code ?? `${s.shipment_number}`} />
               ) : (
@@ -44,9 +44,10 @@ export function ShipmentsPage({ action }: { action?: ReactNode }) {
               </div>
               <div className="stack" style={{ gap: 4, alignItems: "flex-end" }}>
                 <ShipmentStatus delivered={s.delivered} />
-                {!s.delivered && <DeliveredButton onClick={() => setArrived(s)} />}
                 {s.shipping_cost_krw ? <div className="amount small muted">{krw(s.shipping_cost_krw)}</div> : null}
               </div>
+              {/* A full-width button under a shipment in transit (the owner, 22.10.2026). */}
+              {!s.delivered && <DeliveredButton wide onClick={() => setArrived(s)} />}
             </Link>
           ))}
         </div>
@@ -163,18 +164,18 @@ export function ShipmentDetailsPage({
 }
 
 /** Small «Доставлено» button: the one status the client sets (inside a list link, so it stops the click). */
-function DeliveredButton({ onClick }: { onClick: () => void }) {
+function DeliveredButton({ onClick, wide }: { onClick: () => void; wide?: boolean }) {
   return (
     <button
       type="button"
-      className="btn small delivered-btn"
+      className={`btn small delivered-btn ${wide ? "wide" : ""}`}
       onClick={(e: MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
         onClick();
       }}
     >
-      <Check size={14} /> Доставлено
+      <Check size={wide ? 16 : 14} /> {wide ? "Отметить доставленной" : "Доставлено"}
     </button>
   );
 }
