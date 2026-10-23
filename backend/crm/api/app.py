@@ -14,6 +14,7 @@ comes from RoleResolver (admins from env, the client from Firestore).
 
 import logging
 import mimetypes
+import secrets
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -26,7 +27,7 @@ from typing import Annotated, Any, Literal
 from fastapi import Depends, FastAPI, File, Query, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -63,6 +64,8 @@ logger = logging.getLogger(__name__)
 mimetypes.add_type("image/webp", ".webp")
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+SHARE_FILE_TTL = 10 * 60  # seconds a «Скачать» link lives
+SHARE_FILE_MAX = 10
 IdempotencyKey = Annotated[str, Field(pattern=r"^[A-Za-z0-9_.:-]{8,80}$")]
 OrderIds = Annotated[list[str], Field(min_length=1, max_length=100)]
 
@@ -1074,6 +1077,40 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             raise ValidationError("Картинка больше 20 МБ.")
         prepared = TelegramShare(config.bot_token).share_photo(p.user.id, data, picker=picker)
         return {"prepared_id": prepared, "in_chat": prepared is None}
+
+    # «Скачать» a shared picture: Telegram's downloadFile needs an https link,
+    # so the picture is kept in memory for a few minutes under a random token.
+    # Nothing is written to disk; the token is unguessable and expires.
+    share_files: dict[str, tuple[float, bytes]] = {}
+
+    @app.post("/api/share/file")
+    def share_file_put(p: Admin, file: Annotated[UploadFile, File()]) -> dict[str, Any]:
+        data = file.file.read(MAX_UPLOAD_BYTES + 1)
+        if len(data) > MAX_UPLOAD_BYTES:
+            raise ValidationError("Картинка больше 20 МБ.")
+        now = time.monotonic()
+        for key, (made, _) in list(share_files.items()):
+            if now - made > SHARE_FILE_TTL:
+                del share_files[key]
+        while len(share_files) >= SHARE_FILE_MAX:
+            del share_files[next(iter(share_files))]
+        token = secrets.token_urlsafe(24)
+        share_files[token] = (now, data)
+        return {"url": f"/api/share/file/{token}.png"}
+
+    @app.get("/api/share/file/{token}.png")
+    def share_file_get(token: str) -> Response:
+        item = share_files.get(token)
+        if item is None or time.monotonic() - item[0] > SHARE_FILE_TTL:
+            raise NotFoundError("Ссылка устарела — нажмите «Скачать» ещё раз.")
+        return Response(
+            item[1],
+            media_type="image/png",
+            headers={
+                "Cache-Control": "no-store",
+                "Content-Disposition": 'attachment; filename="crm.png"',
+            },
+        )
 
     @app.post("/api/images")
     def upload_image(p: Admin, file: Annotated[UploadFile, File()]) -> dict[str, Any]:
