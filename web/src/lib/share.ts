@@ -19,16 +19,27 @@ export async function sharePicture(blob: Blob, name: string): Promise<ShareResul
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
     return "download";
   }
+  const upload = (picker: boolean) => {
+    const form = new FormData();
+    form.append("file", new File([blob], name, { type: "image/png" }));
+    return api<{ prepared_id: string | null; in_chat: boolean }>(`/api/share?picker=${picker}`, {
+      method: "POST",
+      body: form,
+    });
+  };
   const picker = Boolean(app.shareMessage && app.isVersionAtLeast("8.0"));
-  const form = new FormData();
-  form.append("file", new File([blob], name, { type: "image/png" }));
-  const result = await api<{ prepared_id: string | null; in_chat: boolean }>(`/api/share?picker=${picker}`, {
-    method: "POST",
-    body: form,
-  });
+  const result = await upload(picker);
   if (picker && result.prepared_id) {
-    app.shareMessage!(result.prepared_id);
-    return "picker";
+    try {
+      app.shareMessage!(result.prepared_id);
+      return "picker";
+    } catch {
+      // Telegram refuses a second picker while it thinks the first is still
+      // open («WebAppShareMessageOpened»: on Android closing the picker does
+      // not always reset it, until the Mini App is reopened). Then the
+      // picture goes to the chat with the bot to forward instead.
+      await upload(false);
+    }
   }
   return "chat";
 }
