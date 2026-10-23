@@ -409,7 +409,15 @@ export interface MenuItem {
 
 /** «⋯» button with a small menu for rare actions (copy, delete), so they do
  * not stand next to the everyday buttons. Closes on a tap outside or Esc. */
-export function MoreMenu({ items, label = "Ещё" }: { items: MenuItem[]; label?: string }) {
+export function MoreMenu({
+  items,
+  label = "Ещё",
+  buttonClassName = "btn small ghost icon-only",
+}: {
+  items: MenuItem[];
+  label?: string;
+  buttonClassName?: string;
+}) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -431,7 +439,7 @@ export function MoreMenu({ items, label = "Ещё" }: { items: MenuItem[]; label
     <div className="more-menu" ref={box}>
       <button
         type="button"
-        className="btn small ghost icon-only"
+        className={buttonClassName}
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}

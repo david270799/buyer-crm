@@ -2964,12 +2964,13 @@ table.orders .r {
   .fab { bottom: 32px; right: 32px; }
 }
 
-/* Three buttons (finance: top up, adjust, share) still fit the card's height. */
-.balance-actions:has(> :nth-child(3)) {
-  gap: 6px;
+/* The «⋯» menu in the balance card keeps normal colours in every look. */
+.balance-card .more-pop {
+  z-index: 5;
 }
 
-.balance-actions:has(> :nth-child(3)) .balance-btn {
-  width: 36px;
-  height: 36px;
+.balance-card .more-pop button,
+:root[data-skin] .balance-card .more-pop button,
+:root[data-skin] .balance-card .more-pop button * {
+  color: var(--text) !important;
 }
