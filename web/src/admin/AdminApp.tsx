@@ -1,4 +1,4 @@
-import { SlidersHorizontal, BarChart3, ClipboardCheck, Eye, LayoutGrid, Package, Plus, Settings, ShoppingBag, Truck, Wallet } from "lucide-react";
+import { Send, SlidersHorizontal, BarChart3, ClipboardCheck, Eye, LayoutGrid, Package, Plus, Settings, ShoppingBag, Truck, Wallet } from "lucide-react";
 import {
   PrepItemPage,
   PrepPage,
@@ -13,7 +13,7 @@ import { useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { setClientPreview } from "../api/client";
-import { ShareButton } from "../components/ShareButton";
+import { ShareButton, useShare } from "../components/ShareButton";
 import { balancePicture, shipmentPicture, sinceLastDeposit } from "../lib/shareCard";
 import { AppearanceSettings } from "../shared/AppearanceSettings";
 import { useCreateOrder, useTransactions, useOverview, useSetNotifications, useSetRate, useSettings } from "../api/hooks";
@@ -21,7 +21,7 @@ import type { Category, NotificationSettings, NotifyLevel, NotifyRecipient, Ship
 import { type NavItem, PageHead, Shell } from "../components/Layout";
 import { BalanceCard } from "../components/money";
 import { OrderCard } from "../components/orders";
-import { CountUp, Empty, ErrorState, errorText, Field, Loading, MoneyInput, Switch, useToast } from "../components/ui";
+import { MoreMenu, CountUp, Empty, ErrorState, errorText, Field, Loading, MoneyInput, Switch, useToast } from "../components/ui";
 import { dateTime, krw } from "../lib/format";
 import { BalancePage } from "../shared/BalancePage";
 import { StatusPipeline } from "../shared/filters";
@@ -268,18 +268,23 @@ function AdminShipmentsPage() {
   );
 }
 
-/** The balance and the operations since the last top-up, as a picture for the client. */
-function BalanceShareButton() {
+/** «⋯» in the balance card (the owner, 23.10.2026): send the balance picture
+ * (operations since the last top-up) or make an adjustment. */
+function BalanceMore({ onAdjust }: { onAdjust: () => void }) {
   const overview = useOverview();
   const history = useTransactions();
-  const balance = overview.data?.balance;
-  if (!balance || !history.data) return null;
+  const { share } = useShare(async () => {
+    if (!overview.data || !history.data) throw new Error("Баланс ещё загружается");
+    return balancePicture(overview.data.balance, sinceLastDeposit(history.data.items));
+  }, "balance.png");
   return (
-    <ShareButton
-      className="balance-btn"
-      size={17}
-      make={() => balancePicture(balance, sinceLastDeposit(history.data.items))}
-      name="balance.png"
+    <MoreMenu
+      label="Ещё"
+      buttonClassName="balance-btn"
+      items={[
+        { label: "Отправить баланс", icon: Send, onClick: share },
+        { label: "Корректировка", icon: SlidersHorizontal, onClick: onAdjust },
+      ]}
     />
   );
 }
@@ -295,10 +300,7 @@ function FinancePage() {
             <button className="balance-btn primary" onClick={() => setSheet("deposit")} aria-label="Пополнить" title="Пополнить">
               <Plus size={18} />
             </button>
-            <button className="balance-btn" onClick={() => setSheet("adjust")} aria-label="Корректировка" title="Корректировка">
-              <SlidersHorizontal size={17} />
-            </button>
-            <BalanceShareButton />
+            <BalanceMore onAdjust={() => setSheet("adjust")} />
           </>
         }
       />
