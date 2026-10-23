@@ -3,20 +3,39 @@ import { webApp } from "../telegram";
 
 export type ShareResult = "picker" | "chat" | "download";
 
+function browserDownload(blob: Blob, name: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/** «Скачать»: Telegram saves it to the phone (Bot API 8.0+, it needs an https
+ * link — the server keeps the picture for a few minutes); else a plain download. */
+export async function downloadPicture(blob: Blob, name: string): Promise<void> {
+  const app = webApp();
+  const https = window.location.protocol === "https:";
+  if (app?.downloadFile && app.isVersionAtLeast("8.0") && https) {
+    const form = new FormData();
+    form.append("file", new File([blob], name, { type: "image/png" }));
+    const { url } = await api<{ url: string }>("/api/share/file", { method: "POST", body: form });
+    app.downloadFile({ url: new URL(url, window.location.href).toString(), file_name: name });
+    return;
+  }
+  browserDownload(blob, name);
+}
+
 /** Send a picture on by hand («Поделиться», the owner, 23.10.2026). In Telegram
  * the server prepares it and Telegram's chat picker opens; an old Telegram gets
  * the picture in the chat with the bot to forward; a plain browser downloads it. */
 export async function sharePicture(blob: Blob, name: string): Promise<ShareResult> {
   const app = webApp();
   if (!app) {
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = name;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    browserDownload(blob, name);
     return "download";
   }
   const upload = (picker: boolean) => {

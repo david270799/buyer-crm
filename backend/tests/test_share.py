@@ -70,3 +70,13 @@ def test_share_endpoint_is_admin_only(api, monkeypatch):  # noqa: F811
     assert response.status_code == 200
     assert response.json() == {"prepared_id": "prep-9", "in_chat": False}
     assert sent == [(ADMIN_TG, True)]
+
+
+def test_download_link_serves_the_picture_once_uploaded(api):  # noqa: F811
+    files = {"file": ("crm.png", b"\x89PNG-data", "image/png")}
+    assert api("POST", "/api/share/file", who=CLIENT_TG, files=files).status_code == 403
+    url = api("POST", "/api/share/file", files=files).json()["url"]
+    got = api("GET", url, who=None)
+    assert got.status_code == 200 and got.content == b"\x89PNG-data"
+    assert got.headers["content-type"] == "image/png"
+    assert api("GET", "/api/share/file/nope.png", who=None).status_code == 404
