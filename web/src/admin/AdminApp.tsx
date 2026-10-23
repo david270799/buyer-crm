@@ -13,7 +13,7 @@ import { useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { setClientPreview } from "../api/client";
-import { ShareButton, useShare } from "../components/ShareButton";
+import { ShareButton, ShareLoading, useShare } from "../components/ShareButton";
 import { balancePicture, shipmentPicture, sinceLastDeposit } from "../lib/shareCard";
 import { AppearanceSettings } from "../shared/AppearanceSettings";
 import { useCreateOrder, useTransactions, useOverview, useSetNotifications, useSetRate, useSettings } from "../api/hooks";
@@ -273,19 +273,22 @@ function AdminShipmentsPage() {
 function BalanceMore({ onAdjust }: { onAdjust: () => void }) {
   const overview = useOverview();
   const history = useTransactions();
-  const { share } = useShare(async () => {
+  const { share, busy } = useShare(async () => {
     if (!overview.data || !history.data) throw new Error("Баланс ещё загружается");
     return balancePicture(overview.data.balance, sinceLastDeposit(history.data.items));
   }, "balance.png");
   return (
-    <MoreMenu
-      label="Ещё"
-      buttonClassName="balance-btn"
-      items={[
-        { label: "Отправить баланс", icon: Send, onClick: share },
-        { label: "Корректировка", icon: SlidersHorizontal, onClick: onAdjust },
-      ]}
-    />
+    <>
+      <MoreMenu
+        label="Ещё"
+        buttonClassName="balance-btn"
+        items={[
+          { label: "Отправить баланс", icon: Send, onClick: share },
+          { label: "Корректировка", icon: SlidersHorizontal, onClick: onAdjust },
+        ]}
+      />
+      <ShareLoading busy={busy} />
+    </>
   );
 }
 
