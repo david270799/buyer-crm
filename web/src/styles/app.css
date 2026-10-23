@@ -2974,3 +2974,32 @@ table.orders .r {
 :root[data-skin] .balance-card .more-pop button * {
   color: var(--text) !important;
 }
+
+/* «Поделиться»: the picture is being made. */
+.share-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.35);
+  animation: share-fade 0.15s ease-out;
+}
+
+.share-loading-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 28px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: var(--shadow-lg);
+}
+
+@keyframes share-fade {
+  from { opacity: 0; }
+}
