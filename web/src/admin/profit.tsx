@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { type ProfitLine, useAddProfit, useProfit, useProfitLines } from "../api/hooks";
-import { PageHead } from "../components/Layout";
 import { Thumb } from "../components/orders";
 import { Empty, ErrorState, Loading } from "../components/ui";
 import { errorText, Field, MoneyInput, Sheet, useToast } from "../components/ui";
@@ -136,7 +135,6 @@ export function ProfitPage() {
         : "Прибыль за всё время";
   return (
     <>
-      <PageHead title="Прибыль" />
       <div className="chips" style={{ marginBottom: 12 }}>
         <button className={`chip ${period === "month" ? "active" : ""}`} onClick={() => setParams({ period: "month" })}>
           За месяц

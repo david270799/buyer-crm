@@ -12,12 +12,11 @@ import { Confirm, Empty, ErrorState, Loading, errorText, useToast } from "../com
 import { date, items, krw, orderTitle, sizeText } from "../lib/format";
 import { CopyText } from "./OrderDetailsPage";
 
-export function ShipmentsPage({ action }: { action?: ReactNode }) {
+export function ShipmentsPage() {
   const { data, error, isLoading, refetch } = useShipments();
   const [arrived, setArrived] = useState<Shipment | null>(null);
   return (
     <>
-      <PageHead title="Отправки" sub={data ? `${data.items.length} всего` : undefined} action={action} />
       {isLoading ? (
         <Loading rows={4} />
       ) : error || !data ? (

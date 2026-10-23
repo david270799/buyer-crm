@@ -1,4 +1,4 @@
-import { BarChart3, ClipboardCheck, Eye, LayoutGrid, Package, Plus, Settings, ShoppingBag, Truck, Wallet } from "lucide-react";
+import { SlidersHorizontal, BarChart3, ClipboardCheck, Eye, LayoutGrid, Package, Plus, Settings, ShoppingBag, Truck, Wallet } from "lucide-react";
 import {
   PrepItemPage,
   PrepPage,
@@ -256,13 +256,11 @@ function AdminShipmentsPage() {
   const [creating, setCreating] = useState(false);
   return (
     <>
-      <ShipmentsPage
-        action={
-          <button className="btn primary small" onClick={() => setCreating(true)} aria-label="Новая отправка">
-            <Plus size={16} /> Новая
-          </button>
-        }
-      />
+      <ShipmentsPage />
+      {/* A round «+» above the menu (the owner, 23.10.2026). */}
+      <button className="fab" onClick={() => setCreating(true)} aria-label="Новая отправка" title="Новая отправка">
+        <Plus size={22} />
+      </button>
       {creating && <NewShipmentFlow onClose={() => setCreating(false)} />}
     </>
   );
@@ -272,17 +270,17 @@ function FinancePage() {
   const [sheet, setSheet] = useState<"deposit" | "adjust" | null>(null);
   return (
     <>
+      {/* Two round buttons in the balance card (the owner, 23.10.2026). */}
       <BalancePage
-        title="Финансы"
         actions={
-          <div className="row" style={{ gap: 6 }}>
-            <button className="btn primary small" onClick={() => setSheet("deposit")}>
-              Пополнить
+          <>
+            <button className="balance-btn primary" onClick={() => setSheet("deposit")} aria-label="Пополнить" title="Пополнить">
+              <Plus size={18} />
             </button>
-            <button className="btn small" onClick={() => setSheet("adjust")}>
-              Корректировка
+            <button className="balance-btn" onClick={() => setSheet("adjust")} aria-label="Корректировка" title="Корректировка">
+              <SlidersHorizontal size={17} />
             </button>
-          </div>
+          </>
         }
       />
       {sheet && <MoneySheet kind={sheet} onClose={() => setSheet(null)} />}
@@ -388,7 +386,6 @@ function SettingsPage({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
   const current = settings.data?.krw_per_usd ?? null;
   return (
     <>
-      <PageHead title="Настройки" />
       <div className="stack">
         <AppearanceSettings />
         <div className="card pad stack">

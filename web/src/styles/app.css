@@ -2901,3 +2901,65 @@ table.orders .r {
   margin-left: -16px;
   padding-left: 16px;
 }
+
+/* Buttons inside the balance card (finance): the card's empty right side. */
+.balance-actions {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transform: translateY(-50%);
+}
+
+.balance-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+
+.balance-btn.primary {
+  border: 0;
+  background: #ffffff;
+  color: #263140;
+}
+
+:root[data-skin] .balance-card .balance-btn.primary,
+:root[data-skin] .balance-card .balance-btn.primary * { color: #000000 !important; }
+:root[data-skin="minimal"][data-theme="dark"] .balance-card .balance-btn.primary { background: #000000; }
+:root[data-skin="minimal"][data-theme="dark"] .balance-card .balance-btn.primary * { color: #ffffff !important; }
+:root[data-skin="sport"] .balance-card .balance-btn.primary { background: #111111; }
+:root[data-skin="sport"] .balance-card .balance-btn.primary * { color: #d7ff3a !important; }
+
+/* Round «+» floating above the bottom menu. */
+.fab {
+  position: fixed;
+  right: 20px;
+  bottom: calc(var(--nav-height) + var(--safe-bottom) + 32px);
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+:root[data-skin="sport"] .fab { background: #111111; color: #d7ff3a; }
+
+@media (min-width: 960px) {
+  .fab { bottom: 32px; right: 32px; }
+}

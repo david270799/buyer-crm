@@ -7,7 +7,18 @@ import { dayKey, date, krw, LEDGER_LABEL, shortDate, usd } from "../lib/format";
 import { Thumb } from "./orders";
 import { Empty, useSeenAmount } from "./ui";
 
-export function BalanceCard({ balance, to, label = "Баланс" }: { balance: Balance; to?: string; label?: string }) {
+export function BalanceCard({
+  balance,
+  to,
+  label = "Баланс",
+  actions,
+}: {
+  balance: Balance;
+  to?: string;
+  label?: string;
+  /** Round buttons in the empty right part of the card (finance: top up, adjust). */
+  actions?: ReactNode;
+}) {
   const debt = balance.krw < 0;
   const { shown, delta } = useSeenAmount("balance", balance.krw);
   const content = (
@@ -27,6 +38,7 @@ export function BalanceCard({ balance, to, label = "Баланс" }: { balance: 
         {balance.krw_per_usd ? <span className="tiny"> · 1 $ = {balance.krw_per_usd.toLocaleString("en-US")} ₩</span> : null}
       </div>
       {to && <ChevronRight className="chev" size={20} />}
+      {actions && <div className="balance-actions">{actions}</div>}
     </>
   );
   const className = `balance-card ${debt ? "debt" : ""} ${delta !== 0 ? "changed" : ""}`;
