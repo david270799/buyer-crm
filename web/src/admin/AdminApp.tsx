@@ -13,8 +13,10 @@ import { useState } from "react";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 
 import { setClientPreview } from "../api/client";
+import { ShareButton } from "../components/ShareButton";
+import { balancePicture, shipmentPicture, sinceLastDeposit } from "../lib/shareCard";
 import { AppearanceSettings } from "../shared/AppearanceSettings";
-import { useCreateOrder, useOverview, useSetNotifications, useSetRate, useSettings } from "../api/hooks";
+import { useCreateOrder, useTransactions, useOverview, useSetNotifications, useSetRate, useSettings } from "../api/hooks";
 import type { Category, NotificationSettings, NotifyLevel, NotifyRecipient, Shipment } from "../api/types";
 import { type NavItem, PageHead, Shell } from "../components/Layout";
 import { BalanceCard } from "../components/money";
@@ -266,6 +268,22 @@ function AdminShipmentsPage() {
   );
 }
 
+/** The balance and the operations since the last top-up, as a picture for the client. */
+function BalanceShareButton() {
+  const overview = useOverview();
+  const history = useTransactions();
+  const balance = overview.data?.balance;
+  if (!balance || !history.data) return null;
+  return (
+    <ShareButton
+      className="balance-btn"
+      size={17}
+      make={() => balancePicture(balance, sinceLastDeposit(history.data.items))}
+      name="balance.png"
+    />
+  );
+}
+
 function FinancePage() {
   const [sheet, setSheet] = useState<"deposit" | "adjust" | null>(null);
   return (
@@ -280,6 +298,7 @@ function FinancePage() {
             <button className="balance-btn" onClick={() => setSheet("adjust")} aria-label="Корректировка" title="Корректировка">
               <SlidersHorizontal size={17} />
             </button>
+            <BalanceShareButton />
           </>
         }
       />
@@ -449,10 +468,11 @@ function AdminShipmentDetails() {
     <>
       <ShipmentDetailsPage
         onEdit={(shipment, orders) => (
-          <div className="row" style={{ gap: 6 }}>
+          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
             <ShipmentSplitButton shipment={shipment} orders={orders} />
             <ShipmentDeliveredButton orders={orders} />
             <EditButton onClick={() => setEditing(shipment)} />
+            <ShareButton make={() => shipmentPicture(shipment, orders)} name={`${shipment.tracking_code ?? shipment.id}.png`} />
           </div>
         )}
       />

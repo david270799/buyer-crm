@@ -12,6 +12,7 @@ interface TelegramWebApp {
   setHeaderColor(color: string): void;
   setBackgroundColor(color: string): void;
   disableVerticalSwipes?(): void;
+  shareMessage?(msgId: string, callback?: (sent: boolean) => void): void;
   downloadFile?(params: { url: string; file_name: string }, callback?: (accepted: boolean) => void): void;
   onEvent(event: string, handler: () => void): void;
   BackButton: { show(): void; hide(): void; onClick(cb: () => void): void; offClick(cb: () => void): void };
