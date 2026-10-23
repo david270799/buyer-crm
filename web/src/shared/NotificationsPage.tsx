@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 
 import { useEvents, useMarkRead, useUnread } from "../api/hooks";
 import { EventFeed } from "../components/events";
-import { PageHead } from "../components/Layout";
 import { Empty, ErrorState, Loading } from "../components/ui";
 
 export function NotificationsPage() {
@@ -30,7 +29,6 @@ export function NotificationsPage() {
   const items = feed.data?.pages.flatMap((p) => p.items) ?? [];
   return (
     <>
-      <PageHead title="Уведомления" />
       <div className="chips" style={{ marginBottom: 4 }}>
         <button className={`chip ${important ? "active" : ""}`} onClick={() => setImportant(true)}>
           Важные{counts?.important ? ` · ${counts.important}` : ""}

@@ -3,7 +3,7 @@ import { Link, Navigate, Route, Routes } from "react-router-dom";
 
 import { useOrders, useOverview } from "../api/hooks";
 import type { OrderFilters } from "../api/types";
-import { type NavItem, PageHead, Shell } from "../components/Layout";
+import { type NavItem, Shell } from "../components/Layout";
 import { BalanceCard } from "../components/money";
 import { OrderCard } from "../components/orders";
 import { Empty, ErrorState, Loading, useDebounced } from "../components/ui";
@@ -48,7 +48,6 @@ const settingsGear = (
 function ClientSettings() {
   return (
     <>
-      <PageHead title="Настройки" />
       <AppearanceSettings />
     </>
   );
@@ -100,7 +99,6 @@ function ClientOrders() {
   const { data, error, isLoading, refetch } = useOrders(request);
   return (
     <>
-      <PageHead title="Заказы" sub={data ? `${data.total} ${plural(data.total, "заказ", "заказа", "заказов")}` : undefined} />
       <div className="stack">
         <div className="filters">
           <SortSelect value={sort} onChange={setSort} />
