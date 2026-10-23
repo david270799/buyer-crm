@@ -2909,7 +2909,7 @@ table.orders .r {
   right: 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   transform: translateY(-50%);
 }
 
@@ -2962,4 +2962,14 @@ table.orders .r {
 
 @media (min-width: 960px) {
   .fab { bottom: 32px; right: 32px; }
+}
+
+/* Three buttons (finance: top up, adjust, share) still fit the card's height. */
+.balance-actions:has(> :nth-child(3)) {
+  gap: 6px;
+}
+
+.balance-actions:has(> :nth-child(3)) .balance-btn {
+  width: 36px;
+  height: 36px;
 }

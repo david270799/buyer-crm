@@ -53,6 +53,7 @@ from crm.services.order_service import BulkUpdate, NewOrder, OrderQuery, OrderUp
 from crm.services.shipment_service import ShipmentDetails, ShipmentUpdate
 from crm.services.showcase_service import CartLine
 from crm.services.sizes import order_sizes
+from crm.services.telegram_share import TelegramShare
 from crm.storage import TransactionContentionError
 
 logger = logging.getLogger(__name__)
@@ -1057,6 +1058,22 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
             "engine": result.engine,
             "note": result.note,
         }
+
+    @app.post("/api/share")
+    def share_picture(
+        p: Admin, file: Annotated[UploadFile, File()], picker: bool = True
+    ) -> dict[str, Any]:
+        """A picture made in the Mini App (shipment, balance) goes to the
+        admin's Telegram to be sent on by hand; nothing is sent to the client."""
+        if p.preview:
+            raise PermissionDeniedError("В режиме «Как видит клиент» делиться нельзя.")
+        if not config.bot_token or config.demo:
+            raise ConfigurationError("Поделиться можно только в Telegram (нужен BOT_TOKEN).")
+        data = file.file.read(MAX_UPLOAD_BYTES + 1)
+        if len(data) > MAX_UPLOAD_BYTES:
+            raise ValidationError("Картинка больше 20 МБ.")
+        prepared = TelegramShare(config.bot_token).share_photo(p.user.id, data, picker=picker)
+        return {"prepared_id": prepared, "in_chat": prepared is None}
 
     @app.post("/api/images")
     def upload_image(p: Admin, file: Annotated[UploadFile, File()]) -> dict[str, Any]:
