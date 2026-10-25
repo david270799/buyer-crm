@@ -36,6 +36,7 @@ from crm.services.order_service import (
     RebuyResult,
 )
 from crm.services.profit_service import ProfitResult
+from crm.services.server_status import ServerStatus
 from crm.services.shipment_service import ShipmentUpdateResult, ShipResult
 
 
@@ -440,6 +441,53 @@ def notify_settings(settings: NotificationSettings, client_has_telegram: bool) -
     return "\n".join(lines)
 
 
+def _threads(n: int) -> str:
+    if n % 10 == 1 and n % 100 != 11:
+        return "поток"
+    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+        return "потока"
+    return "потоков"
+
+
+def _gb(mb: int) -> str:
+    return f"{mb / 1024:.1f} ГБ"
+
+
+def server_status(status: ServerStatus) -> str:
+    """/server: memory, disk and processor in plain words."""
+    load1, load5, load15 = status.load
+    share = load1 / max(1, status.cpus)
+    mood = "почти не загружен" if share < 0.3 else "средняя нагрузка" if share < 0.7 else "загружен"
+    lines = ["🖥 <b>Сервер</b>"]
+    lines.append(
+        f"Процессор: {status.cpus} {_threads(status.cpus)} · {mood} "
+        f"(нагрузка {load1:g} / {load5:g} / {load15:g} за 1 / 5 / 15 мин)"
+    )
+    used = status.mem_used_mb
+    if used is not None and status.mem_total_mb:
+        percent = round(used * 100 / status.mem_total_mb)
+        lines.append(
+            f"Память: занято {_gb(used)} из {_gb(status.mem_total_mb)} ({percent} %) · "
+            f"свободно {_gb(status.mem_available_mb or 0)}"
+        )
+    used_disk = round(status.disk_total_gb - status.disk_free_gb, 1)
+    lines.append(
+        f"Диск: занято {used_disk:g} из {status.disk_total_gb:g} ГБ · "
+        f"свободно {status.disk_free_gb:g} ГБ"
+    )
+    if status.crm_mb is not None:
+        lines.append(f"CRM сама занимает: {status.crm_mb} МБ памяти")
+    if status.uptime_s is not None:
+        days, rest = divmod(status.uptime_s, 86400)
+        lines.append(f"Работает без перезагрузки: {days} дн. {rest // 3600} ч")
+    if status.small_apps_left is not None:
+        lines.append(
+            f"\nСвободной памяти хватит ещё примерно на <b>{status.small_apps_left}</b> небольших "
+            "приложений (бот или сайт ~150 МБ); тяжёлым (медиасервер, облако) нужно 1–4 ГБ каждому."
+        )
+    return "\n".join(lines)
+
+
 def second_client_set(client: ClientInfo) -> str:
     if client.second_telegram_id is None:
         return "✅ Второй человек клиента убран: в CRM снова входит только основной клиент."
@@ -585,6 +633,7 @@ ADMIN_HELP = """<b>Команды администратора</b>
 /add — ответом на фото: принять его как заказ
 /setclient — ответом на сообщение клиента: указать, кто клиент
 /setclient2 ID [имя] — второй человек клиента (тот же баланс и заказы); /setclient2 off — убрать
+/server — сервер: память, диск, нагрузка процессора и сколько ещё приложений поместится
 /pagefile ссылка — страница магазина файлом (как её видит сервер; для подключения нового магазина)
 Фото в личку боту — бот спросит, какой это заказ (сверит размер со складом), или «➕ новый заказ»
 /arrived или кнопка «📦 Пришло на склад»; фото с подписью «N5» — сразу проверка N5: размер, \

@@ -14,6 +14,7 @@ from crm.domain.enums import Role
 from crm.domain.errors import CRMError
 from crm.services.common import Actor
 from crm.services.container import Services
+from crm.services.server_status import read_status
 
 _STRANGER_TEXT = "Это закрытая CRM-система.\nВаш Telegram ID: <code>{user_id}</code>"
 SETCLIENT_USAGE = (
@@ -185,6 +186,13 @@ async def backup(message: Message, backup: NightlyBackup | None = None) -> None:
     await backup.run_once(to=message.from_user.id)
 
 
+async def server(message: Message, actor: Actor, settings: Settings | None = None) -> None:
+    """/server — memory, disk and processor load of the server (read-only)."""
+    data_dir = settings.data_dir if settings is not None else "/"
+    status = await asyncio.to_thread(read_status, actor, data_dir)
+    await answer_privately(message, fmt.server_status(status))
+
+
 async def pin(message: Message, command: CommandObject, services: Services, actor: Actor) -> None:
     """/pin — is a Mini App PIN set; /pin off — remove a forgotten PIN.
     A new PIN is set only in the Mini App (the digits never go through a chat)."""
@@ -211,6 +219,7 @@ def build() -> Router:
     router.message.register(setclient2, Command("setclient2"), HasRole(Role.ADMIN))
     router.message.register(pin, Command("pin"), HasRole(Role.ADMIN))
     router.message.register(backup, Command("backup"), HasRole(Role.ADMIN))
+    router.message.register(server, Command("server"), HasRole(Role.ADMIN))
     router.message.register(setgroup, Command("setgroup"), HasRole(Role.ADMIN))
     router.message.register(unsetgroup, Command("unsetgroup"), HasRole(Role.ADMIN))
     return router
