@@ -2,6 +2,7 @@ from aiogram import Router
 
 from crm.bot.handlers import (
     arrival,
+    client_buttons,
     common,
     errors,
     fallback,
@@ -21,6 +22,7 @@ def build_router(services: Services, settings: Settings) -> Router:
     # Order matters: the fallback must stay last.
     root.include_routers(
         common.build(),
+        client_buttons.build(),  # «💰 Баланс» / «📦 Получил посылку»
         orders.build(),
         shipments.build(),
         finance.build(),

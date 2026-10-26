@@ -49,7 +49,16 @@ async def start(message: Message, role: Role | None, settings: Settings | None =
             keyboard = InlineKeyboardMarkup(inline_keyboard=rows)
         await message.answer(fmt.ADMIN_HELP, reply_markup=keyboard)
     elif role is Role.CLIENT:
-        await message.answer(fmt.CLIENT_HELP, reply_markup=keyboard)
+        if private:
+            from crm.bot.handlers.client_buttons import CLIENT_KEYBOARD
+
+            # The two buttons under the message field (the owner, 26.10.2026); the
+            # «Открыть CRM» button goes in its own message (one keyboard per message).
+            await message.answer(fmt.CLIENT_HELP, reply_markup=CLIENT_KEYBOARD)
+            if keyboard:
+                await message.answer("CRM — заказы, отправки и витрина:", reply_markup=keyboard)
+        else:
+            await message.answer(fmt.CLIENT_HELP)
     elif private and message.from_user:
         await answer(message, _STRANGER_TEXT.format(user_id=message.from_user.id))
 

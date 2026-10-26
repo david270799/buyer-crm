@@ -399,6 +399,12 @@ def _sort_key(sort: str, status: OrderStatus | None = None):
     return lambda o: order_number(o.id) or 0
 
 
+@dataclass(frozen=True)
+class ReceiptResult:
+    delivered: list[str]  # became «Доставлен»
+    missing: list[str]  # still «Отправлен», marked «Требует внимания»
+
+
 class OrderService:
     def __init__(
         self,
@@ -1103,6 +1109,59 @@ class OrderService:
             if not ids:
                 return BulkResult()
             return self._set_status(tx, actor, ids, OrderStatus.DELIVERED)
+
+        return self._db.run_transaction(fn)
+
+    def client_received(
+        self, actor: Actor, shipment_id: str, received_ids: Sequence[str]
+    ) -> "ReceiptResult":
+        """«📦 Получил посылку» in the client's chat (the owner, 26.10.2026): the ticked
+        orders of a shipment in transit become «Доставлен»; the rest stay «Отправлен»
+        and get «Требует внимания», so the owner sees what did not arrive.
+        No money moves."""
+        if actor.role not in (Role.ADMIN, Role.CLIENT):
+            require_admin(actor)
+        received = {normalize_order_id(i) for i in received_ids}
+
+        def fn(tx: Transaction) -> ReceiptResult:
+            shipment = self._shipments.get(tx, shipment_id)
+            if shipment is None:
+                raise NotFoundError(f"Отправка {shipment_id} не найдена.")
+            orders = self._orders.get_many(tx, shipment.order_ids)
+            in_transit = [
+                i
+                for i in shipment.order_ids
+                if (o := orders.get(i)) is not None
+                and o.status is OrderStatus.CARGO
+                and o.shipment_id == shipment_id
+            ]
+            arrived = [i for i in in_transit if i in received]
+            missing = [i for i in in_transit if i not in received]
+            delivered = (
+                self._set_status(tx, actor, arrived, OrderStatus.DELIVERED).updated
+                if arrived
+                else []
+            )
+            now = self._clock.now()
+            for order_id in missing:
+                if orders[order_id].attention_required:
+                    continue
+                self._orders.update(
+                    tx,
+                    order_id,
+                    {"attention_required": True, "updated_at": now, "updated_by": actor.id},
+                )
+                self._auditor.record(
+                    tx,
+                    actor,
+                    now,
+                    action="order.not_received",
+                    entity_type="order",
+                    entity_id=order_id,
+                    before={"attention_required": False},
+                    after={"attention_required": True, "shipment_id": shipment_id},
+                )
+            return ReceiptResult(delivered=delivered, missing=missing)
 
         return self._db.run_transaction(fn)
 
