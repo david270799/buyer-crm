@@ -9,7 +9,7 @@ import { Thumb } from "../components/orders";
 import { PhotoCarousel } from "../components/PhotoCarousel";
 import { StatusBadge } from "../components/status";
 import { Confirm, Empty, ErrorState, Loading, errorText, useToast } from "../components/ui";
-import { date, items, krw, orderTitle, sizeText } from "../lib/format";
+import { date, items, krw, orderTitle, shipmentTotal, sizeText } from "../lib/format";
 import { CopyText } from "./OrderDetailsPage";
 
 export function ShipmentsPage() {
@@ -43,7 +43,7 @@ export function ShipmentsPage() {
               </div>
               <div className="stack" style={{ gap: 4, alignItems: "flex-end" }}>
                 <ShipmentStatus delivered={s.delivered} />
-                {s.shipping_cost_krw ? <div className="amount small muted">{krw(s.shipping_cost_krw)}</div> : null}
+                {shipmentTotal(s) ? <div className="amount small muted">{krw(shipmentTotal(s))}</div> : null}
               </div>
               {/* A full-width button under a shipment in transit (the owner, 22.10.2026). */}
               {!s.delivered && <DeliveredButton wide onClick={() => setArrived(s)} />}

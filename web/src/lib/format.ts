@@ -1,4 +1,4 @@
-import type { Category, LedgerType, OrderStatus } from "../api/types";
+import type { Category, LedgerType, OrderStatus, Shipment } from "../api/types";
 
 const TZ = "Asia/Seoul";
 const NBSP = " ";
@@ -149,4 +149,12 @@ export const CATEGORY_LABEL: Record<Category, string> = {
 /** «L · KR 80», «KR 270», «42»: the usual and the Korean size together. */
 export function sizeText(order: { size?: string | null; size_kr?: string | null }): string | null {
   return [order.size, order.size_kr ? `KR ${order.size_kr}` : null].filter(Boolean).join(" · ") || null;
+}
+
+/** What the list shows per shipment (owner, 26.10.2026): the admin sees the total
+ * charged — delivery plus the watches — like «Итого списано» on the shipment page;
+ * the client (no charge fields) sees the delivery cost as before. */
+export function shipmentTotal(s: Shipment): number {
+  if (s.shipping_charged_krw === undefined && s.watch_charged_krw === undefined) return s.shipping_cost_krw ?? 0;
+  return (s.shipping_charged_krw ?? s.shipping_cost_krw ?? 0) + (s.watch_charged_krw ?? 0);
 }

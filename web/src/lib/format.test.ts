@@ -1,6 +1,7 @@
+import type { Shipment } from "../api/types";
 import { describe, expect, it } from "vitest";
 
-import { date, dayKey, formatAmountInput, items, krw, parseAmount, usd } from "./format";
+import { date, dayKey, formatAmountInput, items, krw, parseAmount, shipmentTotal, usd } from "./format";
 
 const nbsp = (s: string) => s.replace(/ /g, " ");
 
@@ -39,5 +40,17 @@ describe("plural", () => {
     expect(items(8)).toBe("8 товаров");
     expect(items(21)).toBe("21 товар");
     expect(items(12)).toBe("12 товаров");
+  });
+});
+
+describe("shipmentTotal", () => {
+  const base = { shipping_cost_krw: 73000 } as Shipment;
+  it("admin: delivery charged plus the watches", () => {
+    expect(shipmentTotal({ ...base, shipping_charged_krw: 73000, watch_charged_krw: 27000 })).toBe(100000);
+    expect(shipmentTotal({ ...base, shipping_charged_krw: 0, watch_charged_krw: 13500 })).toBe(13500);
+  });
+  it("client: only the delivery cost", () => {
+    expect(shipmentTotal(base)).toBe(73000);
+    expect(shipmentTotal({ ...base, shipping_cost_krw: null })).toBe(0);
   });
 });
