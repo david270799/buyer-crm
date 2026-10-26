@@ -142,7 +142,10 @@ class IntakeService:
             link = item.link if item.link in caption_links else None
             # «L 80», «42/265»: the usual and the Korean size (owner, 16.10.2026).
             size, size_kr = order_sizes(
-                _no_links(item.size), strip_quantity(incoming.caption), from_caption=one_product
+                _no_links(item.size),
+                strip_quantity(incoming.caption),
+                from_caption=one_product,
+                clothes=category_from_text(recognition.category) == "clothes",
             )
             return {
                 "brand": _safe(_clean_text, _no_links(item.brand), "Бренд", _MAX_SHORT_TEXT),

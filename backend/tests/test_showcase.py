@@ -279,7 +279,7 @@ def test_colour_then_size_product_gets_every_pair_with_stock(showcase, admin):
         showcase.order(admin, [CartLine(item.id, "090(S)")])
     [order] = showcase.order(admin, [CartLine(item.id, "095(M)", "NJ5JR66B_CHC")])
     assert order.model.endswith("· NJ5JR66B_CHC")
-    assert (order.size, order.size_kr) == ("M", "095")
+    assert (order.size, order.size_kr) == ("M", "95")
 
 
 def test_colour_answers_failing_keep_the_page_list(showcase, admin):

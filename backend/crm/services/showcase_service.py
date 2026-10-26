@@ -683,7 +683,9 @@ class ShowcaseService:
         created = []
         for line in lines:
             item = items[line.item_id]
-            size, size_kr = order_sizes(line.size, None, from_caption=False)
+            size, size_kr = order_sizes(
+                line.size, None, from_caption=False, clothes=item.category == "clothes"
+            )
             created.append(
                 self._orders.create_showcase_order(
                     actor,
