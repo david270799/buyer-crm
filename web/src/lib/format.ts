@@ -179,3 +179,16 @@ export function formatUsdInput(text: string, allowNegative = false): string {
 export function usdToKrw(amount: number, rate: number): number {
   return Math.round(amount * rate);
 }
+
+/** «$100 · 1 $ = 1,350 ₩» — added to a top-up comment when it was typed in dollars. */
+export function usdNote(dollars: number, rate: number): string {
+  const amount = dollars.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  return `$${amount} · 1 $ = ${rate.toLocaleString("en-US")} ₩`;
+}
+
+export function withUsdNote(comment: string, usd: { dollars: number; rate: number } | null): string {
+  const text = comment.trim();
+  if (!usd) return text;
+  const note = usdNote(usd.dollars, usd.rate);
+  return text ? `${text} · ${note}` : note;
+}

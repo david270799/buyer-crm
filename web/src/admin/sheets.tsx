@@ -29,7 +29,7 @@ import {
 import type { BulkResult, Category, LinkImport, Order, OrderStatus, PhotoRecognition, Shipment } from "../api/types";
 import { Thumb } from "../components/orders";
 import { Checkbox, Confirm, errorText, Field, MoneyInput, Sheet, Switch, useToast } from "../components/ui";
-import { STATUS_LABEL, krw, sizeText, todayKey } from "../lib/format";
+import { STATUS_LABEL, krw, sizeText, todayKey, usdNote, withUsdNote } from "../lib/format";
 
 // --- helpers ------------------------------------------------------------------
 
@@ -1396,6 +1396,9 @@ export function MoneySheet({ kind, onClose }: { kind: "deposit" | "adjust"; onCl
   const mutation = useMoney(kind);
   const [amount, setAmount] = useState<number | null>(null);
   const [comment, setComment] = useState("");
+  // Typed in dollars → «$100 · 1 $ = 1,350 ₩» goes into the comment (owner, 26.10.2026).
+  const [usd, setUsd] = useState<{ dollars: number; rate: number } | null>(null);
+  const fullComment = withUsdNote(comment, kind === "adjust" ? null : usd);
   const [confirming, setConfirming] = useState(false);
   // One key per opened form: a double tap or a retry cannot post twice.
   const [key] = useState(() => crypto.getRandomValues(new Uint32Array(3)).join("-"));
@@ -1403,7 +1406,7 @@ export function MoneySheet({ kind, onClose }: { kind: "deposit" | "adjust"; onCl
   const valid = amount !== null && amount !== 0 && (adjust || amount > 0) && (!adjust || comment.trim().length > 0);
   const submit = () =>
     mutation.mutate(
-      { amount_krw: amount!, comment: comment.trim() || null, idempotency_key: key },
+      { amount_krw: amount!, comment: fullComment || null, idempotency_key: key },
       {
         onSuccess: (r) => {
           toast(r.already_done ? "Операция уже была проведена" : `${adjust ? "Корректировка" : "Пополнение"}: ${krw(amount, true)}`);
@@ -1421,7 +1424,7 @@ export function MoneySheet({ kind, onClose }: { kind: "deposit" | "adjust"; onCl
         onClose={() => setConfirming(false)}
         onConfirm={submit}
       >
-        {comment.trim() && <div className="small muted">«{comment.trim()}»</div>}
+        {fullComment && <div className="small muted">«{fullComment}»</div>}
         <BalancePreview delta={amount!} label={adjust ? "Корректировка" : "Пополнение"} />
       </Confirm>
     );
@@ -1443,11 +1446,12 @@ export function MoneySheet({ kind, onClose }: { kind: "deposit" | "adjust"; onCl
     >
       <div className="stack">
         <Field label={adjust ? "Сумма (минус — списание)" : "Сумма"}>
-          <MoneyInput value={amount} onChange={setAmount} allowNegative={adjust} autoFocus placeholder={adjust ? "-15,000" : "5,000,000"} usd={!adjust} />
+          <MoneyInput value={amount} onChange={setAmount} allowNegative={adjust} autoFocus placeholder={adjust ? "-15,000" : "5,000,000"} usd={!adjust} onUsd={(dollars, rate) => setUsd(dollars !== null && rate ? { dollars, rate } : null)} />
         </Field>
         <Field label={adjust ? "Причина (обязательно)" : "Комментарий"} hint="Клиент увидит комментарий в истории баланса">
           <input className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder={adjust ? "Комиссия банка" : "Перевод 26.09"} />
         </Field>
+        {!adjust && usd && <div className="tiny muted">В комментарий добавится: {usdNote(usd.dollars, usd.rate)}</div>}
       </div>
     </Sheet>
   );

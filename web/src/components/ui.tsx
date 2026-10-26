@@ -202,6 +202,7 @@ export function MoneyInput({
   placeholder,
   autoFocus,
   usd,
+  onUsd,
 }: {
   value: number | null;
   onChange: (value: number | null) => void;
@@ -210,6 +211,8 @@ export function MoneyInput({
   autoFocus?: boolean;
   /** The «₩ / $» switch — only balance top-ups (owner, 26.10.2026). */
   usd?: boolean;
+  /** Dollars typed in «$» mode (null in «₩» mode) and the rate used. */
+  onUsd?: (dollars: number | null, rate: number | null) => void;
 }) {
   const [text, setText] = useState(value === null ? "" : formatAmountInput(String(value), allowNegative));
   // «$»: the owner types dollars, the field keeps won by the current rate (26.10.2026).
@@ -227,6 +230,8 @@ export function MoneyInput({
     } else {
       setText(value === null ? "" : formatAmountInput(String(value), allowNegative));
     }
+    if (inUsd) onUsd?.(null, null);
+    else if (value !== null && rate) onUsd?.(Math.round((value / rate) * 100) / 100, rate);
     setInUsd(!inUsd);
   };
   const showSwitch = !!usd && !!rate;
@@ -244,6 +249,7 @@ export function MoneyInput({
             setUsdText(next);
             const dollars = parseUsd(next);
             onChange(dollars === null ? null : usdToKrw(dollars, rate));
+            onUsd?.(dollars, rate);
             return;
           }
           const next = formatAmountInput(e.target.value, allowNegative);

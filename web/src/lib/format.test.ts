@@ -1,7 +1,7 @@
 import type { Shipment } from "../api/types";
 import { describe, expect, it } from "vitest";
 
-import { date, dayKey, formatAmountInput, items, krw, parseAmount, parseUsd, formatUsdInput, shipmentTotal, usd, usdToKrw } from "./format";
+import { date, dayKey, formatAmountInput, items, krw, parseAmount, parseUsd, formatUsdInput, shipmentTotal, usd, usdToKrw, withUsdNote } from "./format";
 
 const nbsp = (s: string) => s.replace(/ /g, " ");
 
@@ -71,5 +71,13 @@ describe("dollars in money inputs", () => {
     expect(usdToKrw(100, 1350)).toBe(135000);
     expect(usdToKrw(10.5, 1387.4)).toBe(14568);
     expect(usdToKrw(-20, 1350)).toBe(-27000);
+  });
+});
+
+describe("withUsdNote", () => {
+  it("adds the dollars to a top-up comment", () => {
+    expect(withUsdNote("", { dollars: 100, rate: 1350 })).toBe("$100 · 1 $ = 1,350 ₩");
+    expect(withUsdNote(" Перевод ", { dollars: 118.5, rate: 1387.5 })).toBe("Перевод · $118.5 · 1 $ = 1,387.5 ₩");
+    expect(withUsdNote("Перевод", null)).toBe("Перевод");
   });
 });
