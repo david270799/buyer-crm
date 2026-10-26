@@ -158,3 +158,24 @@ export function shipmentTotal(s: Shipment): number {
   if (s.shipping_charged_krw === undefined && s.watch_charged_krw === undefined) return s.shipping_cost_krw ?? 0;
   return (s.shipping_charged_krw ?? s.shipping_cost_krw ?? 0) + (s.watch_charged_krw ?? 0);
 }
+
+/** «$» mode of money inputs (owner, 26.10.2026): dollars typed, won saved by the rate.
+ * "1,234.5" → 1234.5; up to two decimals; a leading "-" when negatives are allowed. */
+export function parseUsd(text: string): number | null {
+  const cleaned = text.replace(/[\s,_$]/g, "");
+  if (!/^-?\d+(\.\d{0,2})?$/.test(cleaned)) return null;
+  return Number(cleaned);
+}
+
+export function formatUsdInput(text: string, allowNegative = false): string {
+  const negative = allowNegative && text.trim().startsWith("-");
+  const [whole = "", ...rest] = text.replace(/[^\d.]/g, "").split(".");
+  const digits = whole.replace(/^0+(?=\d)/, "");
+  const head = digits ? group.format(Number(digits)) : rest.length ? "0" : "";
+  const tail = rest.length ? `.${rest.join("").slice(0, 2)}` : "";
+  return `${negative ? "-" : ""}${head}${tail}`;
+}
+
+export function usdToKrw(amount: number, rate: number): number {
+  return Math.round(amount * rate);
+}

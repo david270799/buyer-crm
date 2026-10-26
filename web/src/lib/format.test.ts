@@ -1,7 +1,7 @@
 import type { Shipment } from "../api/types";
 import { describe, expect, it } from "vitest";
 
-import { date, dayKey, formatAmountInput, items, krw, parseAmount, shipmentTotal, usd } from "./format";
+import { date, dayKey, formatAmountInput, items, krw, parseAmount, parseUsd, formatUsdInput, shipmentTotal, usd, usdToKrw } from "./format";
 
 const nbsp = (s: string) => s.replace(/ /g, " ");
 
@@ -52,5 +52,24 @@ describe("shipmentTotal", () => {
   it("client: only the delivery cost", () => {
     expect(shipmentTotal(base)).toBe(73000);
     expect(shipmentTotal({ ...base, shipping_cost_krw: null })).toBe(0);
+  });
+});
+
+describe("dollars in money inputs", () => {
+  it("parses and formats what is typed", () => {
+    expect(parseUsd("1,234.5")).toBe(1234.5);
+    expect(parseUsd("100")).toBe(100);
+    expect(parseUsd("-15.25")).toBe(-15.25);
+    expect(parseUsd("1.234")).toBeNull();
+    expect(parseUsd("")).toBeNull();
+    expect(formatUsdInput("1234.567")).toBe("1,234.56");
+    expect(formatUsdInput("0012")).toBe("12");
+    expect(formatUsdInput(".5")).toBe("0.5");
+    expect(formatUsdInput("-20", true)).toBe("-20");
+  });
+  it("converts by the rate, rounded to whole won", () => {
+    expect(usdToKrw(100, 1350)).toBe(135000);
+    expect(usdToKrw(10.5, 1387.4)).toBe(14568);
+    expect(usdToKrw(-20, 1350)).toBe(-27000);
   });
 });

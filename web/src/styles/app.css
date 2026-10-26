@@ -3003,3 +3003,10 @@ table.orders .r {
 @keyframes share-fade {
   from { opacity: 0; }
 }
+
+/* Money inputs: «₩ / $» switch (26.10.2026) */
+.money-input { position: relative; }
+.money-input.with-switch .input { padding-right: 52px; }
+.money-switch { position: absolute; right: 6px; top: 6px; height: calc(100% - 12px); max-height: 36px; min-width: 40px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); color: var(--text); font: inherit; font-weight: 800; cursor: pointer; }
+.money-switch.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+.money-hint { margin-top: 6px; }

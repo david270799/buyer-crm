@@ -10,7 +10,8 @@ import {
   useState,
 } from "react";
 
-import { formatAmountInput, parseAmount } from "../lib/format";
+import { useSettings } from "../api/hooks";
+import { formatAmountInput, formatUsdInput, krw, parseAmount, parseUsd, usdToKrw } from "../lib/format";
 import { motionAllowed } from "../lib/skin";
 import { haptic } from "../telegram";
 
@@ -200,30 +201,67 @@ export function MoneyInput({
   allowNegative,
   placeholder,
   autoFocus,
+  noUsd,
 }: {
   value: number | null;
   onChange: (value: number | null) => void;
   allowNegative?: boolean;
   placeholder?: string;
   autoFocus?: boolean;
+  /** No «$» switch (the rate field itself). */
+  noUsd?: boolean;
 }) {
   const [text, setText] = useState(value === null ? "" : formatAmountInput(String(value), allowNegative));
+  // «$»: the owner types dollars, the field keeps won by the current rate (26.10.2026).
+  const rate = useSettings().data?.krw_per_usd ?? null;
+  const [inUsd, setInUsd] = useState(false);
+  const [usdText, setUsdText] = useState("");
   useEffect(() => {
+    if (inUsd) return;
     if (parseAmount(text) !== value) setText(value === null ? "" : formatAmountInput(String(value), allowNegative));
   }, [value]);
+  const toggle = () => {
+    haptic("select");
+    if (!inUsd) {
+      setUsdText(value !== null && rate ? formatUsdInput(String(Math.round((value / rate) * 100) / 100), allowNegative) : "");
+    } else {
+      setText(value === null ? "" : formatAmountInput(String(value), allowNegative));
+    }
+    setInUsd(!inUsd);
+  };
+  const showSwitch = !noUsd && !!rate;
   return (
-    <input
-      className="input num"
-      inputMode={allowNegative ? "text" : "numeric"}
-      placeholder={placeholder ?? "₩"}
-      value={text}
-      autoFocus={autoFocus}
-      onChange={(e) => {
-        const next = formatAmountInput(e.target.value, allowNegative);
-        setText(next);
-        onChange(parseAmount(next));
-      }}
-    />
+    <div className={`money-input${showSwitch ? " with-switch" : ""}`}>
+      <input
+        className="input num"
+        inputMode={allowNegative ? "text" : inUsd ? "decimal" : "numeric"}
+        placeholder={inUsd ? "$" : placeholder ?? "₩"}
+        value={inUsd ? usdText : text}
+        autoFocus={autoFocus}
+        onChange={(e) => {
+          if (inUsd && rate) {
+            const next = formatUsdInput(e.target.value, allowNegative);
+            setUsdText(next);
+            const dollars = parseUsd(next);
+            onChange(dollars === null ? null : usdToKrw(dollars, rate));
+            return;
+          }
+          const next = formatAmountInput(e.target.value, allowNegative);
+          setText(next);
+          onChange(parseAmount(next));
+        }}
+      />
+      {showSwitch && (
+        <button type="button" className={`money-switch${inUsd ? " on" : ""}`} onClick={toggle} aria-label={inUsd ? "Вводить в вонах" : "Вводить в долларах"}>
+          {inUsd ? "$" : "₩"}
+        </button>
+      )}
+      {inUsd && rate && (
+        <div className="tiny muted money-hint">
+          = {krw(value)} · 1 $ = {rate.toLocaleString("en-US")} ₩
+        </div>
+      )}
+    </div>
   );
 }
 

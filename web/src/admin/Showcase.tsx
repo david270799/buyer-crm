@@ -786,7 +786,7 @@ function PrepEditor({
                   </button>
                 ))}
               </div>
-              <MoneyInput value={form.markup_value} onChange={(v) => set("markup_value", v)} placeholder="0" />
+              <MoneyInput value={form.markup_value} onChange={(v) => set("markup_value", v)} placeholder="0" noUsd={form.markup_type === "pct"} />
             </div>
           </div>
         </div>
