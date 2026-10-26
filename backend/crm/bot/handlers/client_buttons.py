@@ -49,8 +49,15 @@ logger = logging.getLogger(__name__)
 
 BALANCE_BUTTON = "💰 Баланс"
 PARCEL_BUTTON = "📦 Получил посылку"
+# «💰 Баланс» is hidden for now (the owner, 26.10.2026: «скрой, потом скажу»);
+# the handler stays, set True to show the button again.
+SHOW_BALANCE_BUTTON = False
 CLIENT_KEYBOARD = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text=BALANCE_BUTTON), KeyboardButton(text=PARCEL_BUTTON)]],
+    keyboard=[
+        [KeyboardButton(text=BALANCE_BUTTON), KeyboardButton(text=PARCEL_BUTTON)]
+        if SHOW_BALANCE_BUTTON
+        else [KeyboardButton(text=PARCEL_BUTTON)]
+    ],
     resize_keyboard=True,
     is_persistent=True,
 )

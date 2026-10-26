@@ -123,3 +123,9 @@ def test_pictures_are_drawn(db, services, admin):
         datetime(2026, 10, 26, tzinfo=UTC),
     )
     assert Image.open(io.BytesIO(png)).height == 48 + 310 + 60 + 2 * 124 + 48
+
+
+def test_only_the_parcel_button_is_shown_for_now():
+    from crm.bot.handlers.client_buttons import CLIENT_KEYBOARD, PARCEL_BUTTON
+
+    assert [[b.text for b in row] for row in CLIENT_KEYBOARD.keyboard] == [[PARCEL_BUTTON]]
