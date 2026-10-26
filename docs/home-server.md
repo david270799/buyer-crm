@@ -101,6 +101,31 @@ docker run --rm -v buyer-crm_crm_data:/data -v /root:/in alpine tar xzf /in/crm-
    - `DOMAIN=` — **пусто** (сертификат делает Cloudflare, Caddy работает по HTTP внутри);
    - `MINI_APP_URL=https://crm.ваш-домен/` — адрес из пункта 3.
 
+### Как сделано на самом деле (26.10.2026): DuckDNS + nginx мини-ПК
+
+Сначала адрес давал Tailscale Funnel (`https://davron.tail91ec3a.ts.net`), но через него всё
+тормозило: файл приложения 415 КБ скачивался за 1–12 с (35–300 КБ/с), каждая кнопка — 2–5 с.
+Сам сервер отвечает за 0,005–0,02 с, диск быстрый — узким местом был только Funnel.
+Теперь путь прямой (тот же файл — 0,05–0,3 с):
+
+```
+телефон → buyercrm.duckdns.org (118.36.233.224) → роутер, порты 80/443
+        → nginx на самом мини-ПК (там же сертификат Let's Encrypt, certbot)
+        → контейнер davron 10.89.76.186:80 → Caddy (HTTP) → CRM
+```
+
+- **В контейнере davron:** `docker-compose.override.yml` — `caddy` `ports: !override ["80:80"]`
+  (не `127.0.0.1:80:80`, иначе nginx мини-ПК до CRM не достучится); в `.env` `DOMAIN=` пусто,
+  `MINI_APP_URL=https://buyercrm.duckdns.org`. Адрес в DuckDNS обновляет cron каждые 5 минут:
+  `curl -s -K /root/.duckdns` (в файле — адрес обновления с токеном, `chmod 600`).
+- **На мини-ПК (хост LXD):** сайт `/etc/nginx/sites-available/buyercrm` (`proxy_pass
+  http://10.89.76.186:80`, `client_max_body_size 25m`) и сертификат
+  `certbot --nginx -d buyercrm.duckdns.org`. Рядом работает сайт второго блока — правило nginx
+  только для имени `buyercrm.duckdns.org`, его не трогает.
+- **Проверка, что бот отдаёт новый адрес:** `docker compose exec crm printenv MINI_APP_URL`;
+  кнопку «CRM» бот ставит сам при запуске.
+- Funnel больше не нужен: `tailscale funnel reset`.
+
 ## Шаг 5. Запустить
 
 ```bash
