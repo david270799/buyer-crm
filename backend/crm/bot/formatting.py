@@ -463,6 +463,16 @@ def server_status(status: ServerStatus) -> str:
         f"Процессор: {status.cpus} {_threads(status.cpus)} · {mood} "
         f"(нагрузка {load1:g} / {load5:g} / {load15:g} за 1 / 5 / 15 мин)"
     )
+    if status.cpu_temp_c is not None:
+        temp = status.cpu_temp_c
+        note = (
+            " ⚠️ горячо — проверьте вентилятор и пыль"
+            if temp >= 85
+            else " · тёплый, но в норме"
+            if temp >= 70
+            else " · норма"
+        )
+        lines.append(f"Температура процессора: {temp:g} °C{note}")
     used = status.mem_used_mb
     if used is not None and status.mem_total_mb:
         percent = round(used * 100 / status.mem_total_mb)

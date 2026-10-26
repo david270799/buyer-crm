@@ -2,7 +2,13 @@ import pytest
 
 from crm.bot import formatting as fmt
 from crm.domain.errors import PermissionDeniedError
-from crm.services.server_status import ServerStatus, parse_meminfo, parse_rss_mb, read_status
+from crm.services.server_status import (
+    ServerStatus,
+    cpu_temperature,
+    parse_meminfo,
+    parse_rss_mb,
+    read_status,
+)
 
 MEMINFO = """MemTotal:        4194304 kB
 MemFree:         3500000 kB
@@ -42,3 +48,35 @@ def test_read_status_is_admin_only(admin, client_actor, tmp_path):
         read_status(client_actor, tmp_path)
     status = read_status(admin, tmp_path)
     assert status.cpus >= 1 and status.disk_total_gb > 0
+
+
+def _sensor(root, n, name, millideg):
+    d = root / f"hwmon{n}"
+    d.mkdir()
+    (d / "name").write_text(name + "\n")
+    (d / "temp1_input").write_text(f"{millideg}\n")
+
+
+def test_cpu_temperature_prefers_the_processor_sensor(tmp_path):
+    assert cpu_temperature(tmp_path) is None  # no sensors visible (e.g. a container)
+    _sensor(tmp_path, 0, "acpitz", 27800)
+    _sensor(tmp_path, 1, "nvme", 39850)
+    assert cpu_temperature(tmp_path) == 27.8
+    _sensor(tmp_path, 2, "k10temp", 48125)
+    assert cpu_temperature(tmp_path) == 48.1
+
+
+def test_server_status_text_shows_temperature():
+    base = dict(
+        cpus=4,
+        load=(0.1, 0.1, 0.1),
+        mem_total_mb=None,
+        mem_available_mb=None,
+        disk_total_gb=100.0,
+        disk_free_gb=90.0,
+        crm_mb=None,
+        uptime_s=None,
+    )
+    assert "Температура" not in fmt.server_status(ServerStatus(**base))
+    assert "48 °C · норма" in fmt.server_status(ServerStatus(**base, cpu_temp_c=48.0))
+    assert "⚠️ горячо" in fmt.server_status(ServerStatus(**base, cpu_temp_c=91.5))

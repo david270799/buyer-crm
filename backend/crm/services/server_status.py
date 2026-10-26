@@ -23,6 +23,7 @@ class ServerStatus:
     disk_free_gb: float
     crm_mb: int | None  # this CRM process
     uptime_s: int | None
+    cpu_temp_c: float | None = None  # processor sensor (hwmon), if the container sees it
 
     @property
     def mem_used_mb(self) -> int | None:
@@ -58,6 +59,24 @@ def parse_rss_mb(status_text: str) -> int | None:
     return None
 
 
+# Processor sensors first (AMD, Intel, ARM boards); acpitz is the board, a last resort.
+_CPU_SENSORS = ("k10temp", "zenpower", "coretemp", "cpu_thermal", "soc_thermal", "acpitz")
+
+
+def cpu_temperature(hwmon_root: Path | str = "/sys/class/hwmon") -> float | None:
+    """Processor temperature in °C from /sys/class/hwmon (millidegrees in temp1_input)."""
+    found: dict[str, float] = {}
+    for sensor in sorted(Path(hwmon_root).glob("hwmon*")):
+        name = _read(str(sensor / "name")).strip()
+        raw = _read(str(sensor / "temp1_input")).strip()
+        if name in _CPU_SENSORS and raw.lstrip("-").isdigit() and name not in found:
+            found[name] = int(raw) / 1000
+    for name in _CPU_SENSORS:
+        if name in found:
+            return round(found[name], 1)
+    return None
+
+
 def _read(path: str) -> str:
     try:
         return Path(path).read_text()
@@ -83,4 +102,5 @@ def read_status(actor: Actor, data_dir: Path | str = "/") -> ServerStatus:
         disk_free_gb=round(disk.free / 1024**3, 1),
         crm_mb=parse_rss_mb(_read("/proc/self/status")),
         uptime_s=int(float(uptime[0])) if uptime else None,
+        cpu_temp_c=cpu_temperature(),
     )
