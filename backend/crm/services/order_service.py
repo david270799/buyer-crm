@@ -369,7 +369,25 @@ def _matches(order: Order, needle: str, admin: bool) -> bool:
 _STATUS_ORDER = {status: rank for rank, status in enumerate((*STATUS_FLOW, OrderStatus.CANCELLED))}
 
 
-def _sort_key(sort: str):
+_EARLIEST = datetime.min.replace(tzinfo=UTC)
+
+
+def _status_date_key(status: OrderStatus):
+    """«Сначала новые/старые» inside one status (owner, 26.10.2026): by the date the
+    order got that status — bought by the buy-out date, «Склад» by the arrival, and so
+    on. Orders without that date (older documents) fall back to the creation date."""
+    field = status_timestamp_field(status)
+
+    def key(o: Order):
+        when = o.timestamp(field) or o.timestamp("created_at") or _EARLIEST
+        return (when if when.tzinfo else when.replace(tzinfo=UTC), order_number(o.id) or 0)
+
+    return key
+
+
+def _sort_key(sort: str, status: OrderStatus | None = None):
+    if sort in ("newest", "oldest") and status not in (None, OrderStatus.NEW):
+        return _status_date_key(status)
     if sort == "status":
         # Within one status the newest order first.
         return lambda o: (
@@ -452,7 +470,9 @@ class OrderService:
         if needle:
             admin = actor.role is Role.ADMIN
             orders = [o for o in orders if _matches(o, needle, admin)]
-        orders.sort(key=_sort_key(query.sort), reverse=query.sort in ("newest", "price_desc"))
+        orders.sort(
+            key=_sort_key(query.sort, query.status), reverse=query.sort in ("newest", "price_desc")
+        )
         limit = max(1, min(query.limit, 200))
         offset = max(0, query.offset)
         return OrderPage(items=orders[offset : offset + limit], total=len(orders))

@@ -553,3 +553,22 @@ def test_list_sorted_by_status(db, services, admin):
     seed_order(db, "N6", status="bought")
     page = services.orders.list_orders(admin, OrderQuery(sort="status"))
     assert [o.id for o in page.items] == ["N5", "N2", "N6", "N4", "N1", "N3"]
+
+
+def test_status_filter_sorts_by_the_date_of_that_status(db, services, admin):
+    """Owner, 26.10.2026: «Выкуплены» newest-first = latest buy-out first, not the
+    newest order number; «Все» stays by creation (the order number)."""
+    day = lambda d: datetime(2026, 10, d, tzinfo=timezone.utc)  # noqa: E731
+    seed_order(db, "N1", status="bought", created_at=day(1), bought_at=day(20))
+    seed_order(db, "N2", status="bought", created_at=day(2), bought_at=day(10))
+    seed_order(db, "N3", status="bought", created_at=day(3))  # no buy-out date: creation
+    seed_order(db, "N4", status="warehouse", created_at=day(4), warehouse_at=day(5))
+    seed_order(db, "N5", status="warehouse", created_at=day(5), warehouse_at=day(25))
+
+    def ids(**kw):
+        return [o.id for o in services.orders.list_orders(admin, OrderQuery(**kw)).items]
+
+    assert ids(status=OrderStatus.BOUGHT) == ["N1", "N2", "N3"]
+    assert ids(status=OrderStatus.BOUGHT, sort="oldest") == ["N3", "N2", "N1"]
+    assert ids(status=OrderStatus.WAREHOUSE) == ["N5", "N4"]
+    assert ids() == ["N5", "N4", "N3", "N2", "N1"]
