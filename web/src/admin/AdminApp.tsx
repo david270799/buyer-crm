@@ -429,7 +429,7 @@ function SettingsPage({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
           </div>
           <div className="row">
             <div className="grow">
-              <MoneyInput value={rate} onChange={setRateValue} placeholder={current ? String(current) : "1350"} noUsd />
+              <MoneyInput value={rate} onChange={setRateValue} placeholder={current ? String(current) : "1350"} />
             </div>
             <button
               className="btn primary"

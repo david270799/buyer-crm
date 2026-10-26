@@ -1443,7 +1443,7 @@ export function MoneySheet({ kind, onClose }: { kind: "deposit" | "adjust"; onCl
     >
       <div className="stack">
         <Field label={adjust ? "Сумма (минус — списание)" : "Сумма"}>
-          <MoneyInput value={amount} onChange={setAmount} allowNegative={adjust} autoFocus placeholder={adjust ? "-15,000" : "5,000,000"} />
+          <MoneyInput value={amount} onChange={setAmount} allowNegative={adjust} autoFocus placeholder={adjust ? "-15,000" : "5,000,000"} usd={!adjust} />
         </Field>
         <Field label={adjust ? "Причина (обязательно)" : "Комментарий"} hint="Клиент увидит комментарий в истории баланса">
           <input className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder={adjust ? "Комиссия банка" : "Перевод 26.09"} />

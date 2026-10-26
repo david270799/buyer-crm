@@ -201,15 +201,15 @@ export function MoneyInput({
   allowNegative,
   placeholder,
   autoFocus,
-  noUsd,
+  usd,
 }: {
   value: number | null;
   onChange: (value: number | null) => void;
   allowNegative?: boolean;
   placeholder?: string;
   autoFocus?: boolean;
-  /** No «$» switch (the rate field itself). */
-  noUsd?: boolean;
+  /** The «₩ / $» switch — only balance top-ups (owner, 26.10.2026). */
+  usd?: boolean;
 }) {
   const [text, setText] = useState(value === null ? "" : formatAmountInput(String(value), allowNegative));
   // «$»: the owner types dollars, the field keeps won by the current rate (26.10.2026).
@@ -229,7 +229,7 @@ export function MoneyInput({
     }
     setInUsd(!inUsd);
   };
-  const showSwitch = !noUsd && !!rate;
+  const showSwitch = !!usd && !!rate;
   return (
     <div className={`money-input${showSwitch ? " with-switch" : ""}`}>
       <input
