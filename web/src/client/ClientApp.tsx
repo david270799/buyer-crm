@@ -59,7 +59,7 @@ function ClientHome() {
   if (error || !data) return <ErrorState error={error} onRetry={refetch} />;
   const attention = data.orders.attention_count;
   return (
-    <div className="stack" style={{ gap: 16 }}>
+    <div className="stack home-grid client" style={{ gap: 16 }}>
       <BalanceCard balance={data.balance} to="/balance" />
       {attention > 0 && (
         <Link to="/orders?attention=1" className="banner warning">

@@ -8,6 +8,10 @@ interface TelegramWebApp {
   platform: string;
   ready(): void;
   expand(): void;
+  isExpanded?: boolean;
+  isFullscreen?: boolean;
+  requestFullscreen?(): void;
+  exitFullscreen?(): void;
   isVersionAtLeast(version: string): boolean;
   setHeaderColor(color: string): void;
   setBackgroundColor(color: string): void;
@@ -15,6 +19,7 @@ interface TelegramWebApp {
   shareMessage?(msgId: string, callback?: (sent: boolean) => void): void;
   downloadFile?(params: { url: string; file_name: string }, callback?: (accepted: boolean) => void): void;
   onEvent(event: string, handler: () => void): void;
+  offEvent?(event: string, handler: () => void): void;
   BackButton: { show(): void; hide(): void; onClick(cb: () => void): void; offClick(cb: () => void): void };
   HapticFeedback?: {
     notificationOccurred(type: "success" | "error" | "warning"): void;
@@ -54,6 +59,48 @@ export function setupTelegram(onTheme: (scheme: "light" | "dark") => void): void
     /* older clients */
   }
   app.onEvent("themeChanged", () => onTheme(app.colorScheme));
+}
+
+// Phones are full-screen already; the button is for Telegram on a computer,
+// where the Mini App opens in a small window (the owner, 27.10.2026).
+const PHONES = ["android", "android_x", "ios"];
+
+/** «Развернуть» works here: Telegram on a computer, Bot API 8.0+. */
+export function canFullscreen(): boolean {
+  const app = webApp();
+  if (!app?.requestFullscreen || PHONES.includes(app.platform)) return false;
+  try {
+    return app.isVersionAtLeast("8.0");
+  } catch {
+    return false;
+  }
+}
+
+export function isFullscreen(): boolean {
+  return Boolean(webApp()?.isFullscreen);
+}
+
+export function toggleFullscreen(): void {
+  const app = webApp();
+  if (!app) return;
+  try {
+    if (app.isFullscreen) app.exitFullscreen?.();
+    else app.requestFullscreen?.();
+  } catch {
+    app.expand();
+  }
+}
+
+/** Calls `onChange` when the window enters or leaves full screen. */
+export function onFullscreenChange(onChange: () => void): () => void {
+  const app = webApp();
+  if (!app) return () => undefined;
+  app.onEvent("fullscreenChanged", onChange);
+  app.onEvent("fullscreenFailed", onChange);
+  return () => {
+    app.offEvent?.("fullscreenChanged", onChange);
+    app.offEvent?.("fullscreenFailed", onChange);
+  };
 }
 
 export function syncChrome(background: string): void {

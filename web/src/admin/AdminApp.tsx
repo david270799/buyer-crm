@@ -78,7 +78,7 @@ function Dashboard() {
     <>
       {/* No heading and no «+ Заказ» here (the owner, 22.10.2026): the menu
           already says «Сводка», and orders are added in «Заказы». */}
-      <div className="stack" style={{ gap: 12 }}>
+      <div className="stack home-grid" style={{ gap: 12 }}>
         <BalanceCard balance={data.balance} to="/finance" label="Баланс клиента" />
         <div className="kpis">
           <Link to="/profit?period=month" className="card kpi profit">
@@ -410,7 +410,7 @@ function SettingsPage({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
   const current = settings.data?.krw_per_usd ?? null;
   return (
     <>
-      <div className="stack">
+      <div className="stack settings-grid">
         <AppearanceSettings />
         <div className="card pad stack">
           <h3>Как видит клиент</h3>

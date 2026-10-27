@@ -3010,3 +3010,243 @@ table.orders .r {
 .money-switch { position: absolute; right: 6px; top: 6px; height: calc(100% - 12px); max-height: 36px; min-width: 40px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); color: var(--text); font: inherit; font-weight: 800; cursor: pointer; }
 .money-switch.on { background: var(--text); color: var(--bg); border-color: var(--text); }
 .money-hint { margin-top: 6px; }
+
+/* ==========================================================================
+   Wide screen (27.10.2026): Telegram on a computer, enlarged or full screen.
+   The phone layout is untouched; everything below is ≥ 960 px.
+   ========================================================================== */
+
+.nowrap { white-space: nowrap; }
+
+/* Telegram full screen: keep clear of its own buttons over the page. */
+.shell {
+  padding-top: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+}
+
+.side-switch,
+.side-foot {
+  display: none;
+}
+
+@media (min-width: 960px) {
+  /* minmax(0, …): a wide table scrolls inside its card instead of pushing
+     the whole page past the right edge. */
+  .shell {
+    grid-template-columns: 232px minmax(0, 1fr);
+  }
+
+  .sidebar {
+    top: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+    height: calc(100vh - var(--tg-safe-area-inset-top, 0px) - var(--tg-content-safe-area-inset-top, 0px));
+  }
+
+  /* The top bar's switch and buttons moved into the sidebar. */
+  .topbar {
+    display: none;
+  }
+
+  .side-switch {
+    display: block;
+    margin: -8px 0 14px;
+  }
+
+  .side-switch .mode-switch {
+    display: flex;
+    width: 100%;
+  }
+
+  .side-switch .mode-switch button {
+    flex: 1;
+    justify-content: center;
+    padding: 0 8px;
+  }
+
+  .side-foot {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 4px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .side-foot .tiny {
+    padding: 0 8px;
+  }
+
+  .side-actions {
+    display: flex;
+    gap: 8px;
+    padding: 0 4px;
+  }
+
+  .sidebar .side-actions a {
+    padding: 0;
+    border-radius: 12px;
+  }
+
+  .side-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-2);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+
+  .side-btn:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  .main {
+    max-width: 1240px;
+  }
+
+  /* Home: the balance next to the profit tiles (admin) or the pipeline (client). */
+  .home-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .home-grid > * {
+    grid-column: 1 / -1;
+  }
+
+  .home-grid > .balance-card {
+    grid-column: 1;
+  }
+
+  .home-grid > .kpis {
+    display: contents;
+  }
+
+  .home-grid .kpi {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 18px 20px;
+  }
+
+  .home-grid .kpi .value {
+    font-size: 28px;
+  }
+
+  .home-grid.client {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .home-grid.client > .pipeline {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .home-grid.client > .section {
+    margin-top: 12px !important;
+  }
+
+  /* Cards: as many columns as fit, no stretched giants. */
+  .order-grid {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 14px;
+  }
+
+  /* Rows of orders (client «Список»): two columns instead of one long line. */
+  .order-rows {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .order-rows > :nth-child(odd) {
+    border-right: 1px solid var(--border);
+  }
+
+  .order-rows > :nth-last-child(2):nth-child(odd) {
+    border-bottom: 0;
+  }
+
+  /* Shipments: two columns of cards. */
+  .card.list.shipments-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    overflow: visible;
+    border: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .shipments-list > .list-item {
+    align-content: center;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+
+  .shipments-list > .list-item:last-child {
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Balance / «Финансы»: the card stays on the left, history on the right. */
+  .balance-layout {
+    display: grid;
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+  }
+
+  .balance-side {
+    position: sticky;
+    top: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .balance-layout > .section {
+    margin-top: 0;
+  }
+
+  /* Settings: two columns of cards. */
+  .settings-grid {
+    display: block;
+    columns: 2;
+    column-gap: 16px;
+  }
+
+  .settings-grid > * {
+    break-inside: avoid;
+    margin-bottom: 16px;
+  }
+
+  .settings-grid > .btn {
+    display: flex;
+    width: 100%;
+  }
+
+  /* Orders table: name column wide enough for «New Balance 2002R…». */
+  table.orders .col-name {
+    min-width: 190px;
+  }
+
+  table.orders .badge.stuck {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* A narrower window: shipment and date columns give way to the money. */
+@media (min-width: 960px) and (max-width: 1439px) {
+  table.orders .col-wide {
+    display: none;
+  }
+}

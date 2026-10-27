@@ -46,24 +46,24 @@ function OrderRow({ order, selection }: { order: Order; selection: ReturnType<ty
         {order.id}
         {order.attention_required && <AlertTriangle size={13} style={{ marginLeft: 6, verticalAlign: -1, color: "var(--warning)" }} />}
         {order.stuck_days != null && (
-          <div className="badge stuck" style={{ marginTop: 4 }} title="Не пришёл на склад">
+          <div className="badge stuck" style={{ marginTop: 4 }} title={`Не пришёл на склад${order.shop ? ` · ${order.shop}` : ""}`}>
             <Hourglass size={11} /> {order.stuck_days} дн.{order.shop ? ` · ${order.shop}` : ""}
           </div>
         )}
       </td>
-      <td>
+      <td className="col-name">
         <div style={{ fontWeight: 500 }}>{order.brand ?? "—"}</div>
         <div className="small muted">{order.model ?? ""}</div>
       </td>
-      <td>{sizeText(order) ?? "—"}</td>
+      <td className="nowrap">{sizeText(order) ?? "—"}</td>
       <td>
         <StatusBadge status={order.status} />
       </td>
       <td className="r">{krw(order.purchase_price)}</td>
       <td className="r">{krw(order.client_price)}</td>
       <td className={`r ${order.profit != null && order.profit < 0 ? "negative" : ""}`}>{krw(order.profit)}</td>
-      <td className="small">{order.shipment_id ?? <span className="faint">—</span>}</td>
-      <td className="small muted">{shortDate(order.timestamps.created_at ?? order.timestamps.bought_at)}</td>
+      <td className="small col-wide nowrap">{order.shipment_id ?? <span className="faint">—</span>}</td>
+      <td className="small muted col-wide nowrap">{shortDate(order.timestamps.created_at ?? order.timestamps.bought_at)}</td>
     </tr>
   );
 }
@@ -90,8 +90,8 @@ function OrdersTable({ orders, selection }: { orders: Order[]; selection: Return
             <th className="r">Закупка</th>
             <th className="r">Клиенту</th>
             <th className="r">Прибыль</th>
-            <th>Отправка</th>
-            <th>Дата</th>
+            <th className="col-wide">Отправка</th>
+            <th className="col-wide">Дата</th>
           </tr>
         </thead>
         <tbody>

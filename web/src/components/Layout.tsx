@@ -1,8 +1,8 @@
-import type { LucideIcon } from "lucide-react";
-import { type CSSProperties, type ReactNode, useEffect } from "react";
+import { type LucideIcon, Maximize2, Minimize2 } from "lucide-react";
+import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
-import { backButton, handleBackOverride } from "../telegram";
+import { backButton, canFullscreen, handleBackOverride, isFullscreen, onFullscreenChange, toggleFullscreen } from "../telegram";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { BellButton } from "./events";
 
@@ -35,6 +35,22 @@ function useTelegramBack(nav: NavItem[]) {
     const parent = parts.length > 1 ? `/${parts.slice(0, -1).join("/")}` : "/";
     return backButton(nested, () => handleBackOverride() || navigate(parent + (lastSearch.get(parent) ?? "")));
   }, [pathname, navigate, nav]);
+}
+
+/** «Развернуть» / «Свернуть»: Telegram on a computer opens the Mini App in a
+ * small window; full screen switches to the wide layout (the owner, 27.10.2026). */
+export function FullscreenButton({ withLabel }: { withLabel?: boolean }) {
+  const [full, setFull] = useState(isFullscreen);
+  useEffect(() => onFullscreenChange(() => setFull(isFullscreen())), []);
+  if (!canFullscreen()) return null;
+  const label = full ? "Свернуть" : "Развернуть";
+  const Icon = full ? Minimize2 : Maximize2;
+  return (
+    <button type="button" className={withLabel ? "side-btn" : "bell"} onClick={toggleFullscreen} aria-label={label} title={label}>
+      <Icon size={withLabel ? 17 : 19} strokeWidth={1.8} />
+      {withLabel && label}
+    </button>
+  );
 }
 
 export function Shell({
@@ -70,6 +86,7 @@ export function Shell({
           <span className="logo">B</span>
           {title}
         </div>
+        {switcher && <div className="side-switch">{switcher}</div>}
         {nav.map((item) => (
           <NavLink key={item.to} to={pathname === item.to ? item.to : item.to + (lastSearch.get(item.to) ?? "")} className={isActive(item, pathname) ? "active" : ""}>
             <item.icon size={18} strokeWidth={1.8} />
@@ -77,8 +94,14 @@ export function Shell({
           </NavLink>
         ))}
         <div className="spacer" />
-        <div className="tiny faint" style={{ padding: "0 12px" }}>
-          Время: Сеул (KST)
+        {/* The top bar is hidden on a wide screen: its buttons live here. */}
+        <div className="side-foot">
+          <div className="side-actions">
+            {topActions}
+            <BellButton />
+          </div>
+          <FullscreenButton withLabel />
+          <div className="tiny faint">Время: Сеул (KST)</div>
         </div>
       </aside>
       <main className="main">
@@ -87,6 +110,7 @@ export function Shell({
           <header className="topbar">
             {switcher ?? <span className="topbar-title">{title}</span>}
             <div className="topbar-actions">
+              <FullscreenButton />
               {topActions}
               <BellButton />
             </div>

@@ -24,7 +24,7 @@ export function ShipmentsPage() {
       ) : !data.items.length ? (
         <Empty title="Отправок пока нет" icon={<Package size={22} />} hint="Когда товары отправят, они появятся здесь." />
       ) : (
-        <div className="card list">
+        <div className="card list shipments-list">
           {data.items.map((s) => (
             <Link key={s.id} to={`/shipments/${s.id}`} className={`list-item ${s.delivered ? "" : "has-action"}`}>
               {s.thumbnail_url || s.photo_url ? (

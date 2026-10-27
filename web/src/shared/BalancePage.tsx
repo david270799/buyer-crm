@@ -16,9 +16,11 @@ export function BalancePage({
   const overview = useOverview();
   const history = useTransactions();
   return (
-    <>
-      {overview.data ? <BalanceCard balance={overview.data.balance} actions={actions} /> : overview.isLoading ? <Loading rows={1} height={110} /> : null}
-      {extra}
+    <div className="balance-layout">
+      <div className="balance-side">
+        {overview.data ? <BalanceCard balance={overview.data.balance} actions={actions} /> : overview.isLoading ? <Loading rows={1} height={110} /> : null}
+        {extra}
+      </div>
       <div className="section">
         {history.isLoading ? (
           <Loading rows={5} height={64} />
@@ -28,6 +30,6 @@ export function BalancePage({
           <History items={history.data.items} />
         )}
       </div>
-    </>
+    </div>
   );
 }
