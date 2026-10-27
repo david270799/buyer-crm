@@ -37,6 +37,21 @@ function useTelegramBack(nav: NavItem[]) {
   }, [pathname, navigate, nav]);
 }
 
+const WIDE = "(min-width: 960px)";
+
+/** True on the wide layout (sidebar), for pages that differ in more than CSS. */
+export function useWide(): boolean {
+  const [wide, setWide] = useState(() => window.matchMedia?.(WIDE).matches ?? false);
+  useEffect(() => {
+    const media = window.matchMedia?.(WIDE);
+    if (!media) return undefined;
+    const update = () => setWide(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return wide;
+}
+
 /** «Развернуть» / «Свернуть»: Telegram on a computer opens the Mini App in a
  * small window; full screen switches to the wide layout (the owner, 27.10.2026). */
 export function FullscreenButton({ withLabel }: { withLabel?: boolean }) {

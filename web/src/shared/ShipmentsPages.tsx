@@ -4,7 +4,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { useShipment, useShipmentDelivered, useShipments } from "../api/hooks";
 import type { Order, Shipment } from "../api/types";
-import { PageHead } from "../components/Layout";
+import { PageHead, useWide } from "../components/Layout";
 import { Thumb } from "../components/orders";
 import { PhotoCarousel } from "../components/PhotoCarousel";
 import { StatusBadge } from "../components/status";
@@ -12,9 +12,15 @@ import { Confirm, Empty, ErrorState, Loading, errorText, useToast } from "../com
 import { date, items, krw, orderTitle, shipmentTotal, sizeText } from "../lib/format";
 import { CopyText } from "./OrderDetailsPage";
 
-export function ShipmentsPage() {
+type Detail = (id: string) => ReactNode;
+
+const plainDetail: Detail = (id) => <ShipmentDetailsPage id={id} />;
+
+export function ShipmentsPage({ detail = plainDetail, newButton }: { detail?: Detail; newButton?: ReactNode }) {
+  const wide = useWide();
   const { data, error, isLoading, refetch } = useShipments();
   const [arrived, setArrived] = useState<Shipment | null>(null);
+  if (wide && data?.items.length) return <ShipmentsSplit detail={detail} newButton={newButton} />;
   return (
     <>
       {isLoading ? (
@@ -56,13 +62,65 @@ export function ShipmentsPage() {
   );
 }
 
+/** «/shipments/:id»: on a wide screen the list stays on the left. */
+export function ShipmentRoute({ detail = plainDetail, newButton }: { detail?: Detail; newButton?: ReactNode }) {
+  const { id = "" } = useParams();
+  const wide = useWide();
+  return wide ? <ShipmentsSplit active={id} detail={detail} newButton={newButton} /> : <>{detail(id)}</>;
+}
+
+/** Wide screen «Отправки» (variant 3, the owner, 27.10.2026): the list on the
+ * left, the chosen shipment (the newest at first) on the right. */
+function ShipmentsSplit({ active, detail, newButton }: { active?: string; detail: Detail; newButton?: ReactNode }) {
+  const { data } = useShipments();
+  const list = data?.items ?? [];
+  const current = active ?? list[0]?.id;
+  return (
+    <div className="ships-split">
+      <aside className="ships-side">
+        <div className="ships-side-head">
+          <span className="cap">Отправки · {list.length}</span>
+          {newButton}
+        </div>
+        {list.map((s) => (
+          <Link key={s.id} to={`/shipments/${s.id}`} replace className={`card ship-pick ${s.id === current ? "active" : ""}`}>
+            <div className="row between">
+              <b className="num">{s.tracking_code ?? "Без трек-номера"}</b>
+              <ShipmentStatus delivered={s.delivered} />
+            </div>
+            <div className="tiny muted">
+              {date(s.shipment_date ?? s.created_at)} · {items(s.order_count)}
+              {s.weight_kg ? ` · ${s.weight_kg} кг` : ""}
+            </div>
+            <div className="row between">
+              {s.thumbnail_url || s.photo_url ? (
+                <Thumb src={s.thumbnail_url ?? s.photo_url} alt={s.tracking_code ?? "Отправка"} />
+              ) : (
+                <div className="thumb icon">
+                  <Package size={18} strokeWidth={1.8} />
+                </div>
+              )}
+              {shipmentTotal(s) ? <b className="num">{krw(shipmentTotal(s))}</b> : null}
+            </div>
+          </Link>
+        ))}
+      </aside>
+      <section className="card pad ships-detail">{current ? detail(current) : null}</section>
+    </div>
+  );
+}
+
 export function ShipmentDetailsPage({
   onEdit,
+  id: shownId,
 }: {
   /** Admin buttons in the page head; gets the shipment and its orders. */
   onEdit?: (shipment: Shipment, orders: Order[]) => ReactNode;
+  /** Set by the wide split view; otherwise the id comes from the route. */
+  id?: string;
 }) {
-  const { id = "" } = useParams();
+  const params = useParams();
+  const id = shownId ?? params.id ?? "";
   const { data, error, isLoading, refetch } = useShipment(id);
   const [arrived, setArrived] = useState(false);
   if (isLoading) return <Loading rows={3} height={120} />;

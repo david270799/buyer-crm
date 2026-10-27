@@ -25,7 +25,7 @@ import {
 } from "../shared/filters";
 import { NotificationsPage } from "../shared/NotificationsPage";
 import { OrderDetailsPage } from "../shared/OrderDetailsPage";
-import { ShipmentDetailsPage, ShipmentsPage } from "../shared/ShipmentsPages";
+import { ShipmentRoute, ShipmentsPage } from "../shared/ShipmentsPages";
 import { ShowcaseCartPage, ShowcaseClientMode, ShowcaseItemPage, ShowcasePage } from "../admin/Showcase";
 
 const NAV: NavItem[] = [
@@ -148,7 +148,7 @@ export function ClientApp() {
         <Route path="/settings" element={<ClientSettings />} />
         <Route path="/orders/:id" element={<OrderDetailsPage />} />
         <Route path="/shipments" element={<ShipmentsPage />} />
-        <Route path="/shipments/:id" element={<ShipmentDetailsPage />} />
+        <Route path="/shipments/:id" element={<ShipmentRoute />} />
         <Route path="/balance" element={<BalancePage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/showcase" element={<ShowcasePage />} />

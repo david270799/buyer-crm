@@ -3333,6 +3333,69 @@ table.orders .r {
     line-height: 1.25;
   }
 
+  /* «Отправки» (variant 3, the owner, 27.10.2026): list left, shipment right. */
+  .ships-split {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+  }
+
+  .ships-side {
+    position: sticky;
+    top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
+
+  .ships-side-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 36px;
+    margin-bottom: 2px;
+  }
+
+  .ships-side-head .cap {
+    color: var(--text-3);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .ship-pick {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    color: inherit;
+  }
+
+  .ship-pick:hover {
+    background: var(--surface-2);
+  }
+
+  .ship-pick.active {
+    border-color: var(--text);
+    box-shadow: inset 3px 0 0 var(--text);
+  }
+
+  .ships-detail {
+    padding: 22px;
+  }
+
+  .ships-detail .page-head {
+    margin-top: 0;
+  }
+
+  .ships-detail .details {
+    grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  }
+
   /* «Сводка» (variant 1, the owner, 27.10.2026). */
   .dash-strip {
     margin-bottom: 4px;

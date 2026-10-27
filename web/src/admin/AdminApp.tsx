@@ -18,7 +18,7 @@ import { balancePicture, shipmentPicture, sinceLastDeposit } from "../lib/shareC
 import { AppearanceSettings } from "../shared/AppearanceSettings";
 import { useCreateOrder, useTransactions, useOverview, useSetNotifications, useSetRate, useSettings } from "../api/hooks";
 import type { Category, NotificationSettings, NotifyLevel, NotifyRecipient, Shipment } from "../api/types";
-import { type NavItem, PageHead, Shell } from "../components/Layout";
+import { type NavItem, PageHead, Shell, useWide } from "../components/Layout";
 import { BalanceCard } from "../components/money";
 import { OrderCard } from "../components/orders";
 import { MoreMenu, CountUp, Empty, ErrorState, errorText, Field, Loading, MoneyInput, Switch, useToast } from "../components/ui";
@@ -27,7 +27,7 @@ import { BalancePage } from "../shared/BalancePage";
 import { StatusPipeline } from "../shared/filters";
 import { NotificationsPage } from "../shared/NotificationsPage";
 import { OrderDetailsPage } from "../shared/OrderDetailsPage";
-import { EditButton, ShipmentDetailsPage, ShipmentsPage } from "../shared/ShipmentsPages";
+import { EditButton, ShipmentDetailsPage, ShipmentRoute, ShipmentsPage } from "../shared/ShipmentsPages";
 import { OrderAdminPanel } from "./OrderAdminPanel";
 import { DeskDashboard } from "./DeskDashboard";
 import { AdminOrdersPage, ProblemBanner } from "./OrdersPage";
@@ -260,15 +260,30 @@ function NewOrderPage() {
   );
 }
 
-function AdminShipmentsPage() {
+const adminShipment = (id: string) => <AdminShipmentDetails id={id} />;
+
+/** «Отправки» list (or, on a wide screen, the list beside a shipment). */
+function AdminShipmentsPage({ route }: { route?: boolean }) {
+  const wide = useWide();
   const [creating, setCreating] = useState(false);
+  const newButton = (
+    <button className="btn small primary" onClick={() => setCreating(true)}>
+      <Plus size={15} /> Новая
+    </button>
+  );
   return (
     <>
-      <ShipmentsPage />
-      {/* A round «+» above the menu (the owner, 23.10.2026). */}
-      <button className="fab" onClick={() => setCreating(true)} aria-label="Новая отправка" title="Новая отправка">
-        <Plus size={22} />
-      </button>
+      {route ? (
+        <ShipmentRoute detail={adminShipment} newButton={newButton} />
+      ) : (
+        <ShipmentsPage detail={adminShipment} newButton={newButton} />
+      )}
+      {/* A round «+» above the menu (the owner, 23.10.2026); on a wide screen «Новая» sits over the list. */}
+      {!wide && !route && (
+        <button className="fab" onClick={() => setCreating(true)} aria-label="Новая отправка" title="Новая отправка">
+          <Plus size={22} />
+        </button>
+      )}
       {creating && <NewShipmentFlow onClose={() => setCreating(false)} />}
     </>
   );
@@ -497,11 +512,12 @@ function SettingsPage({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
   );
 }
 
-function AdminShipmentDetails() {
+function AdminShipmentDetails({ id }: { id: string }) {
   const [editing, setEditing] = useState<Shipment | null>(null);
   return (
     <>
       <ShipmentDetailsPage
+        id={id}
         onEdit={(shipment, orders) => (
           <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
             <ShipmentSplitButton shipment={shipment} orders={orders} />
@@ -531,7 +547,7 @@ export function AdminApp({ onLeaveDemo }: { onLeaveDemo?: () => void }) {
         <Route path="/orders/new" element={<NewOrderPage />} />
         <Route path="/orders/:id" element={<OrderDetailsPage adminPanel={(order) => <OrderAdminPanel order={order} />} />} />
         <Route path="/shipments" element={<AdminShipmentsPage />} />
-        <Route path="/shipments/:id" element={<AdminShipmentDetails />} />
+        <Route path="/shipments/:id" element={<AdminShipmentsPage route />} />
         <Route path="/finance" element={<FinancePage />} />
         <Route path="/showcase" element={<ShowcasePage />} />
         <Route path="/showcase/cart" element={<ShowcaseCartPage />} />
