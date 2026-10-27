@@ -3225,19 +3225,32 @@ table.orders .r {
     text-transform: uppercase;
   }
 
+  /* The balance part has the balance card's colours in every look. */
   .balance-strip .big {
     border-right: 0;
-    background: var(--text);
-    color: var(--bg);
+    background: var(--accent);
+    color: var(--accent-contrast);
   }
+
+  :root[data-theme="dark"] .balance-strip .big {
+    background: #1f2a3a;
+    color: #ffffff;
+  }
+
+  :root[data-skin="minimal"] .balance-strip .big { background: #0a0a0a; color: #ffffff; }
+  :root[data-skin="minimal"][data-theme="dark"] .balance-strip .big { background: #ffffff; color: #000000; }
+  :root[data-skin="sport"] .balance-strip .big,
+  :root[data-skin="sport"][data-theme="dark"] .balance-strip .big { background: #d7ff3a; color: #111111; }
+  :root[data-skin="sport"] .balance-strip .big.debt { background: #111111; color: #ffffff; }
 
   .balance-strip .big .cap,
   .balance-strip .big .tiny {
-    color: color-mix(in srgb, var(--bg) 68%, transparent);
+    color: inherit;
+    opacity: 0.68;
   }
 
   .balance-strip .big.debt .k {
-    color: #ff9c8a;
+    color: #ff5a4f;
   }
 
   .balance-strip .k {
