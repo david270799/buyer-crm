@@ -3205,12 +3205,12 @@ table.orders .r {
     background: var(--surface);
   }
 
-  .balance-strip > div {
+  .balance-strip > * {
     padding: 20px 22px;
     border-right: 1px solid var(--border);
   }
 
-  .balance-strip > div:last-child {
+  .balance-strip > *:last-child {
     border-right: 0;
   }
 
@@ -3257,6 +3257,61 @@ table.orders .r {
 
   .balance-strip .s.positive {
     color: var(--positive);
+  }
+
+  /* «Сводка» (variant 1, the owner, 27.10.2026). */
+  .dash-strip {
+    margin-bottom: 4px;
+  }
+
+  .dash-strip > a {
+    color: inherit;
+  }
+
+  .dash-strip > a:not(.big):hover {
+    background: var(--surface-2);
+  }
+
+  .dash-cols {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+  }
+
+  .dash-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 22px 0 10px;
+    font-size: 15px;
+  }
+
+  .task-row {
+    padding: 13px 16px;
+  }
+
+  .task-row .title {
+    white-space: normal;
+  }
+
+  /* Icons in the theme's own look: a framed tile, the text colour, thin lines. */
+  .task-icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  .task-icon.warning {
+    border-color: color-mix(in srgb, var(--warning) 40%, var(--border));
+    background: var(--warning-soft);
+    color: var(--warning);
   }
 
   .ledger-bar {

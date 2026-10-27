@@ -29,6 +29,7 @@ import { NotificationsPage } from "../shared/NotificationsPage";
 import { OrderDetailsPage } from "../shared/OrderDetailsPage";
 import { EditButton, ShipmentDetailsPage, ShipmentsPage } from "../shared/ShipmentsPages";
 import { OrderAdminPanel } from "./OrderAdminPanel";
+import { DeskDashboard } from "./DeskDashboard";
 import { AdminOrdersPage, ProblemBanner } from "./OrdersPage";
 import { PinSettings } from "./pin";
 import { UpdateCard } from "./UpdateCard";
@@ -76,9 +77,13 @@ function Dashboard() {
   const o = data.orders;
   return (
     <>
+      <div className="only-desktop">
+        <DeskDashboard data={data} />
+      </div>
+      <div className="only-mobile">
       {/* No heading and no «+ Заказ» here (the owner, 22.10.2026): the menu
           already says «Сводка», and orders are added in «Заказы». */}
-      <div className="stack home-grid" style={{ gap: 12 }}>
+      <div className="stack" style={{ gap: 12 }}>
         <BalanceCard balance={data.balance} to="/finance" label="Баланс клиента" />
         <div className="kpis">
           <Link to="/profit?period=month" className="card kpi profit">
@@ -111,6 +116,7 @@ function Dashboard() {
         ) : (
           <Empty title="Заказов пока нет" />
         )}
+      </div>
       </div>
     </>
   );
