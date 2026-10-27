@@ -4,10 +4,10 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { useOrders, useOverview } from "../api/hooks";
 import type { Order } from "../api/types";
-import { OrderCard, Thumb } from "../components/orders";
+import { OrderCard, Photo, Thumb } from "../components/orders";
 import { StatusBadge } from "../components/status";
 import { Checkbox, Empty, ErrorState, Loading, useDebounced, useLongPress, useSelection } from "../components/ui";
-import { krw, plural, shortDate, sizeText } from "../lib/format";
+import { krw, orderTitle, plural, shortDate, sizeText } from "../lib/format";
 import {
   AttentionButton,
   SearchButton,
@@ -20,26 +20,43 @@ import {
   useSearchToggle,
   ViewToggle,
 } from "../shared/filters";
+import { OrderAdminPanel } from "./OrderAdminPanel";
 import { AttentionSheet, BulkStatusSheet, CommentSheet, DeleteConfirm, DiscountSheet, ShipmentSheet } from "./sheets";
 
 type Bulk = "status" | "ship" | "comment" | "attention" | "discount" | "delete" | null;
 const PAGE = 50;
 
-function OrderRow({ order, selection }: { order: Order; selection: ReturnType<typeof useSelection> }) {
+function OrderRow({
+  order,
+  selection,
+  previewed,
+  onPreview,
+}: {
+  order: Order;
+  selection: ReturnType<typeof useSelection>;
+  previewed: boolean;
+  onPreview: (id: string) => void;
+}) {
   const navigate = useNavigate();
   const selected = selection.has(order.id);
+  // A click shows the order in the panel on the right (the owner, 27.10.2026);
+  // a double click opens the full page.
   const press = useLongPress(
     () => {
       if (!selected) selection.toggle(order.id);
     },
-    () => (selection.selected.length ? selection.toggle(order.id) : navigate(`/orders/${order.id}`)),
+    () => (selection.selected.length ? selection.toggle(order.id) : onPreview(order.id)),
   );
   return (
-    <tr className={`${selected ? "selected" : ""} no-callout`} {...press}>
+    <tr
+      className={`${selected ? "selected" : ""} ${previewed ? "previewed" : ""} no-callout`}
+      {...press}
+      onDoubleClick={() => navigate(`/orders/${order.id}`)}
+    >
       <td onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
         <Checkbox checked={selected} label={`Выбрать ${order.id}`} onChange={() => selection.toggle(order.id)} />
       </td>
-      <td>
+      <td className="col-thumb">
         <Thumb src={order.thumbnail_url ?? order.photo_url} alt={order.id} />
       </td>
       <td className="num" style={{ fontWeight: 600 }}>
@@ -53,13 +70,17 @@ function OrderRow({ order, selection }: { order: Order; selection: ReturnType<ty
       </td>
       <td className="col-name">
         <div style={{ fontWeight: 500 }}>{order.brand ?? "—"}</div>
-        <div className="small muted">{order.model ?? ""}</div>
+        <div className="small muted">
+          {order.model ?? ""}
+          {/* Size moves here when the panel on the right takes the room. */}
+          <span className="split-size">{sizeText(order) ? ` · ${sizeText(order)}` : ""}</span>
+        </div>
       </td>
-      <td className="nowrap">{sizeText(order) ?? "—"}</td>
+      <td className="nowrap col-size">{sizeText(order) ?? "—"}</td>
       <td>
         <StatusBadge status={order.status} />
       </td>
-      <td className="r">{krw(order.purchase_price)}</td>
+      <td className="r col-buy">{krw(order.purchase_price)}</td>
       <td className="r">{krw(order.client_price)}</td>
       <td className={`r ${order.profit != null && order.profit < 0 ? "negative" : ""}`}>{krw(order.profit)}</td>
       <td className="small col-wide nowrap">{order.shipment_id ?? <span className="faint">—</span>}</td>
@@ -68,7 +89,17 @@ function OrderRow({ order, selection }: { order: Order; selection: ReturnType<ty
   );
 }
 
-function OrdersTable({ orders, selection }: { orders: Order[]; selection: ReturnType<typeof useSelection> }) {
+function OrdersTable({
+  orders,
+  selection,
+  preview,
+  onPreview,
+}: {
+  orders: Order[];
+  selection: ReturnType<typeof useSelection>;
+  preview: string | null;
+  onPreview: (id: string) => void;
+}) {
   const allSelected = orders.length > 0 && orders.every((o) => selection.has(o.id));
   return (
     <div className="card table-wrap">
@@ -82,12 +113,12 @@ function OrdersTable({ orders, selection }: { orders: Order[]; selection: Return
                 onChange={() => selection.set(allSelected ? [] : orders.map((o) => o.id))}
               />
             </th>
-            <th />
+            <th className="col-thumb" />
             <th>Заказ</th>
             <th>Бренд / модель</th>
-            <th>Размер</th>
+            <th className="col-size">Размер</th>
             <th>Статус</th>
-            <th className="r">Закупка</th>
+            <th className="r col-buy">Закупка</th>
             <th className="r">Клиенту</th>
             <th className="r">Прибыль</th>
             <th className="col-wide">Отправка</th>
@@ -96,11 +127,64 @@ function OrdersTable({ orders, selection }: { orders: Order[]; selection: Return
         </thead>
         <tbody>
           {orders.map((order) => (
-            <OrderRow key={order.id} order={order} selection={selection} />
+            <OrderRow key={order.id} order={order} selection={selection} previewed={order.id === preview} onPreview={onPreview} />
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** Wide screen «Заказы» (variant 1, the owner, 27.10.2026): the table, and the
+ * clicked order on the right with its prices and actions. */
+function OrdersSplit({
+  orders,
+  selection,
+  preview,
+  onPreview,
+  onClose,
+}: {
+  orders: Order[];
+  selection: ReturnType<typeof useSelection>;
+  preview: string | null;
+  onPreview: (id: string) => void;
+  onClose: () => void;
+}) {
+  const order = preview ? orders.find((o) => o.id === preview) : undefined;
+  return (
+    <div className={order ? "orders-split" : ""}>
+      <OrdersTable orders={orders} selection={selection} preview={order ? preview : null} onPreview={onPreview} />
+      {order && <OrderPreview order={order} onClose={onClose} />}
+    </div>
+  );
+}
+
+function OrderPreview({ order, onClose }: { order: Order; onClose: () => void }) {
+  const size = sizeText(order);
+  return (
+    <aside className="order-preview" key={order.id}>
+      <div className="card pad stack">
+        <div className="row between">
+          <span className="cap">Заказ {order.id}</span>
+          <button className="btn small ghost icon-only" onClick={onClose} aria-label="Закрыть" title="Закрыть">
+            <X size={16} />
+          </button>
+        </div>
+        <Photo src={order.photo_url ?? order.thumbnail_url} alt={orderTitle(order)} />
+        <div className="row between" style={{ alignItems: "flex-start" }}>
+          <div className="grow" style={{ minWidth: 0 }}>
+            <div className="preview-title">{orderTitle(order)}</div>
+            <div className="small muted">{[order.brand, size && `размер ${size}`].filter(Boolean).join(" · ")}</div>
+          </div>
+          <StatusBadge status={order.status} />
+        </div>
+        {order.client_comment && <div className="small">💬 {order.client_comment}</div>}
+        <Link to={`/orders/${order.id}`} className="btn block">
+          Открыть заказ <ChevronRight size={16} />
+        </Link>
+      </div>
+      <OrderAdminPanel order={order} />
+    </aside>
   );
 }
 
@@ -113,6 +197,7 @@ export function AdminOrdersPage() {
   const [limit, setLimit] = useState(PAGE);
   const selection = useSelection();
   const [bulk, setBulk] = useState<Bulk>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   useEffect(() => {
     setLimit(PAGE);
   }, [filters.status, q, sort, filters.attention, filters.stuck, filters.problem]);
@@ -181,7 +266,13 @@ export function AdminOrdersPage() {
           <>
             {view === "list" && (
               <div className="only-desktop">
-                <OrdersTable orders={data.items} selection={selection} />
+                <OrdersSplit
+                  orders={data.items}
+                  selection={selection}
+                  preview={preview}
+                  onPreview={(id) => setPreview(id === preview ? null : id)}
+                  onClose={() => setPreview(null)}
+                />
               </div>
             )}
             <div className={view === "list" ? "only-mobile order-rows card" : "order-grid"}>
