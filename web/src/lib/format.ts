@@ -1,4 +1,4 @@
-import type { Category, LedgerType, OrderStatus, Shipment } from "../api/types";
+import type { Category, LedgerItem, LedgerType, OrderStatus, Shipment } from "../api/types";
 
 const TZ = "Asia/Seoul";
 const NBSP = " ";
@@ -191,4 +191,45 @@ export function withUsdNote(comment: string, usd: { dollars: number; rate: numbe
   if (!usd) return text;
   const note = usdNote(usd.dollars, usd.rate);
   return text ? `${text} · ${note}` : note;
+}
+
+const monthFmt = new Intl.DateTimeFormat("ru-RU", { timeZone: TZ, month: "short" });
+
+export interface MonthSummary {
+  /** «окт» */
+  month: string;
+  deposits: number;
+  depositCount: number;
+  /** Charges, re-purchases, discounts and refunds of orders (net, negative = spent). */
+  goods: number;
+  orders: number;
+  refunds: number;
+  /** Shipping and watch shipping (negative). */
+  shipping: number;
+  shipments: number;
+}
+
+/** Totals of this Seoul month, for the wide «Баланс» strip (the owner, 27.10.2026). */
+export function monthSummary(items: LedgerItem[], now: Date = new Date()): MonthSummary {
+  const month = dayKey(now.toISOString()).slice(0, 7);
+  const sum: MonthSummary = { month: clean(monthFmt.format(now)), deposits: 0, depositCount: 0, goods: 0, orders: 0, refunds: 0, shipping: 0, shipments: 0 };
+  const orders = new Set<string>();
+  const shipments = new Set<string>();
+  for (const item of items) {
+    if (dayKey(item.created_at).slice(0, 7) !== month) continue;
+    if (item.type === "deposit") {
+      sum.deposits += item.amount_krw;
+      sum.depositCount += 1;
+    } else if (item.type === "shipping_charge" || item.type === "watch_charge") {
+      sum.shipping += item.amount_krw;
+      if (item.shipment_id) shipments.add(item.shipment_id);
+    } else if (item.order_id) {
+      sum.goods += item.amount_krw;
+      if (item.type === "order_charge") orders.add(item.order_id);
+      if (item.type === "order_refund") sum.refunds += 1;
+    }
+  }
+  sum.orders = orders.size;
+  sum.shipments = shipments.size;
+  return sum;
 }

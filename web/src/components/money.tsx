@@ -1,9 +1,9 @@
 import { ArrowDownLeft, ChevronRight, Gift, RotateCcw, SlidersHorizontal, Truck, Watch } from "lucide-react";
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import type { Balance, LedgerItem } from "../api/types";
-import { dayKey, date, krw, LEDGER_LABEL, shortDate, usd } from "../lib/format";
+import { dayKey, date, krw, LEDGER_LABEL, monthSummary, plural, shortDate, usd } from "../lib/format";
 import { Thumb } from "./orders";
 import { Empty, useSeenAmount } from "./ui";
 
@@ -110,6 +110,99 @@ function entrySubtitle(item: LedgerItem): string | null {
   return item.comment;
 }
 
+function entryTarget(item: LedgerItem): string | null {
+  if (item.order_id) return orderDeleted(item) ? null : `/orders/${item.order_id}`;
+  return item.shipment_id ? `/shipments/${item.shipment_id}` : null;
+}
+
+/** Wide screen «Баланс» (variant 1, the owner, 27.10.2026): the balance and
+ * this month's top-ups, goods and shipping in one strip. */
+export function BalanceStrip({ balance, items }: { balance: Balance; items: LedgerItem[] }) {
+  const m = monthSummary(items);
+  const debt = balance.krw < 0;
+  return (
+    <div className="balance-strip">
+      <div className={`big ${debt ? "debt" : ""}`}>
+        <div className="cap">
+          Баланс клиента{debt && <span className="debt-badge">долг</span>}
+        </div>
+        <div className="k num">{krw(balance.krw)}</div>
+        <div className="tiny num">
+          {balance.usd !== null ? usd(balance.usd) : "курс $ не задан"}
+          {balance.krw_per_usd ? ` · 1 $ = ${balance.krw_per_usd.toLocaleString("en-US")} ₩` : ""}
+        </div>
+      </div>
+      <div>
+        <div className="cap">Пополнено · {m.month}</div>
+        <div className="s num positive">{krw(m.deposits, true)}</div>
+        <div className="tiny muted">{m.depositCount ? `${m.depositCount} ${plural(m.depositCount, "перевод", "перевода", "переводов")}` : "пополнений не было"}</div>
+      </div>
+      <div>
+        <div className="cap">За товары · {m.month}</div>
+        <div className="s num">{krw(m.goods)}</div>
+        <div className="tiny muted">
+          {m.orders} {plural(m.orders, "заказ", "заказа", "заказов")}
+          {m.refunds ? ` · ${m.refunds} ${plural(m.refunds, "возврат", "возврата", "возвратов")}` : ""}
+        </div>
+      </div>
+      <div>
+        <div className="cap">Доставка · {m.month}</div>
+        <div className="s num">{krw(m.shipping)}</div>
+        <div className="tiny muted">
+          {m.shipments} {plural(m.shipments, "отправка", "отправки", "отправок")}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Wide screen history: date, operation, amount, balance after. */
+export function HistoryTable({ items }: { items: LedgerItem[] }) {
+  const navigate = useNavigate();
+  if (!items.length) return <Empty title="Операций пока нет" hint="Здесь появятся выкупы, пополнения и доставки." />;
+  return (
+    <div className="card table-wrap">
+      <table className="orders ledger">
+        <thead>
+          <tr>
+            <th>Дата</th>
+            <th>Операция</th>
+            <th className="r">Сумма</th>
+            <th className="r">Остаток</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => {
+            const target = entryTarget(item);
+            const sub = entrySubtitle(item);
+            return (
+              <tr key={item.id} className={target ? "" : "static"} onClick={target ? () => navigate(target) : undefined}>
+                <td className="muted nowrap">{shortDate(item.created_at)}</td>
+                <td>
+                  <div className="ledger-op">
+                    <EntryIcon item={item} />
+                    <div>
+                      <div>{entryTitle(item)}</div>
+                      {sub && <div className="small muted">{sub}</div>}
+                    </div>
+                  </div>
+                </td>
+                <td className={`r amount ${item.amount_krw > 0 ? "positive" : ""}`}>
+                  {item.original_amount_krw !== undefined && item.original_amount_krw !== item.amount_krw && (
+                    <s className="amount-was">{krw(item.original_amount_krw, true)}</s>
+                  )}
+                  {krw(item.amount_krw, true)}
+                </td>
+                <td className="r muted">{krw(item.balance_after)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function History({ items }: { items: LedgerItem[] }) {
   if (!items.length) return <Empty title="Операций пока нет" hint="Здесь появятся выкупы, пополнения и доставки." />;
   const groups: { key: string; label: string; items: LedgerItem[] }[] = [];
@@ -142,9 +235,7 @@ export function History({ items }: { items: LedgerItem[] }) {
                   </div>
                 </>
               );
-              let target: string | null = null;
-              if (item.order_id) target = orderDeleted(item) ? null : `/orders/${item.order_id}`;
-              else if (item.shipment_id) target = `/shipments/${item.shipment_id}`;
+              const target = entryTarget(item);
               return target ? (
                 <Link key={item.id} to={target} className="list-item">
                   {content}

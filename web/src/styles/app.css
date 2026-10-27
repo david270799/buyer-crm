@@ -3194,24 +3194,121 @@ table.orders .r {
     border-bottom: 1px solid var(--border);
   }
 
-  /* Balance / «Финансы»: the card stays on the left, history on the right. */
-  .balance-layout {
+  /* Balance / «Финансы» (variant 1, the owner, 27.10.2026): a strip with the
+     balance and this month's totals, then a statement-like table. */
+  .balance-strip {
     display: grid;
-    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
-    gap: 24px;
-    align-items: start;
+    grid-template-columns: minmax(0, 1.35fr) repeat(3, minmax(0, 1fr));
+    overflow: hidden;
+    border: 1px solid var(--text);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
   }
 
-  .balance-side {
-    position: sticky;
-    top: 28px;
+  .balance-strip > div {
+    padding: 20px 22px;
+    border-right: 1px solid var(--border);
+  }
+
+  .balance-strip > div:last-child {
+    border-right: 0;
+  }
+
+  .balance-strip .cap {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-3);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .balance-strip .big {
+    border-right: 0;
+    background: var(--text);
+    color: var(--bg);
+  }
+
+  .balance-strip .big .cap,
+  .balance-strip .big .tiny {
+    color: color-mix(in srgb, var(--bg) 68%, transparent);
+  }
+
+  .balance-strip .big.debt .k {
+    color: #ff9c8a;
+  }
+
+  .balance-strip .k {
+    margin: 8px 0 4px;
+    font-size: 36px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+  }
+
+  .balance-strip .s {
+    margin: 10px 0 2px;
+    font-size: 22px;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .balance-strip .s.positive {
+    color: var(--positive);
+  }
+
+  .ledger-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 40px;
+    margin: 22px 0 10px;
+  }
+
+  .ledger-bar .cap {
+    color: var(--text-3);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  table.ledger td {
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+
+  table.ledger th:first-child,
+  table.ledger td:first-child {
+    width: 90px;
+  }
+
+  table.ledger .ledger-op {
+    display: flex;
+    align-items: center;
     gap: 12px;
   }
 
-  .balance-layout > .section {
-    margin-top: 0;
+  table.ledger .amount {
+    font-weight: 700;
+  }
+
+  table.ledger .amount.positive {
+    color: var(--positive);
+  }
+
+  table.ledger .amount-was {
+    display: block;
+    color: var(--text-3);
+    font-size: 12px;
+    font-weight: 400;
+  }
+
+  table.ledger tbody tr.static {
+    cursor: default;
   }
 
   /* Settings: two columns of cards. */

@@ -270,13 +270,17 @@ function AdminShipmentsPage() {
 
 /** «⋯» in the balance card (the owner, 23.10.2026): send the balance picture
  * (operations since the last top-up) or make an adjustment. */
-function BalanceMore({ onAdjust }: { onAdjust: () => void }) {
+function useBalanceShare() {
   const overview = useOverview();
   const history = useTransactions();
-  const { start, ui } = useShare(async () => {
+  return useShare(async () => {
     if (!overview.data || !history.data) throw new Error("Баланс ещё загружается");
     return balancePicture(overview.data.balance, sinceLastDeposit(history.data.items));
   }, "balance.png");
+}
+
+function BalanceMore({ onAdjust }: { onAdjust: () => void }) {
+  const { start, ui } = useBalanceShare();
   return (
     <>
       <MoreMenu
@@ -287,6 +291,25 @@ function BalanceMore({ onAdjust }: { onAdjust: () => void }) {
           { label: "Корректировка", icon: SlidersHorizontal, onClick: onAdjust },
         ]}
       />
+      {ui}
+    </>
+  );
+}
+
+/** Wide screen: the same actions as text buttons above the history (the owner, 27.10.2026). */
+function FinanceToolbar({ onSheet }: { onSheet: (kind: "deposit" | "adjust") => void }) {
+  const { start, busy, ui } = useBalanceShare();
+  return (
+    <>
+      <button className="btn" onClick={start} disabled={busy}>
+        <Send size={16} /> Отправить баланс
+      </button>
+      <button className="btn" onClick={() => onSheet("adjust")}>
+        <SlidersHorizontal size={16} /> Корректировка
+      </button>
+      <button className="btn primary" onClick={() => onSheet("deposit")}>
+        <Plus size={16} /> Пополнить
+      </button>
       {ui}
     </>
   );
@@ -306,6 +329,7 @@ function FinancePage() {
             <BalanceMore onAdjust={() => setSheet("adjust")} />
           </>
         }
+        toolbar={<FinanceToolbar onSheet={setSheet} />}
       />
       {sheet && <MoneySheet kind={sheet} onClose={() => setSheet(null)} />}
     </>
