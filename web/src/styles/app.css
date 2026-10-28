@@ -153,6 +153,17 @@ h3 {
   color: var(--negative);
 }
 
+/* File inputs opened by a button (PhotoPick): hidden from view, but not
+ * display: none, which some Android webviews refuse to open. */
+.file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1725,6 +1736,11 @@ table.orders .r {
 .photo-tile.add {
   border: 1.5px dashed var(--border-strong);
   cursor: pointer;
+}
+
+button.photo-tile {
+  padding: 0;
+  font: inherit;
 }
 
 .photo-tile.add.disabled {

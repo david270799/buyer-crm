@@ -1,7 +1,7 @@
 import { Camera, CheckCheck, Loader2, Plus, Sparkles, Split, Undo2, X } from "lucide-react";
 import { CategoryPicker } from "../shared/CategoryPicker";
 import { ShopPicker } from "./ShopPicker";
-import { useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -139,6 +139,49 @@ export function AiFillButton({
   );
 }
 
+/** A button that opens the photo picker. Telegram on Android does not always
+ * open it from a <label> around a hidden input (the owner's «Добавить фото»
+ * did nothing, 28.10.2026), so the button calls input.click() itself and the
+ * input is only visually hidden, not display: none. */
+function PhotoPick({
+  className,
+  label,
+  disabled,
+  multiple,
+  onFiles,
+  children,
+}: {
+  className: string;
+  label?: string;
+  disabled?: boolean;
+  multiple?: boolean;
+  onFiles: (files: File[]) => void;
+  children: ReactNode;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <button type="button" className={className} disabled={disabled} aria-label={label} onClick={() => input.current?.click()}>
+        {children}
+      </button>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        multiple={multiple}
+        className="file-input"
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          e.target.value = "";
+          if (files.length) onFiles(files);
+        }}
+      />
+    </>
+  );
+}
+
 export function PhotoInput({ value, onChange }: { value: PhotoValue; onChange: (v: PhotoValue) => void }) {
   const settings = useSettings();
   const toast = useToast();
@@ -156,28 +199,22 @@ export function PhotoInput({ value, onChange }: { value: PhotoValue; onChange: (
         )}
       </div>
       <div className="stack" style={{ gap: 6 }}>
-        <label className={`btn small ${enabled ? "" : "disabled"}`} style={{ cursor: enabled ? "pointer" : "default" }}>
-          {value.photo_url ? "Заменить фото" : "Добавить фото"}
-          <input
-            type="file"
-            accept="image/*"
-            hidden
-            disabled={!enabled || busy}
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (!file) return;
-              setBusy(true);
-              try {
-                onChange(await uploadImage(file));
-              } catch (error) {
-                toast(errorText(error), "error");
-              } finally {
-                setBusy(false);
-              }
-            }}
-          />
-        </label>
+        <PhotoPick
+          className="btn small"
+          disabled={!enabled || busy}
+          onFiles={async ([file]) => {
+            setBusy(true);
+            try {
+              onChange(await uploadImage(file));
+            } catch (error) {
+              toast(errorText(error), "error");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          {busy ? "Загружаем…" : value.photo_url ? "Заменить фото" : "Добавить фото"}
+        </PhotoPick>
         <div className="tiny faint">
           {enabled ? "Сожмём до WebP, пропорции сохранятся" : "Хранилище фото не настроено"}
         </div>
@@ -226,33 +263,29 @@ export function PhotosInput({ value, onChange }: { value: PhotoValue[]; onChange
         </div>
       ))}
       {room > busy && (
-        <label className={`photo-tile add ${enabled ? "" : "disabled"}`} aria-label="Добавить фото">
-          <Plus size={18} />
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            hidden
-            disabled={!enabled}
-            onChange={async (e) => {
-              const files = Array.from(e.target.files ?? []).slice(0, room - busy);
-              e.target.value = "";
-              if (!files.length) return;
-              setBusy((n) => n + files.length);
-              const added: PhotoValue[] = [];
-              for (const file of files) {
-                try {
-                  added.push(await uploadImage(file));
-                } catch (error) {
-                  toast(errorText(error), "error");
-                } finally {
-                  setBusy((n) => n - 1);
-                }
+        <PhotoPick
+          className={`photo-tile add ${enabled ? "" : "disabled"}`}
+          label="Добавить фото"
+          disabled={!enabled}
+          multiple
+          onFiles={async (picked) => {
+            const files = picked.slice(0, room - busy);
+            setBusy((n) => n + files.length);
+            const added: PhotoValue[] = [];
+            for (const file of files) {
+              try {
+                added.push(await uploadImage(file));
+              } catch (error) {
+                toast(errorText(error), "error");
+              } finally {
+                setBusy((n) => n - 1);
               }
-              if (added.length) onChange([...value, ...added]);
-            }}
-          />
-        </label>
+            }
+            if (added.length) onChange([...value, ...added]);
+          }}
+        >
+          <Plus size={18} />
+        </PhotoPick>
       )}
     </div>
   );
