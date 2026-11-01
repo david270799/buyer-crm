@@ -17,7 +17,7 @@ import {
 } from "../api/hooks";
 import type { Category, ShowcaseItem, ShowcaseSize } from "../api/types";
 import { PageHead } from "../components/Layout";
-import { Checkbox, Confirm, Empty, ErrorState, Field, Loading, MoneyInput, errorText, useToast } from "../components/ui";
+import { Checkbox, Confirm, Empty, ErrorState, Field, Loading, MoneyInput, Sheet, errorText, useToast } from "../components/ui";
 import { CATEGORY_LABEL, krw, moment, plural } from "../lib/format";
 import { downloadFiles } from "../telegram";
 
@@ -420,6 +420,28 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
   const needsSize = item.sizes.length > 0;
   const ready = (!colors.length || Boolean(color)) && (!needsSize || Boolean(size));
   const choice = [color, size].filter(Boolean).join(" · ");
+  // No sizes on the card (the owner, 02.11.2026): the client types the size
+  // he needs when adding to the cart or ordering.
+  const [asking, setAsking] = useState<"cart" | "order" | null>(null);
+  const toCart = (chosen: string | null) => {
+    if (preview) return toast(PREVIEW_HINT);
+    cart.add({ item_id: item.id, size: chosen, color });
+    toast(`В корзине: ${cart.lines.length + 1}`);
+  };
+  const placeOrder = (chosen: string | null) =>
+    preview
+      ? toast(PREVIEW_HINT)
+      : order.mutate([{ item_id: item.id, size: chosen, color }], {
+          onSuccess: (r) => {
+            toast(
+              client
+                ? `Заказ ${r.items[0].id} отправлен байеру`
+                : `Заказ ${r.items.map((o) => o.id).join(", ")} создан — в «Новых»`,
+            );
+            navigate(`/orders/${r.items[0].id}`);
+          },
+          onError: (e) => toast(errorText(e), "error"),
+        });
   return (
     <>
       <div className="sc-detail">
@@ -503,39 +525,21 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
         ) : needsSize ? (
           <SizeChips sizes={sizes} selected={size} onSelect={setSize} counts />
         ) : (
-          <div className="small muted">Размеры магазин не показал — укажите в комментарии к заказу.</div>
+          <div className="small muted">Размер укажете при заказе — впишите, какой нужен.</div>
         )}
       </div>
       <div className="sc-cta">
         <button
           className="btn"
           disabled={!ready}
-          onClick={() => {
-            if (preview) return toast(PREVIEW_HINT);
-            cart.add({ item_id: item.id, size, color });
-            toast(`В корзине: ${cart.lines.length + 1}`);
-          }}
+          onClick={() => (needsSize ? toCart(size) : setAsking("cart"))}
         >
           <ShoppingCart size={16} /> В корзину
         </button>
         <button
           className="btn primary"
           disabled={!ready || order.isPending}
-          onClick={() =>
-            preview
-              ? toast(PREVIEW_HINT)
-              : order.mutate([{ item_id: item.id, size, color }], {
-              onSuccess: (r) => {
-                toast(
-                  client
-                    ? `Заказ ${r.items[0].id} отправлен байеру`
-                    : `Заказ ${r.items.map((o) => o.id).join(", ")} создан — в «Новых»`,
-                );
-                navigate(`/orders/${r.items[0].id}`);
-              },
-              onError: (e) => toast(errorText(e), "error"),
-            })
-          }
+          onClick={() => (needsSize ? placeOrder(size) : setAsking("order"))}
         >
           {order.isPending
             ? "Подождите…"
@@ -548,7 +552,53 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
                   : "Заказать"}
         </button>
       </div>
+      {asking && (
+        <SizeAsk
+          title={asking === "cart" ? "В корзину" : "Заказать"}
+          onClose={() => setAsking(null)}
+          onDone={(typed) => {
+            setAsking(null);
+            if (asking === "cart") toCart(typed);
+            else placeOrder(typed);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+/** «Укажите размер» for a card without sizes (the owner, 02.11.2026). */
+function SizeAsk({ title, onClose, onDone }: { title: string; onClose: () => void; onDone: (size: string | null) => void }) {
+  const [text, setText] = useState("");
+  const value = text.trim().replace(/\s+/g, " ").slice(0, 40);
+  return (
+    <Sheet
+      title={title}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn ghost" onClick={() => onDone(null)}>
+            Без размера
+          </button>
+          <button className="btn primary" disabled={!value} onClick={() => onDone(value)}>
+            Готово
+          </button>
+        </>
+      }
+    >
+      <Field label="Укажите размер" hint="Какой размер вам нужен: например 270, 42, M или 100">
+        <input
+          className="input"
+          autoFocus
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && value) onDone(value);
+          }}
+          placeholder="Размер"
+        />
+      </Field>
+    </Sheet>
   );
 }
 
