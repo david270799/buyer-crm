@@ -8,6 +8,7 @@ retries and events written elsewhere, every few minutes. Only one bot process ma
 
 import asyncio
 import logging
+from collections.abc import Callable
 from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from aiogram import Bot
@@ -24,8 +25,10 @@ from aiogram.types import (
 )
 
 from crm.bot import formatting as fmt
+from crm.bot.admin_group import start_param_url
 from crm.domain.events import Event
 from crm.domain.notifications import DeliveryStatus
+from crm.services.admin_group import NOTIFICATIONS, AdminGroup
 from crm.services.notifications import NotificationService, SendOutcome
 
 logger = logging.getLogger(__name__)
@@ -35,14 +38,18 @@ _MAX_ROUNDS = 10
 _NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
 
+def open_target(event: Event) -> str:
+    """What «Открыть в CRM» opens: the order, the shipment or the notifications."""
+    if len(event.order_ids) == 1:
+        return f"order:{event.order_ids[0]}"
+    if event.shipment_id:
+        return f"shipment:{event.shipment_id}"
+    return "notifications"
+
+
 def open_url(base: str, event: Event) -> str:
     """Mini App link that opens the order, the shipment or the notifications."""
-    if len(event.order_ids) == 1:
-        target = f"order:{event.order_ids[0]}"
-    elif event.shipment_id:
-        target = f"shipment:{event.shipment_id}"
-    else:
-        target = "notifications"
+    target = open_target(event)
     parts = urlsplit(base)
     query = "&".join(q for q in (parts.query, urlencode({"open": target})) if q)
     return urlunsplit((parts.scheme, parts.netloc, parts.path or "/", query, ""))
@@ -70,6 +77,8 @@ class TelegramNotifier:
         poll_seconds: float = 300,
         settle_seconds: float = 0.5,
         pause_seconds: float = 0.4,
+        admin_ids: frozenset[int] = frozenset(),
+        admin_group: Callable[[], AdminGroup] | None = None,
     ):
         self._bot = bot
         self._service = notifications
@@ -77,6 +86,10 @@ class TelegramNotifier:
         self._poll = poll_seconds
         self._settle = settle_seconds
         self._pause = pause_seconds
+        # Admins' copies go to the «Уведомления» topic of their group when it is
+        # bound (the owner, 01.11.2026): one message there instead of one each.
+        self._admin_ids = admin_ids
+        self._admin_group = admin_group
 
     async def run(self) -> None:
         loop = asyncio.get_running_loop()
@@ -115,7 +128,7 @@ class TelegramNotifier:
             retry_later = False
             for delivery in batch.deliveries:
                 event = delivery.event
-                outcomes = [await self._send(chat_id, event) for chat_id in delivery.chat_ids]
+                outcomes = await self._deliver(delivery.chat_ids, event)
                 try:
                     status = await asyncio.to_thread(self._service.record, delivery, outcomes)
                 except Exception:  # noqa: BLE001
@@ -127,22 +140,47 @@ class TelegramNotifier:
                 break
         return handled
 
-    def _markup(self, event: Event) -> InlineKeyboardMarkup | None:
+    async def _deliver(self, chat_ids: tuple[int, ...], event: Event) -> list[SendOutcome]:
+        group = self._admin_group() if self._admin_group is not None else AdminGroup()
+        thread = group.topic(NOTIFICATIONS)
+        admins = [c for c in chat_ids if c in self._admin_ids]
+        if thread is None or group.chat_id is None or not admins:
+            return [await self._send(chat_id, event) for chat_id in chat_ids]
+        outcomes = [await self._send(c, event) for c in chat_ids if c not in self._admin_ids]
+        shared = await self._send(group.chat_id, event, thread=thread)
+        outcomes.extend(
+            SendOutcome(admin, ok=shared.ok, permanent=shared.permanent, error=shared.error)
+            for admin in admins
+        )
+        return outcomes
+
+    async def _markup(self, event: Event, *, in_group: bool) -> InlineKeyboardMarkup | None:
         if not self._mini_app_url:
             return None
-        button = InlineKeyboardButton(
-            text="Открыть в CRM",
-            web_app=WebAppInfo(url=open_url(self._mini_app_url, event)),
-        )
+        if in_group:
+            # Mini App buttons work only in private chats: a t.me link instead.
+            url = await start_param_url(self._bot, open_target(event))
+            if url is None:
+                return None
+            button = InlineKeyboardButton(text="Открыть в CRM", url=url)
+        else:
+            button = InlineKeyboardButton(
+                text="Открыть в CRM",
+                web_app=WebAppInfo(url=open_url(self._mini_app_url, event)),
+            )
         return InlineKeyboardMarkup(inline_keyboard=[[button]])
 
-    async def _send(self, chat_id: int, event: Event) -> SendOutcome:
+    async def _send(self, chat_id: int, event: Event, *, thread: int | None = None) -> SendOutcome:
         text = fmt.notification(event)[:_MAX_TEXT]
-        markup = self._markup(event)
+        markup = await self._markup(event, in_group=thread is not None)
         for attempt in range(2):
             try:
                 await self._bot.send_message(
-                    chat_id, text, reply_markup=markup, link_preview_options=_NO_PREVIEW
+                    chat_id,
+                    text,
+                    reply_markup=markup,
+                    link_preview_options=_NO_PREVIEW,
+                    message_thread_id=thread,
                 )
                 await asyncio.sleep(self._pause)
                 return SendOutcome(chat_id, ok=True)

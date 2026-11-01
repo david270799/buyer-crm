@@ -1,4 +1,5 @@
-"""«📦 Пришло на склад» in the admin's private chat (the owner, 16.10.2026).
+"""«📦 Пришло на склад» in the admin's private chat (the owner, 16.10.2026) and,
+since 01.11.2026, in the «Склад» topic of the admin group.
 
 The button (under /start, or /arrived) lists the bought orders; the admin taps
 one and sends a photo of what arrived — or simply sends a photo with «N5» as the
@@ -23,11 +24,13 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from crm.bot import formatting as fmt
 from crm.bot.access import HasRole
+from crm.bot.admin_group import in_topic, real_reply
 from crm.bot.handlers.intake import PhotoIntake, _file_id
 from crm.config import Settings
 from crm.domain.enums import Role
 from crm.domain.errors import CRMError
 from crm.domain.ids import normalize_order_id
+from crm.services.admin_group import WAREHOUSE
 from crm.services.arrival import MATCH, MISMATCH, UNCLEAR, ArrivalResult
 from crm.services.common import Actor
 from crm.services.container import Services
@@ -100,13 +103,14 @@ def build(services: Services, settings: Settings) -> Router:
         return None
 
     def is_admin_photo(message: Message, role: Role | None) -> bool:
-        """Every photo the admin sends the bot privately: the bot asks which order
-        it is (owner, 16.10.2026), «N5» in the caption answers at once."""
-        if role is not Role.ADMIN or message.chat.type != ChatType.PRIVATE:
+        """Every photo the admin sends the bot privately, or to the «Склад» topic of
+        the admin group (owner, 01.11.2026): the bot asks which order it is
+        (owner, 16.10.2026), «N5» in the caption answers at once."""
+        if role is not Role.ADMIN or message.from_user is None or _file_id(message) is None:
             return False
-        if message.from_user is None or message.reply_to_message is not None:
-            return False
-        return _file_id(message) is not None
+        if message.chat.type == ChatType.PRIVATE:
+            return message.reply_to_message is None
+        return in_topic(services, message, WAREHOUSE) and real_reply(message) is None
 
     def order_buttons(orders, prefix: str) -> list[list[InlineKeyboardButton]]:
         buttons = [
@@ -143,14 +147,18 @@ def build(services: Services, settings: Settings) -> Router:
             await asyncio.to_thread(services.arrival.waiting, actor) if services.arrival else []
         )
         rows = order_buttons(orders, f"{PHOTO_PICK}{token}:")
-        rows.append(
-            [InlineKeyboardButton(text="➕ Это новый заказ", callback_data=f"{PHOTO_NEW}{token}")]
-        )
+        private = message.chat.type == ChatType.PRIVATE
+        if private:  # «Склад» in the group is only for arrivals
+            data = f"{PHOTO_NEW}{token}"
+            rows.append([InlineKeyboardButton(text="➕ Это новый заказ", callback_data=data)])
+        if orders:
+            question = "Какой это заказ? Выберите — бот сверит фото с заказом."
+        elif private:
+            question = "Выкупленных заказов, которые ждут склада, нет. Это новый заказ?"
+        else:
+            question = "Выкупленных заказов, которые ждут склада, нет."
         await message.reply(
-            "Какой это заказ? Выберите — бот сверит фото с заказом."
-            if orders
-            else "Выкупленных заказов, которые ждут склада, нет. Это новый заказ?",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
+            question, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows) if rows else None
         )
 
     async def store(bot: Bot, message: Message):
@@ -224,7 +232,9 @@ def build(services: Services, settings: Settings) -> Router:
         )
 
     async def on_command(message: Message, actor: Actor | None) -> None:
-        if actor is not None and message.chat.type == ChatType.PRIVATE:
+        if actor is None:
+            return
+        if message.chat.type == ChatType.PRIVATE or in_topic(services, message, WAREHOUSE):
             await show_list(message, actor)
 
     async def on_list(query: CallbackQuery, actor: Actor | None) -> None:

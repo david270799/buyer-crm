@@ -183,6 +183,7 @@ web/
 | `settings/general` | `krw_per_usd` |
 | `settings/shops` | `names[]` — пузырьки «Магазин» в форме выкупа (16.10); нет документа → список по умолчанию (`DEFAULT_SHOPS`) |
 | `settings/security` | PIN админа для Mini App: `pin_hash` (PBKDF2, соль), `pin_length`; сам код не хранится. Экран PIN — только для админа, сброс `/pin off` |
+| `settings/admin_group` | группа админа с темами (01.11): `chat_id`, `title`, `topics` {warehouse/showcase/notifications: id темы}; задаётся `/topic` внутри темы (`services/admin_group.py`) |
 | `settings/groups` | `chats` {id: название} — разрешённые группы, задаются `/setgroup` (плюс `ALLOWED_CHAT_IDS` из env) |
 | `settings/notifications` | уведомления в личку: `recipient` (`off`/`admins`/`client`), `level` (`important`/`all`) |
 | `counters/orders`, `counters/shipments` | `next_id`; увеличиваются только в транзакции; после удаления заказов номера возвращаются только с конца, не ниже `floor` (номера с историей денег) |
@@ -235,6 +236,14 @@ web/
   (картинки отправок «В пути» → выбор → чек-лист заказов; галочки — битовая маска в callback_data).
   `OrderService.client_received`: отмеченные → «Доставлен», остальные → «Требует внимания», админам — сообщение;
   деньги не двигаются. Клавиатура приходит на /start. «Баланс» пока скрыт (`SHOW_BALANCE_BUTTON = False`, владелец скажет, когда вернуть).
+* **Группа админа с темами** (01.11, `services/admin_group.py`, `bot/admin_group.py`, `bot/handlers/topics.py`):
+  владелец перенёс работу с ботом из лички в свою группу. `/topic` в теме → «Склад» (фото → какой заказ →
+  проверка, как в личке, без «новый заказ»), «Витрина» (ссылка → черновик), «Уведомления» (всё, что бот писал
+  админам: вопросы по заказам, уведомления CRM — одна копия вместо каждого админа, «клиент получил не всё»,
+  сообщения о группах). Не привязано или группа не принимает — по-старому в личку. Группа пропускается
+  без `/setgroup`, ответы в ней — для админа (`audience_for`). Кнопки Mini App (`web_app`) в группах
+  запрещены Telegram — там ссылка `t.me/<bot>?startapp=order-N5` (нужна Main Mini App в @BotFather),
+  `lib/deeplink.ts` читает `tgWebAppStartParam`. Ночная копия базы осталась в личке.
 * **Ночная копия:** в 04:00 по Сеулу копия базы (gzip) уходит админам в личку (`BACKUP_TO_TELEGRAM`); `/backup` — копия сразу, только спросившему админу.
 * При старте бот предупреждает в логах: Privacy Mode включён, нет ключа Gemini, нет админов.
 

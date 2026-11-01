@@ -29,11 +29,14 @@ class AccessMiddleware(BaseMiddleware):
         roles: RoleResolver,
         allowed_chat_ids: frozenset[int],
         allowed: Callable[[], frozenset[int]] | None = None,
+        admin_chat: Callable[[], int | None] | None = None,
     ):
         self._roles = roles
         self._allowed_chat_ids = allowed_chat_ids
         # Groups added with /setgroup (read on each update, the data is in memory).
         self._allowed = allowed
+        # The admin's group with topics (crm.services.admin_group).
+        self._admin_chat = admin_chat
 
     async def __call__(
         self,
@@ -44,11 +47,13 @@ class AccessMiddleware(BaseMiddleware):
         user: User | None = data.get("event_from_user")
         chat: Chat | None = data.get("event_chat")
         allowed = self._allowed() if self._allowed else self._allowed_chat_ids
+        admin_chat = self._admin_chat() if self._admin_chat else None
         if (
             chat is not None
             and chat.type != ChatType.PRIVATE
             and allowed
             and chat.id not in allowed
+            and chat.id != admin_chat
             and not _is_setgroup(event)
         ):
             logger.info("Ignoring update from non-allowed chat %s", chat.id)
@@ -57,26 +62,28 @@ class AccessMiddleware(BaseMiddleware):
         role = await asyncio.to_thread(self._roles.resolve, user.id) if user else None
         data["role"] = role
         data["actor"] = Actor.telegram(user.id, role) if user and role else None
-        data["audience"] = audience_for(role, chat)
+        data["audience"] = audience_for(role, chat, admin_chat)
         return await handler(event, data)
 
 
 def _is_setgroup(event: TelegramObject) -> bool:
-    """/setgroup must reach its handler in a group that is not allowed yet
-    (the handler itself accepts it only from an admin)."""
+    """/setgroup and /topic must reach their handlers in a group that is not
+    allowed yet (the handlers themselves accept them only from an admin)."""
     text = getattr(event, "text", None) or ""
-    return text.split("@", 1)[0].split(" ", 1)[0] == "/setgroup"
+    return text.split("@", 1)[0].split(" ", 1)[0] in ("/setgroup", "/topic")
 
 
-def audience_for(role: Role | None, chat: Chat | None) -> Role:
+def audience_for(role: Role | None, chat: Chat | None, admin_chat: int | None = None) -> Role:
     """Whose visibility rules apply to a reply.
 
     Everyone in a chat sees the bot's reply, and the client is a member of
     the orders group, so outside a private chat replies are always rendered
-    for the CLIENT — even when the admin asked.
+    for the CLIENT — even when the admin asked. The admin's own group with
+    topics is the exception: only admins are there.
     """
-    if role is Role.ADMIN and chat is not None and chat.type == ChatType.PRIVATE:
-        return Role.ADMIN
+    if role is Role.ADMIN and chat is not None:
+        if chat.type == ChatType.PRIVATE or (admin_chat is not None and chat.id == admin_chat):
+            return Role.ADMIN
     return Role.CLIENT
 
 

@@ -11,6 +11,7 @@ from crm.bot.handlers import (
     orders,
     shipments,
     showcase,
+    topics,
 )
 from crm.config import Settings
 from crm.services.container import Services
@@ -22,13 +23,15 @@ def build_router(services: Services, settings: Settings) -> Router:
     # Order matters: the fallback must stay last.
     root.include_routers(
         common.build(),
+        topics.build(services),  # /topic in the admin's group
         client_buttons.build(),  # «💰 Баланс» / «📦 Получил посылку»
         orders.build(),
         shipments.build(),
         finance.build(),
         arrival.build(services, settings),  # before the intake: «N5» photos are arrivals
-        intake.build(services, settings),
+        # Before the intake too: screenshots in the «Витрина» topic are not orders.
         showcase.build(services, settings),  # a shop link from the admin → draft
+        intake.build(services, settings),
         fallback.build(),
     )
     root.errors.register(errors.on_error)

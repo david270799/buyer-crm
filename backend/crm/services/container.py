@@ -15,6 +15,7 @@ from crm.repositories import (
     ShipmentRepository,
     ShowcaseRepository,
 )
+from crm.services.admin_group import AdminGroupService
 from crm.services.arrival import ArrivalService
 from crm.services.auth import RoleResolver
 from crm.services.client_service import ClientService
@@ -64,6 +65,8 @@ class Services:
     arrival: ArrivalService | None = None
     showcase: ShowcaseService | None = None
     updates: UpdateService | None = None
+    # The admin's group with topics («Склад», «Витрина», «Уведомления»).
+    admin_group: AdminGroupService | None = None
 
 
 def build_services(
@@ -149,4 +152,5 @@ def build_services(
             recognizer,
         ),
         updates=UpdateService(db, clock, auditor, update_dir),
+        admin_group=AdminGroupService(db, clock, auditor),
     )

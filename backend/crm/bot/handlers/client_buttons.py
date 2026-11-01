@@ -31,6 +31,8 @@ from aiogram.types import (
 
 from crm.bot import formatting as fmt
 from crm.bot.access import HasRole
+from crm.bot.admin_group import tell_admins
+from crm.config import Settings
 from crm.domain.enums import OrderStatus, Role
 from crm.domain.errors import CRMError
 from crm.domain.models import Order, Shipment
@@ -283,7 +285,13 @@ async def on_all(call: CallbackQuery, services: Services, actor: Actor) -> None:
     await _redraw(call, shipment, waiting, (1 << len(waiting)) - 1)
 
 
-async def on_done(call: CallbackQuery, services: Services, actor: Actor, bot: Bot) -> None:
+async def on_done(
+    call: CallbackQuery,
+    services: Services,
+    actor: Actor,
+    bot: Bot,
+    settings: Settings | None = None,
+) -> None:
     shipment_id, mask_text = call.data.removeprefix(DONE).rsplit(":", 1)
     shipment, orders = await _load(services, actor, shipment_id)
     waiting = _waiting(orders)
@@ -317,13 +325,14 @@ async def on_done(call: CallbackQuery, services: Services, actor: Actor, bot: Bo
     # The admins get the parcel picture and what is missing.
     picture = await asyncio.to_thread(_shipment_photo, services, shipment, orders)
     text = admin_report(shipment, orders, result.delivered, result.missing)
-    for admin_id in services.roles.admin_ids:
-        try:
-            await bot.send_photo(
-                admin_id, BufferedInputFile(picture, f"{shipment.id}.png"), caption=text[:1024]
-            )
-        except Exception:  # noqa: BLE001 - an admin who never opened the bot
-            logger.warning("Could not tell admin %s about a missing parcel item", admin_id)
+    await tell_admins(
+        bot,
+        services,
+        text,
+        photo=BufferedInputFile(picture, f"{shipment.id}.png"),
+        mini_app=settings.mini_app_url if settings else None,
+        target=f"shipment:{shipment.id}",
+    )
 
 
 def build() -> Router:

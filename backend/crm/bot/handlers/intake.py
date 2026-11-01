@@ -30,6 +30,7 @@ from aiogram.types import ChatMemberUpdated, Message
 
 from crm.bot import formatting as fmt
 from crm.bot.access import audience_for
+from crm.bot.admin_group import tell_admins
 from crm.bot.handlers.reply import answer_privately
 from crm.config import Settings
 from crm.domain.enums import Role
@@ -133,15 +134,9 @@ class PhotoIntake:
             return None
 
     async def tell_admins(self, bot: Bot, text: str, photo_file_id: str | None = None) -> None:
-        for admin_id in sorted(self._settings.admin_ids):
-            try:
-                if photo_file_id and len(text) <= 1024:
-                    await bot.send_photo(admin_id, photo_file_id, caption=text)
-                else:
-                    await bot.send_message(admin_id, text, disable_web_page_preview=True)
-            except Exception:  # noqa: BLE001 - try once more without the photo
-                with contextlib.suppress(Exception):
-                    await bot.send_message(admin_id, text, disable_web_page_preview=True)
+        """Questions about a new order: «Уведомления» of the admin group or privately."""
+        photo = photo_file_id if photo_file_id and len(text) <= 1024 else None
+        await tell_admins(bot, self._services, text, photo=photo)
 
     async def handle(
         self,
@@ -293,17 +288,13 @@ def build(services: Services, settings: Settings) -> Router:
                 await bot.leave_chat(chat.id)
             anonymous = adder is not None and adder.id == ANONYMOUS_ADMIN_ID
             text = fmt.group_left_for_admin(chat.title or "группа", anonymous)
-            for admin_id in sorted(settings.admin_ids):
-                with contextlib.suppress(Exception):
-                    await bot.send_message(admin_id, text)
+            await tell_admins(bot, services, text)
             return
         me = await bot.get_me()
         is_admin = event.new_chat_member.status == ChatMemberStatus.ADMINISTRATOR
         sees_photos = bool(me.can_read_all_group_messages) or is_admin
         text = fmt.group_added_for_admin(chat.title or "группа", chat.id, sees_photos)
-        for admin_id in sorted(settings.admin_ids):
-            with contextlib.suppress(Exception):
-                await bot.send_message(admin_id, text)
+        await tell_admins(bot, services, text)
 
     router.message.register(on_add, Command("add"))
     router.message.register(on_photo, F.photo | F.document)

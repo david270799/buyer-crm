@@ -1,27 +1,28 @@
 """«Витрина» in the bot (the owner, 20.10.2026): a shop link sent to the bot
-privately by the admin becomes a draft card on «Подготовка»."""
+privately by the admin — or, since 01.11.2026, to the «Витрина» topic of the
+admin group — becomes a draft card on «Подготовка»."""
 
 import asyncio
 import logging
-from urllib.parse import urlencode, urlsplit, urlunsplit
+from urllib.parse import urlsplit
 
 from aiogram import Bot, F, Router
 from aiogram.enums import ChatType
 from aiogram.filters import Command, CommandObject
 from aiogram.types import (
     BufferedInputFile,
-    InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
-    WebAppInfo,
 )
 
 from crm.bot import formatting as fmt
 from crm.bot.access import HasRole
+from crm.bot.admin_group import in_topic, open_button
 from crm.config import Settings
 from crm.domain.enums import Role
 from crm.domain.errors import CRMError
 from crm.domain.models import ShowcaseItem
+from crm.services.admin_group import SHOWCASE
 from crm.services.common import Actor
 from crm.services.container import Services
 from crm.services.recognition import extract_urls
@@ -50,14 +51,21 @@ def draft_text(item: ShowcaseItem) -> str:
 def build(services: Services, settings: Settings) -> Router:
     router = Router(name="showcase")
 
-    def keyboard(item: ShowcaseItem) -> InlineKeyboardMarkup | None:
-        if not settings.mini_app_url:
-            return None
-        parts = urlsplit(settings.mini_app_url)
-        query = "&".join(q for q in (parts.query, urlencode({"open": f"prep:{item.id}"})) if q)
-        url = urlunsplit((parts.scheme, parts.netloc, parts.path or "/", query, ""))
-        button = InlineKeyboardButton(text="Открыть в «Одобрении»", web_app=WebAppInfo(url=url))
-        return InlineKeyboardMarkup(inline_keyboard=[[button]])
+    async def keyboard(
+        bot: Bot, item: ShowcaseItem, message: Message
+    ) -> InlineKeyboardMarkup | None:
+        button = await open_button(
+            bot,
+            settings.mini_app_url,
+            f"prep:{item.id}",
+            in_group=message.chat.type != ChatType.PRIVATE,
+            text="Открыть в «Одобрении»",
+        )
+        return InlineKeyboardMarkup(inline_keyboard=[[button]]) if button else None
+
+    def here(message: Message) -> bool:
+        """Privately, or in the «Витрина» topic of the admin group (01.11.2026)."""
+        return message.chat.type == ChatType.PRIVATE or in_topic(services, message, SHOWCASE)
 
     async def on_link(message: Message, bot: Bot, actor: Actor | None) -> None:
         if actor is None or services.showcase is None:
@@ -70,7 +78,8 @@ def build(services: Services, settings: Settings) -> Router:
             except CRMError as exc:
                 await bot.edit_message_text(fmt.e(exc.user_message), **where)
                 continue
-            await bot.edit_message_text(draft_text(item), reply_markup=keyboard(item), **where)
+            markup = await keyboard(bot, item, message)
+            await bot.edit_message_text(draft_text(item), reply_markup=markup, **where)
             if item.shop_price_krw is None or not item.sizes:
                 # A shop the CRM cannot read yet (the owner, 20.10.2026: no extra
                 # command): the page itself, to teach the CRM this shop.
@@ -104,12 +113,10 @@ def build(services: Services, settings: Settings) -> Router:
             return
         await send_page(message, actor, urls[0])
 
-    router.message.register(
-        pagefile, Command("pagefile"), F.chat.type == ChatType.PRIVATE, HasRole(Role.ADMIN)
-    )
+    router.message.register(pagefile, Command("pagefile"), F.func(here), HasRole(Role.ADMIN))
     router.message.register(
         on_link,
-        F.chat.type == ChatType.PRIVATE,
+        F.func(here),
         F.text.contains("http"),
         ~F.text.startswith("/"),
         HasRole(Role.ADMIN),

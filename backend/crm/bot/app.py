@@ -47,6 +47,7 @@ ADMIN_COMMANDS = [
     BotCommand(command="setclient", description="Указать клиента (ответом на его сообщение)"),
     BotCommand(command="setclient2", description="Второй человек клиента: /setclient2 ID"),
     BotCommand(command="setgroup", description="Рабочая группа: /setgroup ID"),
+    BotCommand(command="topic", description="В теме своей группы: склад / витрина / уведомления"),
     BotCommand(command="notify", description="Уведомления в личку"),
     BotCommand(command="backup", description="Прислать копию базы сейчас"),
     BotCommand(command="server", description="Сервер: память, диск, нагрузка"),
@@ -76,10 +77,12 @@ def create_dispatcher(
     dp["settings"] = settings
     dp["backup"] = backup
     groups = services.groups
+    admin_group = services.admin_group
     access = AccessMiddleware(
         services.roles,
         settings.allowed_chat_ids,
         (lambda: groups.allowed_ids() | settings.allowed_chat_ids) if groups else None,
+        (lambda: admin_group.current().chat_id) if admin_group else None,
     )
     dp.message.outer_middleware(access)
     dp.callback_query.outer_middleware(access)
@@ -136,7 +139,13 @@ async def run_bot(
                 send=settings.backup_to_telegram,
             )
         dp = create_dispatcher(services, settings, nightly)
-        notifier = TelegramNotifier(bot, services.notifications, settings.mini_app_url)
+        notifier = TelegramNotifier(
+            bot,
+            services.notifications,
+            settings.mini_app_url,
+            admin_ids=services.roles.admin_ids,
+            admin_group=services.admin_group.current if services.admin_group else None,
+        )
         notifier_task = asyncio.create_task(notifier.run(), name="telegram-notifier")
         notifier_task.add_done_callback(_report_notifier_exit)
         background = [notifier_task]
