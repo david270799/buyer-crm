@@ -2844,9 +2844,6 @@ button.photo-tile {
 .sc-photo { position: relative; aspect-ratio: 1 / 1; background: #fff; }
 .sc-photo img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .sc-photo.big { border-radius: var(--radius-lg); overflow: hidden; border: 1px solid var(--border); }
-.sc-swipe { display: flex; width: 100%; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
-.sc-swipe::-webkit-scrollbar { display: none; }
-.sc-swipe img { flex: 0 0 100%; scroll-snap-align: center; }
 .sc-shop { position: absolute; left: 8px; top: 8px; padding: 3px 9px; border-radius: 999px; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 11px; font-weight: 700; }
 .sc-heart { position: absolute; right: 8px; top: 8px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.5); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .sc-heart.on { color: #ff4d6d; }
@@ -3599,16 +3596,40 @@ button.photo-tile {
   animation: share-fade 0.15s ease-out;
 }
 
+/* The strips move by hand (components/swipe.ts): one photo per swipe. */
+.sc-swipe,
 .pv-strip {
-  display: flex;
+  width: 100%;
   height: 100%;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: none;
+  overflow: hidden;
 }
 
-.pv-strip::-webkit-scrollbar {
-  display: none;
+.sc-swipe {
+  touch-action: pan-y; /* up/down still scrolls the page */
+}
+
+.pv-strip {
+  touch-action: none; /* one finger swipes, two fingers zoom */
+}
+
+.sc-track,
+.pv-track {
+  display: flex;
+  height: 100%;
+  will-change: transform;
+}
+
+.sc-track img {
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.photo-dots i {
+  cursor: pointer;
 }
 
 .pv-slide {
@@ -3617,9 +3638,40 @@ button.photo-tile {
   height: 100%;
   place-items: center;
   overflow: hidden;
-  scroll-snap-align: center;
-  /* One finger swipes sideways; two fingers are the zoom (PhotoViewer). */
-  touch-action: pan-x;
+}
+
+.pv-nav {
+  position: absolute;
+  top: 50%;
+  display: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-top: -24px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  cursor: pointer;
+}
+
+.pv-nav:disabled {
+  opacity: 0.3;
+}
+
+.pv-nav.prev {
+  left: 16px;
+}
+
+.pv-nav.next {
+  right: 16px;
+}
+
+/* A computer has no swipe: arrows. */
+@media (hover: hover) and (pointer: fine) {
+  .pv-nav {
+    display: grid;
+  }
 }
 
 .pv-slide img {
@@ -3656,6 +3708,6 @@ button.photo-tile {
   cursor: pointer;
 }
 
-.sc-swipe img {
+.sc-track img {
   cursor: zoom-in;
 }

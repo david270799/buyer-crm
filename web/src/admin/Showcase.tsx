@@ -19,6 +19,7 @@ import {
 import type { Category, ShowcaseItem, ShowcaseSize } from "../api/types";
 import { PageHead } from "../components/Layout";
 import { PhotoViewer } from "../components/PhotoViewer";
+import { useSwipe } from "../components/swipe";
 import { PhotosInput } from "./sheets";
 import { Checkbox, Confirm, Empty, ErrorState, Field, Loading, MoneyInput, Sheet, errorText, useToast } from "../components/ui";
 import { CATEGORY_LABEL, krw, moment, plural } from "../lib/format";
@@ -647,24 +648,35 @@ function ShowcasePhotos({ item, preview }: { item: ShowcaseItem; preview?: boole
   const [open, setOpen] = useState<number | null>(null);
   const close = useCallback(() => setOpen(null), []);
   const photos = item.photos;
+  const current = Math.min(index, Math.max(0, photos.length - 1));
+  const swipe = useSwipe(photos.length, current, setIndex, () => setOpen(current));
   return (
     <div>
       <div className="sc-photo big">
-        <div
-          className="sc-swipe"
-          onScroll={(e) => setIndex(Math.round(e.currentTarget.scrollLeft / Math.max(1, e.currentTarget.clientWidth)))}
-        >
-          {photos.map((p, i) => (
-            <img key={`${i}-${p.photo_url}`} src={p.photo_url} alt="" loading={i ? "lazy" : "eager"} onClick={() => setOpen(i)} />
-          ))}
+        <div className="sc-swipe" {...swipe.handlers}>
+          <div className="sc-track" style={swipe.style}>
+            {photos.map((p, i) => (
+              <img
+                key={`${i}-${p.photo_url}`}
+                src={p.photo_url}
+                alt=""
+                loading={i ? "lazy" : "eager"}
+                draggable={false}
+                onClick={() => {
+                  if (swipe.isMouseClick()) setOpen(i);
+                }}
+              />
+            ))}
+          </div>
         </div>
         {item.shop && <span className="sc-shop">{item.shop}</span>}
         <LikeButton item={item} preview={preview} />
       </div>
       {photos.length > 1 && (
-        <div className="photo-dots" aria-hidden>
+        <div className="photo-dots">
+          {/* On a computer there is no swipe: a dot opens its photo. */}
           {photos.map((p, i) => (
-            <i key={`${i}-${p.photo_url}`} className={i === index ? "active" : ""} />
+            <i key={`${i}-${p.photo_url}`} className={i === index ? "active" : ""} onClick={() => setIndex(i)} />
           ))}
         </div>
       )}

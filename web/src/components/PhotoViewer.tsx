@@ -1,43 +1,53 @@
-import { X } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useEffect, useRef, useState, type TouchEvent } from "react";
 
 import { overrideBack } from "../telegram";
+import { useSwipe } from "./swipe";
 
 /** Photos over the whole screen (the owner, 02.11.2026): swipe to the next one,
  * spread two fingers to zoom like in the phone's gallery; on release the photo
  * slides back to its place. «×» or Telegram's «назад» closes it. */
 export function PhotoViewer({ photos, start, onClose }: { photos: string[]; start: number; onClose: () => void }) {
-  const strip = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(start);
+  const swipe = useSwipe(photos.length, index, setIndex);
   useEffect(() => overrideBack(onClose), [onClose]);
   useEffect(() => {
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const node = strip.current;
-    if (node) node.scrollLeft = start * node.clientWidth;
     return () => {
       document.body.style.overflow = overflow;
     };
-  }, [start]);
+  }, []);
   return (
     <div className="pv" role="dialog" aria-modal="true" aria-label="Фото">
-      <div
-        ref={strip}
-        className="pv-strip"
-        onScroll={(e) => setIndex(Math.round(e.currentTarget.scrollLeft / Math.max(1, e.currentTarget.clientWidth)))}
-      >
-        {photos.map((url, i) => (
-          <ZoomSlide key={`${i}-${url}`} url={url} />
-        ))}
+      <div className="pv-strip" {...swipe.handlers}>
+        <div className="pv-track" style={swipe.style}>
+          {photos.map((url, i) => (
+            <ZoomSlide key={`${i}-${url}`} url={url} />
+          ))}
+        </div>
       </div>
       <div className="pv-bar">
-        <span className="num">
-          {photos.length > 1 ? `${index + 1} / ${photos.length}` : ""}
-        </span>
+        <span className="num">{photos.length > 1 ? `${index + 1} / ${photos.length}` : ""}</span>
         <button className="pv-close" onClick={onClose} aria-label="Закрыть">
           <X size={22} />
         </button>
       </div>
+      {photos.length > 1 && (
+        <>
+          <button className="pv-nav prev" disabled={index === 0} onClick={() => setIndex(index - 1)} aria-label="Предыдущее фото">
+            <ChevronLeft size={26} />
+          </button>
+          <button
+            className="pv-nav next"
+            disabled={index === photos.length - 1}
+            onClick={() => setIndex(index + 1)}
+            aria-label="Следующее фото"
+          >
+            <ChevronRight size={26} />
+          </button>
+        </>
+      )}
     </div>
   );
 }
