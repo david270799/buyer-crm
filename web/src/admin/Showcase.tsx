@@ -1,5 +1,5 @@
 import { Bell, Check, Download, ExternalLink, Eye, Heart, LayoutGrid, Loader2, RefreshCw, Search, ShoppingBag, ShoppingCart, Trash2, Undo2, X } from "lucide-react";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import {
@@ -18,6 +18,7 @@ import {
 } from "../api/hooks";
 import type { Category, ShowcaseItem, ShowcaseSize } from "../api/types";
 import { PageHead } from "../components/Layout";
+import { PhotoViewer } from "../components/PhotoViewer";
 import { PhotosInput } from "./sheets";
 import { Checkbox, Confirm, Empty, ErrorState, Field, Loading, MoneyInput, Sheet, errorText, useToast } from "../components/ui";
 import { CATEGORY_LABEL, krw, moment, plural } from "../lib/format";
@@ -643,6 +644,8 @@ function SizeAsk({ title, onClose, onDone }: { title: string; onClose: () => voi
 /** Big photo; several photos swipe sideways with dots below. */
 function ShowcasePhotos({ item, preview }: { item: ShowcaseItem; preview?: boolean }) {
   const [index, setIndex] = useState(0);
+  const [open, setOpen] = useState<number | null>(null);
+  const close = useCallback(() => setOpen(null), []);
   const photos = item.photos;
   return (
     <div>
@@ -652,7 +655,7 @@ function ShowcasePhotos({ item, preview }: { item: ShowcaseItem; preview?: boole
           onScroll={(e) => setIndex(Math.round(e.currentTarget.scrollLeft / Math.max(1, e.currentTarget.clientWidth)))}
         >
           {photos.map((p, i) => (
-            <img key={`${i}-${p.photo_url}`} src={p.photo_url} alt="" loading={i ? "lazy" : "eager"} />
+            <img key={`${i}-${p.photo_url}`} src={p.photo_url} alt="" loading={i ? "lazy" : "eager"} onClick={() => setOpen(i)} />
           ))}
         </div>
         {item.shop && <span className="sc-shop">{item.shop}</span>}
@@ -665,6 +668,7 @@ function ShowcasePhotos({ item, preview }: { item: ShowcaseItem; preview?: boole
           ))}
         </div>
       )}
+      {open !== null && <PhotoViewer photos={photos.map((p) => p.photo_url)} start={open} onClose={close} />}
     </div>
   );
 }
