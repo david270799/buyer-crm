@@ -140,6 +140,8 @@ class ShowcasePatchIn(BaseModel):
     model: str | None = Field(default=None, max_length=120)
     shop: str | None = Field(default=None, max_length=60)
     category: str | None = None
+    # Screenshot cards only: the sizes typed in by the admin.
+    sizes: list[str] | None = Field(default=None, max_length=40)
 
 
 class CartLineIn(BaseModel):
@@ -366,6 +368,8 @@ def _showcase_card(item: ShowcaseItem, liked: set[str] | frozenset[str]) -> dict
         "client_price_krw": item.client_price_krw,
         "sizes": item.sizes,
         "note": item.note,
+        "source": item.source,
+        "code": item.code,
         "liked": item.id in (liked or set()),
         "refreshed_at": item.refreshed_at,
         "created_at": item.created_at,

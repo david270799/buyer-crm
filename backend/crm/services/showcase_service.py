@@ -19,6 +19,7 @@ from crm.domain.enums import Role
 from crm.domain.errors import ConflictError, NotFoundError, PermissionDeniedError, ValidationError
 from crm.domain.models import ShowcaseItem
 from crm.repositories import ShowcaseRepository
+from crm.services import screenshots
 from crm.services.common import Actor, Auditor, Clock, require_admin
 from crm.services.image_service import ImageService, process_image, process_showcase_image
 from crm.services.link_import import (
@@ -49,6 +50,8 @@ SHOWCASE_PHOTOS_FOLDER = "showcase"
 MAX_PRICE_KRW = 50_000_000
 MAX_MARKUP_PCT = 300
 MAX_CART = 20
+MAX_PAGES_TRIED = 4  # pages of a screenshot's product opened in search of photos
+MAX_TYPED_SIZES = 30
 
 # Host → the shop's name as in the «Магазин» bubbles.
 _SHOP_NAMES = {
@@ -93,6 +96,25 @@ def _gateway_target(url: str) -> str | None:
     inner_host = (urlsplit(inner).hostname or "").lower()
     ssg = inner_host == "ssg.com" or inner_host.endswith(".ssg.com")
     return inner if inner.startswith("https://") and ssg else None
+
+
+def typed_sizes(names: Any) -> list[dict[str, Any]]:
+    """Sizes typed in by the admin for a screenshot card: «95», «100 (L)»…"""
+    if not isinstance(names, list):
+        raise ValidationError("Размеры — список.")
+    sizes: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw in names:
+        name = " ".join(str(raw).split()) if isinstance(raw, (str, int)) else ""
+        if not name or name.lower() in seen:
+            continue
+        if len(name) > 20:
+            raise ValidationError("Размер — не длиннее 20 символов.")
+        seen.add(name.lower())
+        sizes.append({"name": name, "stock": None, "available": True})
+    if len(sizes) > MAX_TYPED_SIZES:
+        raise ValidationError(f"Не больше {MAX_TYPED_SIZES} размеров.")
+    return sizes
 
 
 def _require_viewer(actor: Actor) -> None:
@@ -259,29 +281,7 @@ class ShowcaseService:
             notes.append("цена не найдена")
         if not offer.sizes:
             notes.append("размеры не найдены")
-        image, photos = None, []
-        for photo_url in photo_candidates(html, final, page.image_url):
-            if len(photos) >= MAX_PHOTOS:
-                break
-            try:
-                original = self._fetcher.image(photo_url)
-            except (LinkError, ValidationError):
-                if photos and "image.hmall.com" in photo_url:
-                    break  # Hmall numbers photos in a row: the first gap is the end
-                continue
-            try:
-                if image is None:
-                    image, _, _ = process_image(original)  # small WebP for Gemini
-                if self._images is not None:
-                    main, thumb, size = process_showcase_image(original)
-                    stored = self._images.store_processed(
-                        main, thumb, size, folder=SHOWCASE_PHOTOS_FOLDER, jpeg=True
-                    )
-                    photos.append(
-                        {"photo_url": stored.photo_url, "thumbnail_url": stored.thumbnail_url}
-                    )
-            except ValidationError as exc:
-                notes.append(f"фото: {exc}")
+        image, photos = self._store_photos(html, final, page.image_url, notes)
         if photos:
             fields["photos"] = photos
             fields["photo_url"] = photos[0]["photo_url"]
@@ -315,6 +315,128 @@ class ShowcaseService:
             notes.append(note)
         return fields, notes
 
+    def _store_photos(
+        self, html: str, final: str, first: str | None, notes: list[str]
+    ) -> tuple[bytes | None, list[dict[str, Any]]]:
+        """The page's product photos, stored; (a small WebP of the first one for
+        Gemini, the stored photos). Problems go to `notes`."""
+        image, photos = None, []
+        for photo_url in photo_candidates(html, final, first):
+            if len(photos) >= MAX_PHOTOS:
+                break
+            try:
+                original = self._fetcher.image(photo_url)
+            except (LinkError, ValidationError):
+                if photos and "image.hmall.com" in photo_url:
+                    break  # Hmall numbers photos in a row: the first gap is the end
+                continue
+            try:
+                if image is None:
+                    image, _, _ = process_image(original)  # small WebP for Gemini
+                stored = self._store_one(original)
+                if stored is not None:
+                    photos.append(stored)
+            except ValidationError as exc:
+                notes.append(f"фото: {exc}")
+        return image, photos
+
+    def _store_one(self, original: bytes) -> dict[str, Any] | None:
+        if self._images is None:
+            return None
+        main, thumb, size = process_showcase_image(original)
+        stored = self._images.store_processed(
+            main, thumb, size, folder=SHOWCASE_PHOTOS_FOLDER, jpeg=True
+        )
+        return {"photo_url": stored.photo_url, "thumbnail_url": stored.thumbnail_url}
+
+    # --- a card from a shop screenshot (the owner, 01.11.2026) ---------------
+
+    def add_screenshot(self, actor: Actor, data: bytes) -> ShowcaseItem:
+        """A screenshot of a product in a shop app → a draft card: the name in
+        English, the price exactly as on the screenshot (no markup), photos
+        from a page of this very product found on the web (checked by the
+        style code) or else cut out of the screenshot. Sizes are typed in on
+        «Подготовка»; the shop is never re-read for such a card."""
+        require_admin(actor)
+        reader = self._recognizer
+        if reader is None or not hasattr(reader, "read_screenshot"):
+            raise ValidationError("Для скриншотов нужен ключ Gemini (GEMINI_API_KEY).")
+        try:
+            answer = reader.read_screenshot(screenshots.for_gemini(data))
+        except RecognitionError as exc:
+            raise ValidationError(f"Gemini не прочитал скриншот: {exc}") from None
+        if not answer.get("is_product") or not answer.get("price_krw"):
+            raise ValidationError("На скриншоте не нашлось товара с ценой.")
+        notes: list[str] = []
+        brand, model, code = answer.get("brand"), answer.get("model"), answer.get("code")
+        if has_hangul(brand):
+            brand = None
+        if has_hangul(model):
+            model = None
+        if answer.get("confidence", 0) < MIN_CONFIDENCE or not (brand or model):
+            notes.append("название не уверено — проверьте")
+        page_url, photos = self._photos_from_web(brand, model, code)
+        if not photos:
+            cut = screenshots.crop(data, answer["photo_box"]) if answer.get("photo_box") else None
+            stored = None
+            if cut is not None:
+                try:
+                    stored = self._store_one(cut)
+                except ValidationError as exc:
+                    notes.append(f"фото: {exc}")
+            if stored is not None:
+                photos = [stored]
+                notes.append("фото со скриншота — других фото в интернете не нашлось")
+            else:
+                notes.append("нет фото")
+        notes.append("размеры впишите сами")
+        fields: dict[str, Any] = {
+            "brand": brand,
+            "model": model,
+            "code": code,
+            "category": category_from_text(answer.get("category")),
+            "shop_price_krw": answer["price_krw"],
+            # Exactly as on the screenshot (the owner): no rounding to ₩ 100.
+            "client_price_override": answer["price_krw"],
+            "official_price_krw": answer.get("original_price_krw"),
+            "sizes": [],
+            "source": "screenshot",
+            "url": page_url or "",
+            "shop": shop_name(page_url) if page_url else None,
+        }
+        if photos:
+            fields["photos"] = photos
+            fields["photo_url"] = photos[0]["photo_url"]
+            fields["thumbnail_url"] = photos[0]["thumbnail_url"]
+        return self._create(actor, fields, notes, page_url or "screenshot")
+
+    def _photos_from_web(
+        self, brand: str | None, model: str | None, code: str | None
+    ) -> tuple[str | None, list[dict[str, Any]]]:
+        """(page, stored photos) of the first found page that carries the code."""
+        if not code or not hasattr(self._recognizer, "find_product_pages"):
+            return None, []
+        query = " ".join(p for p in (brand, code, model) if p)
+        try:
+            urls = self._recognizer.find_product_pages(query)
+        except RecognitionError as exc:
+            logger.info("Product pages not found: %s", exc)
+            return None, []
+        for url in urls[:MAX_PAGES_TRIED]:
+            try:
+                with self._reading:
+                    html, final = self._fetcher.html(url)
+            except LinkError as exc:
+                logger.info("Product page %s not read: %s", url, exc)
+                continue
+            if not screenshots.page_has_code(html, code):
+                continue
+            page = parse_page(html, final)
+            _, photos = self._store_photos(html, final, page.image_url, [])
+            if photos:
+                return final, photos
+        return None, []
+
     def page_source(self, actor: Actor, url: str) -> tuple[str, str]:
         """/pagefile: the shop page exactly as this server gets it (HTML, final
         URL) — to see whether a shop lets the server in and how its page is
@@ -341,6 +463,11 @@ class ShowcaseService:
         if not url.startswith(("http://", "https://")):
             raise ValidationError("Нужна ссылка на товар (https://…).")
         fields, notes = self._read(url)
+        return self._create(actor, {**fields, "url": url, "shop": shop_name(url)}, notes, url)
+
+    def _create(
+        self, actor: Actor, fields: dict[str, Any], notes: list[str], source: str
+    ) -> ShowcaseItem:
         item_id = f"sc{self._db.new_id()}"
 
         def fn(tx: Transaction) -> None:
@@ -350,8 +477,6 @@ class ShowcaseService:
                 item_id,
                 {
                     **fields,
-                    "url": url,
-                    "shop": shop_name(url),
                     "status": "draft",
                     "markup_type": "krw",
                     "markup_value": 0,
@@ -370,7 +495,7 @@ class ShowcaseService:
                 entity_type="showcase",
                 entity_id=item_id,
                 before=None,
-                after={"url": url, "price": fields.get("shop_price_krw")},
+                after={"url": source, "price": fields.get("shop_price_krw")},
             )
 
         self._db.run_transaction(fn)
@@ -457,9 +582,13 @@ class ShowcaseService:
             if changes["category"] not in (None, *CATEGORIES):
                 raise ValidationError("Неизвестная категория.")
             fields["category"] = changes["category"]
-        if not fields:
+        current = self.get(actor, item_id) if fields or "sizes" in changes else None
+        if "sizes" in changes and changes["sizes"] is not None:
+            if current is None or not current.from_screenshot:
+                raise ValidationError("Размеры вписываются только у карточек со скриншота.")
+            fields["sizes"] = typed_sizes(changes["sizes"])
+        if not fields or current is None:
             raise ValidationError("Нет изменений.")
-        current = self.get(actor, item_id)
         kind = fields.get("markup_type", current.markup_type)
         if kind == "pct" and fields.get("markup_value", current.markup_value) > MAX_MARKUP_PCT:
             raise ValidationError(f"Наценка не больше {MAX_MARKUP_PCT}%.")
@@ -470,6 +599,12 @@ class ShowcaseService:
         The client may press «Обновить» too (the owner, 20.10.2026): a card
         read less than CLIENT_REFRESH_EVERY ago is just returned as it is."""
         item = self.get(actor, item_id)
+        if item.from_screenshot or not item.url:
+            if actor.role is Role.ADMIN:
+                raise ValidationError(
+                    "Карточка со скриншота: наличие не читается, размеры вписываются вручную."
+                )
+            return item
         if actor.role is not Role.ADMIN and item.refreshed_at is not None:
             if self._clock.now() - item.refreshed_at < CLIENT_REFRESH_EVERY:
                 return item

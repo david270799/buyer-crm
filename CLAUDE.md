@@ -244,6 +244,11 @@ web/
   без `/setgroup`, ответы в ней — для админа (`audience_for`). Кнопки Mini App (`web_app`) в группах
   запрещены Telegram — там ссылка `t.me/<bot>?startapp=order-N5` (нужна Main Mini App в @BotFather),
   `lib/deeplink.ts` читает `tgWebAppStartParam`. Ночная копия базы осталась в личке.
+* **Витрина по скриншоту** (01.11, тема «Витрина»): фото → `ShowcaseService.add_screenshot` → Gemini
+  `read_screenshot` (бренд, модель по-английски, код, цена, `photo_box`) → `find_product_pages` (Google Search)
+  → фото только со страницы, где есть код (`screenshots.page_has_code`), иначе вырез из скриншота. Цена =
+  `client_price_override` = цене скриншота; `source: "screenshot"` — размеры вписываются в «Одобрении»
+  (`sizes` в PATCH только для таких карточек), `refresh` их не перечитывает.
 * **Ночная копия:** в 04:00 по Сеулу копия базы (gzip) уходит админам в личку (`BACKUP_TO_TELEGRAM`); `/backup` — копия сразу, только спросившему админу.
 * При старте бот предупреждает в логах: Privacy Mode включён, нет ключа Gemini, нет админов.
 

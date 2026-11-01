@@ -3,6 +3,7 @@ privately by the admin — or, since 01.11.2026, to the «Витрина» topic
 admin group — becomes a draft card on «Подготовка»."""
 
 import asyncio
+import contextlib
 import logging
 from urllib.parse import urlsplit
 
@@ -33,7 +34,11 @@ MAX_LINKS = 5
 
 def draft_text(item: ShowcaseItem) -> str:
     lines = [f"🛍 <b>Черновик витрины</b> · {fmt.e(item.shop or '')}", fmt.e(item.title_line)]
-    if item.shop_price_krw:
+    if item.code:
+        lines.append(f"Код: <code>{fmt.e(item.code)}</code>")
+    if item.from_screenshot and item.shop_price_krw:
+        lines.append(f"Цена как на скриншоте: <b>₩ {item.shop_price_krw:,}</b>")
+    elif item.shop_price_krw:
         lines.append(f"Цена в магазине: <b>₩ {item.shop_price_krw:,}</b>")
     sizes = [
         f"{s.get('name')}" + (f" ({s.get('stock')})" if s.get("stock") else "")
@@ -44,7 +49,10 @@ def draft_text(item: ShowcaseItem) -> str:
         lines.append("В наличии: " + fmt.e(", ".join(sizes)))
     if item.note:
         lines.append(f"⚠️ {fmt.e(item.note)}")
-    lines.append("Проверьте цену и опубликуйте в «Одобрении».")
+    if item.from_screenshot:
+        lines.append("Впишите размеры и опубликуйте в «Одобрении».")
+    else:
+        lines.append("Проверьте цену и опубликуйте в «Одобрении».")
     return "\n".join(lines)
 
 
@@ -85,6 +93,39 @@ def build(services: Services, settings: Settings) -> Router:
                 # command): the page itself, to teach the CRM this shop.
                 await send_page(message, actor, url, unread=True)
 
+    async def on_screenshot(message: Message, bot: Bot, actor: Actor | None) -> None:
+        """A shop screenshot in the «Витрина» topic → a draft card (01.11.2026)."""
+        if actor is None or services.showcase is None or not message.photo:
+            return
+        wait = await message.reply("Читаю скриншот и ищу фото модели…")
+        where = {"chat_id": wait.chat.id, "message_id": wait.message_id}
+        try:
+            buffer = await bot.download(message.photo[-1].file_id)
+            data = buffer.read() if buffer else b""
+            item = await asyncio.to_thread(services.showcase.add_screenshot, actor, data)
+        except CRMError as exc:
+            await bot.edit_message_text(f"❌ {fmt.e(exc.user_message)}", **where)
+            return
+        markup = await keyboard(bot, item, message)
+        text = draft_text(item)
+        if item.photo_url and services.images is not None:
+            # The card's first photo, so the result is visible without opening the CRM.
+            picture = await asyncio.to_thread(services.images.read, item.photo_url)
+            if picture:
+                try:
+                    await message.reply_photo(
+                        BufferedInputFile(picture, f"{item.id}.jpg"),
+                        caption=text[:1024],
+                        reply_markup=markup,
+                    )
+                except Exception:  # noqa: BLE001 - the text below is enough
+                    logger.info("Card photo not sent", exc_info=True)
+                else:
+                    with contextlib.suppress(Exception):
+                        await bot.delete_message(**where)
+                    return
+        await bot.edit_message_text(text, reply_markup=markup, **where)
+
     async def send_page(message: Message, actor: Actor, url: str, *, unread: bool = False) -> None:
         """The shop page as this server gets it, as a file (to teach the CRM a shop)."""
         try:
@@ -114,6 +155,12 @@ def build(services: Services, settings: Settings) -> Router:
         await send_page(message, actor, urls[0])
 
     router.message.register(pagefile, Command("pagefile"), F.func(here), HasRole(Role.ADMIN))
+    router.message.register(
+        on_screenshot,
+        F.photo,
+        F.func(lambda m: in_topic(services, m, SHOWCASE)),
+        HasRole(Role.ADMIN),
+    )
     router.message.register(
         on_link,
         F.func(here),

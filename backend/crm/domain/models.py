@@ -384,6 +384,10 @@ class ShowcaseItem:
     client_price_override: int | None = None
     sizes: list[Doc] = field(default_factory=list)  # {name, stock, available}
     note: str | None = None  # what could not be read
+    # "screenshot": made from a shop screenshot (01.11.2026) — the price is the
+    # screenshot's, sizes are typed in by the admin, the shop is never re-read.
+    source: str | None = None
+    code: str | None = None  # the brand's style code, e.g. "NJ3BS51A"
     refreshed_at: datetime | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -401,6 +405,10 @@ class ShowcaseItem:
         else:
             raw = self.shop_price_krw + self.markup_value
         return int(-(-raw // 100) * 100)
+
+    @property
+    def from_screenshot(self) -> bool:
+        return self.source == "screenshot"
 
     @property
     def title_line(self) -> str:
@@ -435,6 +443,8 @@ class ShowcaseItem:
             client_price_override=_int_or_none(data.get("client_price_override")),
             sizes=[dict(s) for s in data.get("sizes") or [] if isinstance(s, dict)],
             note=_str_or_none(data.get("note")),
+            source=_str_or_none(data.get("source")),
+            code=_str_or_none(data.get("code")),
             refreshed_at=when("refreshed_at"),
             created_at=when("created_at"),
             updated_at=when("updated_at"),

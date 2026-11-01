@@ -331,6 +331,9 @@ export interface ShowcaseItem {
   client_price_krw: number | null;
   sizes: ShowcaseSize[];
   note: string | null;
+  /** "screenshot": made from a shop screenshot — sizes typed in, the shop never re-read. */
+  source?: string | null;
+  code?: string | null;
   liked: boolean;
   refreshed_at: string | null;
   created_at: string | null;

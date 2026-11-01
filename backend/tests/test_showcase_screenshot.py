@@ -1,0 +1,156 @@
+"""«Витрина» from a shop screenshot (the owner, 01.11.2026)."""
+
+import io
+
+import pytest
+from PIL import Image
+from test_showcase import FakeImages
+
+from crm.domain.errors import PermissionDeniedError, ValidationError
+from crm.repositories import ShowcaseRepository
+from crm.services.link_import import LinkError
+from crm.services.screenshots import crop, page_has_code
+from crm.services.showcase_service import CartLine, ShowcaseService
+
+pytestmark = pytest.mark.usefixtures("client_doc")
+
+JACKET = {
+    "is_product": True,
+    "brand": "The North Face",
+    "model": "Men's Hailstone Jacket Black",
+    "code": "NJ3BS51A",
+    "price_krw": 158_840,
+    "original_price_krw": 209_000,
+    "category": "куртка",
+    "photo_box": [100, 0, 530, 1000],
+    "confidence": 0.95,
+}
+PAGE = "https://www.thenorthfacekorea.co.kr/product/NJ3BS51A"
+
+
+def _screenshot() -> bytes:
+    buffer = io.BytesIO()
+    Image.new("RGB", (857, 2000), (250, 250, 250)).save(buffer, format="JPEG")
+    return buffer.getvalue()
+
+
+class FakeGemini:
+    def __init__(self, answer=JACKET, pages=(PAGE,)):
+        self.answer = dict(answer)
+        self.pages = list(pages)
+        self.searched = None
+
+    def read_screenshot(self, image, mime="image/jpeg"):
+        assert image[:2] == b"\xff\xd8"  # a plain JPEG, not squared
+        return self.answer
+
+    def find_product_pages(self, product):
+        self.searched = product
+        return self.pages
+
+
+class FakeFetcher:
+    def __init__(self, html):
+        self.html_text = html
+        self.opened = []
+
+    def html(self, url):
+        self.opened.append(url)
+        if "broken" in url:
+            raise LinkError("HTTP 403")
+        return self.html_text, url
+
+    def image(self, url):
+        buffer = io.BytesIO()
+        Image.new("RGB", (800, 800), (20, 20, 20)).save(buffer, format="JPEG")
+        return buffer.getvalue()
+
+
+PRODUCT_HTML = (
+    '<html><head><meta property="og:image" content="https://cdn.example/nj3bs51a_1.jpg">'
+    "<title>NJ3BS51A 남성 헤일스톤 자켓</title></head><body>NJ3BS51A-BLK</body></html>"
+)
+
+
+def make(db, services, clock, gemini, html=PRODUCT_HTML):
+    return ShowcaseService(
+        db,
+        clock,
+        ShowcaseRepository(),
+        services.orders,
+        services.orders._auditor,
+        FakeImages(),
+        gemini,
+        FakeFetcher(html),
+    )
+
+
+def test_screenshot_becomes_a_draft_with_its_price_and_web_photos(db, services, clock, admin):
+    gemini = FakeGemini(pages=("https://broken.example/x", PAGE))
+    showcase = make(db, services, clock, gemini)
+    item = showcase.add_screenshot(admin, _screenshot())
+    assert item.status == "draft" and item.from_screenshot
+    assert (item.brand, item.model, item.code) == (
+        "The North Face",
+        "Men's Hailstone Jacket Black",
+        "NJ3BS51A",
+    )
+    assert item.category == "clothes"
+    # The price exactly as on the screenshot, no markup; the crossed-out one kept.
+    assert item.shop_price_krw == 158_840 and item.client_price_krw == 158_840
+    assert item.official_price_krw == 209_000
+    assert item.url == PAGE and item.photos and item.sizes == []
+    assert "NJ3BS51A" in gemini.searched
+    assert "размеры впишите" in item.note and "скриншота" not in item.note
+
+
+def test_no_page_with_the_code_takes_the_photo_from_the_screenshot(db, services, clock, admin):
+    other = PRODUCT_HTML.replace("NJ3BS51A", "NJ3BS99Z").replace("nj3bs51a", "nj3bs99z")
+    showcase = make(db, services, clock, FakeGemini(), html=other)
+    item = showcase.add_screenshot(admin, _screenshot())
+    assert item.url == "" and item.photos  # cut out of the screenshot
+    assert "фото со скриншота" in item.note
+
+
+def test_sizes_are_typed_in_and_the_shop_is_never_reread(db, services, clock, admin, client_actor):
+    showcase = make(db, services, clock, FakeGemini())
+    item = showcase.add_screenshot(admin, _screenshot())
+    with pytest.raises(ValidationError):
+        showcase.refresh(admin, item.id)  # the admin is told why
+    item = showcase.update(admin, item.id, {"sizes": ["95", "100", " 100 ", "105 (L)"]})
+    assert [s["name"] for s in item.sizes] == ["95", "100", "105 (L)"]
+    showcase.set_status(admin, item.id, "published")
+    assert showcase.refresh(client_actor, item.id).shop_price_krw == 158_840  # untouched
+    showcase.order(client_actor, [CartLine(item.id, "100")])
+    order = db.get("orders", "N1")
+    assert "100" in (order.get("size"), order.get("size_kr"))
+
+
+def test_typed_sizes_only_on_screenshot_cards(db, services, clock, admin):
+    showcase = make(db, services, clock, FakeGemini())
+    item = showcase.add_screenshot(admin, _screenshot())
+    db.run_transaction(lambda tx: tx.update("showcase", item.id, {"source": None}))
+    with pytest.raises(ValidationError):
+        showcase.update(admin, item.id, {"sizes": ["M"]})
+
+
+def test_not_a_product_or_no_price_or_not_admin(db, services, clock, admin, client_actor):
+    with pytest.raises(ValidationError):
+        make(db, services, clock, FakeGemini({**JACKET, "price_krw": None})).add_screenshot(
+            admin, _screenshot()
+        )
+    with pytest.raises(ValidationError):
+        make(db, services, clock, FakeGemini({**JACKET, "is_product": False})).add_screenshot(
+            admin, _screenshot()
+        )
+    with pytest.raises(PermissionDeniedError):
+        make(db, services, clock, FakeGemini()).add_screenshot(client_actor, _screenshot())
+
+
+def test_helpers():
+    assert page_has_code("<p>nj3bs51a-blk</p>", "NJ3BS51A")
+    assert not page_has_code("<p>NJ3BS52A</p>", "NJ3BS51A")
+    assert not page_has_code("anything", "AB")  # too short to prove anything
+    assert crop(_screenshot(), [100, 0, 105, 1000]) is None  # a sliver is not a photo
+    piece = Image.open(io.BytesIO(crop(_screenshot(), [100, 0, 530, 1000])))
+    assert piece.size == (857, 860)

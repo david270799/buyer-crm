@@ -346,6 +346,8 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
         )}
         <div className="row between" style={{ margin: "16px 0 8px" }}>
           <span className="small muted">{colors.length ? "Цвет" : "Размер"}</span>
+          {/* A card from a screenshot has no shop page to check (01.11.2026). */}
+          {item.source !== "screenshot" && (
           <button
             className="btn small"
             disabled={action.isPending}
@@ -359,6 +361,7 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
             {action.isPending ? <Loader2 className="spin" size={14} /> : <RefreshCw size={14} />} Обновить
             {item.refreshed_at ? ` · ${ago(item.refreshed_at)}` : ""}
           </button>
+          )}
         </div>
         {colors.length > 0 && (
           <>
@@ -690,7 +693,9 @@ function PrepEditor({
     markup_type: item.markup_type,
     markup_value: item.markup_value as number | null,
     client_price_override: item.client_price_override,
+    sizes: item.sizes.map((s) => s.name).join(", "),
   });
+  const screenshot = item.source === "screenshot";
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
   const auto = (() => {
     if (!form.shop_price_krw) return null;
@@ -706,6 +711,7 @@ function PrepEditor({
     model: form.model || null,
     official_price_krw: form.official_price_krw,
     client_price_krw: clientPrice ?? null,
+    sizes: screenshot ? typedSizes(form.sizes).map((name) => ({ name, stock: null, available: true })) : item.sizes,
   };
   const body = (): ShowcasePatch => ({
     brand: form.brand.trim() || null,
@@ -715,6 +721,7 @@ function PrepEditor({
     markup_type: form.markup_type,
     markup_value: form.markup_value ?? 0,
     client_price_override: form.client_price_override,
+    ...(screenshot ? { sizes: typedSizes(form.sizes) } : {}),
   });
   const publish = () =>
     save.mutate(body(), {
@@ -734,11 +741,18 @@ function PrepEditor({
         title="Проверка карточки"
         sub={<span className={`badge ${item.status === "published" ? "s-delivered" : "warn"}`}>{STATUS_LABEL[item.status]}</span>}
       />
-      {item.note && <div className="banner info small" style={{ marginBottom: 12 }}>⚠️ Не удалось: {item.note}</div>}
+      {item.note && (
+        <div className="banner info small" style={{ marginBottom: 12 }}>
+          {screenshot ? `📝 Со скриншота: ${item.note}` : `⚠️ Не удалось: ${item.note}`}
+        </div>
+      )}
       {/* The owner (20.10.2026): check the price on the shop page itself. */}
-      <a className="btn sc-shop-link" href={item.url} target="_blank" rel="noopener noreferrer">
-        <ExternalLink size={16} /> Открыть в магазине{item.shop ? ` · ${item.shop}` : ""}
-      </a>
+      {item.url && (
+        <a className="btn sc-shop-link" href={item.url} target="_blank" rel="noopener noreferrer">
+          <ExternalLink size={16} /> {screenshot ? "Где нашлись фото" : "Открыть в магазине"}
+          {item.shop ? ` · ${item.shop}` : ""}
+        </a>
+      )}
       <div className="card pad stack">
         <div className="form-grid two">
           <Field label="Бренд">
@@ -747,6 +761,19 @@ function PrepEditor({
           <Field label="Модель">
             <input className="input" value={form.model} onChange={(e) => set("model", e.target.value)} />
           </Field>
+          {screenshot && (
+            /* Screenshot cards (the owner, 01.11.2026): the sizes are typed in here. */
+            <div className="full">
+              <Field label="Размеры" hint={`Через запятую или пробел: 95, 100, 105 или 260 265 270${item.code ? ` · код ${item.code}` : ""}`}>
+                <input
+                  className="input"
+                  value={form.sizes}
+                  onChange={(e) => set("sizes", e.target.value)}
+                  placeholder="например: 95, 100, 105"
+                />
+              </Field>
+            </div>
+          )}
           <Field label="Цена в магазине">
             <MoneyInput value={form.shop_price_krw} onChange={(v) => set("shop_price_krw", v)} />
           </Field>
@@ -797,13 +824,15 @@ function PrepEditor({
       </div>
       <div className="row between" style={{ margin: "18px 0 8px" }}>
         <span className="small muted">Как увидит клиент</span>
-        <button
-          className="btn small"
-          disabled={action.isPending}
-          onClick={() => action.mutate("refresh", { onSuccess: () => toast("Наличие обновлено"), onError: (e) => toast(errorText(e), "error") })}
-        >
-          <RefreshCw size={14} /> Обновить наличие
-        </button>
+        {!screenshot && (
+          <button
+            className="btn small"
+            disabled={action.isPending}
+            onClick={() => action.mutate("refresh", { onSuccess: () => toast("Наличие обновлено"), onError: (e) => toast(errorText(e), "error") })}
+          >
+            <RefreshCw size={14} /> Обновить наличие
+          </button>
+        )}
       </div>
       <button type="button" className="sc-preview" onClick={() => setFull(true)} aria-label="Открыть карточку как клиент">
         <ShowcaseTile item={preview} preview />
@@ -844,6 +873,21 @@ function PrepEditor({
       </div>
     </>
   );
+}
+
+/** «95, 100 105» → ["95", "100", "105"]; «100 (L)» stays one size. */
+export function typedSizes(text: string): string[] {
+  const parts = text.includes(",") || text.includes(";") ? text.split(/[,;]/) : text.split(/\s+/);
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of parts) {
+    const name = raw.trim().replace(/\s+/g, " ");
+    if (name && !seen.has(name.toLowerCase())) {
+      seen.add(name.toLowerCase());
+      result.push(name);
+    }
+  }
+  return result;
 }
 
 const STATUS_LABEL: Record<ShowcaseItem["status"], string> = {

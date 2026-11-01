@@ -327,4 +327,37 @@ def create_demo_database(
                 "published_at": now if status == "published" else None,
             },
         )
+    # A draft made from a shop screenshot (01.11.2026): sizes still to type in.
+    jacket = db.get("orders", "N5") or {}
+    now = clock.now()
+    db.seed(
+        "showcase",
+        "sc_demo4",
+        {
+            "url": "",
+            "status": "draft",
+            "source": "screenshot",
+            "code": "NJ3BS51A",
+            "brand": "The North Face",
+            "model": "Men's Hailstone Jacket Black",
+            "category": "clothes",
+            "photo_url": jacket.get("photo_url"),
+            "thumbnail_url": jacket.get("thumbnail_url"),
+            "photos": [
+                {"photo_url": jacket.get("photo_url"), "thumbnail_url": jacket.get("thumbnail_url")}
+            ]
+            if jacket.get("photo_url")
+            else [],
+            "shop_price_krw": 158_840,
+            "client_price_override": 158_840,
+            "official_price_krw": 209_000,
+            "markup_type": "krw",
+            "markup_value": 0,
+            "sizes": [],
+            "note": "размеры впишите сами",
+            "refreshed_at": now,
+            "created_at": now,
+            "updated_at": now,
+        },
+    )
     return db

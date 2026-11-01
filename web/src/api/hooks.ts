@@ -491,7 +491,7 @@ export type ShowcasePatch = Partial<
     | "shop"
     | "category"
   >
->;
+> & { sizes?: string[] };
 
 export const useShowcasePatch = (id: string) => {
   const refresh = useShowcaseRefresh();
