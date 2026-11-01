@@ -110,6 +110,22 @@ CODE_PAGES = {"swatch": "https://www.swatch.com/en-en/{code}.html"}
 _SWATCH_TITLE = re.compile(r"^\s*(.+?)\s+-\s+([A-Z0-9.-]+)\s+-\s+Swatch", re.I)
 
 
+_SWATCH_URL = re.compile(r"^https://www\.swatch\.com/.*/([A-Z0-9.-]+)\.html", re.I)
+
+
+def _brand_site(url: str, brand: str | None) -> bool:
+    """«thenorthfacekorea.co.kr» for «The North Face», «nike.com» for «Nike»."""
+    token = re.sub(r"[^a-z0-9]", "", (brand or "").lower())
+    host = re.sub(r"[^a-z0-9]", "", (urlsplit(url).hostname or "").lower())
+    return len(token) >= 3 and token in host
+
+
+def swatch_code(url: str | None) -> str | None:
+    """The model number of a swatch.com product page («…/SYXS106.html»)."""
+    match = _SWATCH_URL.match(url or "")
+    return match.group(1).upper() if match else None
+
+
 def brand_model_name(title: str | None, code: str) -> str | None:
     """The brand's own model name from its page title, when the brand writes
     it so (Swatch: «SKINBLUEIRON - SYXS106 - Swatch® Official Store»)."""
@@ -330,6 +346,8 @@ class ShowcaseService:
             "title": page.title,
             "shop_price_krw": offer.price_krw,
             "sizes": _sizes(offer),
+            # Short links (share.google, naver.me…) end on the shop's own page.
+            "url": final,
         }
         self._split(fields["sizes"])
         self._translate(fields["sizes"], {})
@@ -506,9 +524,13 @@ class ShowcaseService:
         if hasattr(self._recognizer, "find_product_pages"):
             query = " ".join(p for p in (brand, code, model) if p)
             try:
-                urls += self._recognizer.find_product_pages(query)[:MAX_PAGES_TRIED]
+                found = self._recognizer.find_product_pages(query)
             except RecognitionError as exc:
                 logger.info("Product pages not found: %s", exc)
+                found = []
+            # The brand's own site has the clear photos from every side (the
+            # owner, 02.11.2026): its pages go before the shops'.
+            urls += sorted(found, key=lambda u: 0 if _brand_site(u, brand) else 1)[:MAX_PAGES_TRIED]
         for url in urls:
             try:
                 with self._reading:
@@ -550,7 +572,15 @@ class ShowcaseService:
         if not url.startswith(("http://", "https://")):
             raise ValidationError("Нужна ссылка на товар (https://…).")
         fields, notes = self._read(url)
-        return self._create(actor, {**fields, "url": url, "shop": shop_name(url)}, notes, url)
+        final = fields.get("url") or url
+        fields["shop"] = shop_name(final)
+        code = swatch_code(final)
+        if code:  # Swatch (the owner, 02.11.2026): its own name and the number
+            own = brand_model_name(fields.get("title"), code)
+            fields.update(code=code, brand="Swatch", category="watch")
+            if own:
+                fields["model"] = own
+        return self._create(actor, fields, notes, url)
 
     def add_by_code(self, actor: Actor, code: str) -> ShowcaseItem:
         """A card from a model number alone (the owner, 02.11.2026: the client
@@ -572,13 +602,9 @@ class ShowcaseService:
             if not screenshots.page_has_code(html, code):
                 continue
             item = self.add(actor, final)
-            fields: dict[str, Any] = {"code": code}
-            if "swatch.com" in final:
-                fields.update(brand=item.brand or "Swatch", category="watch")
-                own = brand_model_name(parse_page(html, final).title, code)
-                if own:
-                    fields["model"] = own
-            return self._write(actor, item.id, fields, "showcase.code")
+            if item.code == code:
+                return item
+            return self._write(actor, item.id, {"code": code}, "showcase.code")
         raise ValidationError(f"Модель {code} не нашлась. Пришлите ссылку или скриншот.")
 
     def _found_pages(self, code: str) -> list[str]:

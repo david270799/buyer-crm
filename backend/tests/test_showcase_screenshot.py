@@ -240,3 +240,24 @@ def test_a_watch_screenshot_goes_to_the_brand_site_first(db, services, clock, ad
     assert showcase._fetcher.opened[0] == "https://www.swatch.com/en-en/SYXS106.html"
     assert (item.brand, item.model, item.category) == ("Swatch", "Skinblueiron", "watch")
     assert item.client_price_krw == 190_000 and len(item.photos) == 3
+
+
+def test_short_links_end_on_the_shop_page_and_official_sites_go_first(db, services, clock, admin):
+    """share.google → swatch.com: the card keeps the real page (02.11.2026)."""
+    from crm.services.showcase_service import _brand_site, swatch_code
+
+    page = "https://www.swatch.com/en-en/skinblueiron-syxs106/SYXS106.html"
+
+    class Redirecting(FakeFetcher):
+        def html(self, url):
+            self.opened.append(url)
+            return self.html_text, page
+
+    showcase = make(db, services, clock, FakeGemini(pages=()), html=SWATCH_HTML)
+    showcase._fetcher = Redirecting(SWATCH_HTML)
+    item = showcase.add(admin, "https://share.google/MzkPIzfIvaGjSXeWE")
+    assert item.url == page and item.shop != "share.google"
+    assert (item.brand, item.model, item.code) == ("Swatch", "Skinblueiron", "SYXS106")
+    assert swatch_code(page) == "SYXS106" and swatch_code("https://example.com/a.html") is None
+    assert _brand_site("https://www.thenorthfacekorea.co.kr/p/1", "The North Face")
+    assert not _brand_site("https://www.musinsa.com/p/1", "The North Face")
