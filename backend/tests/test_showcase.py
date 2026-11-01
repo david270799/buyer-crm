@@ -3,7 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from conftest import START_BALANCE, balance
+from conftest import ADMIN_TG, START_BALANCE, balance
 from PIL import Image
 
 from crm.domain.errors import ConflictError, NotFoundError, PermissionDeniedError, ValidationError
@@ -97,6 +97,7 @@ def showcase(db, services, clock):
         FakeImages(),
         FakeGemini(),
         fetcher,
+        admin_ids=frozenset({ADMIN_TG}),
     )
     service.fetcher = fetcher
     return service
@@ -187,16 +188,16 @@ def test_official_price_is_taken_only_from_the_brand_site(showcase, admin):
     assert "не найдена" in again.note
 
 
-def test_statistics_count_opens_likes_and_orders(showcase, admin):
+def test_statistics_count_opens_likes_and_orders(showcase, admin, client_actor):
     item = showcase.add(admin, URL)
     showcase.set_status(admin, item.id, "published")
     for _ in range(3):
-        showcase.viewed(admin, item.id)
-    showcase.toggle_like(admin, item.id)
-    showcase.order(admin, [CartLine(item.id, "S")])
+        showcase.viewed(client_actor, item.id)
+    showcase.toggle_like(client_actor, item.id)
+    showcase.order(client_actor, [CartLine(item.id, "S")])
 
-    showcase.toggle_like(admin, item.id)  # ♥ off …
-    showcase.toggle_like(admin, item.id)  # … and on again
+    showcase.toggle_like(client_actor, item.id)  # ♥ off …
+    showcase.toggle_like(client_actor, item.id)  # … and on again
 
     stats = showcase.statistics(admin)
     [card] = stats["cards"]
@@ -205,8 +206,31 @@ def test_statistics_count_opens_likes_and_orders(showcase, admin):
     kinds = [h["kind"] for h in stats["history"]]
     assert sorted(kinds) == sorted(["view"] * 3 + ["like", "unlike", "like", "order"])
     order = next(h for h in stats["history"] if h["kind"] == "order")
-    assert order["size"] == "S" and order["order_id"] and order["viewer"] == admin.id
+    assert order["size"] == "S" and order["order_id"] and order["viewer"] == client_actor.id
     assert stats["items"][item.id]["title"] == item.title_line
+
+
+def test_statistics_are_about_the_client_only(db, showcase, admin, client_actor):
+    """The owner (01.11.2026): his own opens of a card were counted too."""
+    item = showcase.add(admin, URL)
+    showcase.set_status(admin, item.id, "published")
+    showcase.viewed(admin, item.id)
+    showcase.toggle_like(admin, item.id)
+    showcase.order(admin, [CartLine(item.id, "M")])
+    showcase.viewed(client_actor, item.id)
+    # Older data written before the fix: an admin's counted open and log entry.
+    now = showcase._clock.now()
+
+    def older(tx):
+        showcase._repo.set_stats(tx, admin.id, {"views": {item.id: 5}})
+        showcase._log(tx, admin, item.id, "view", now)
+
+    db.run_transaction(older)
+
+    stats = showcase.statistics(admin)
+    assert [(c["viewer"], c["views"]) for c in stats["cards"]] == [(client_actor.id, 1)]
+    assert {h["viewer"] for h in stats["history"]} == {client_actor.id}
+    assert showcase.liked(admin) == [item.id]  # the admin's own ♥ still works
 
 
 def test_all_product_photos_are_kept_up_to_the_first_gap(showcase, admin):

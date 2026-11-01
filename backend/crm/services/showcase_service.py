@@ -175,6 +175,8 @@ class ShowcaseService:
         images: ImageService | None,
         recognizer: Any = None,
         fetcher: Any = None,
+        *,
+        admin_ids: frozenset[int] = frozenset(),
     ):
         self._db = db
         self._clock = clock
@@ -184,6 +186,9 @@ class ShowcaseService:
         self._images = images
         self._recognizer = recognizer
         self._fetcher = fetcher or PageFetcher()
+        # «Статистика» counts the client only (the owner, 01.11.2026): the
+        # admins' own opens and ♥ are not written and older ones are hidden.
+        self._admin_viewers = frozenset(f"tg:{i}" for i in admin_ids)
         self._reading = threading.BoundedSemaphore(READ_PARALLEL)
 
     # --- reading the shop page -----------------------------------------------
@@ -689,8 +694,11 @@ class ShowcaseService:
     # --- interest («Статистика» in «Настройки», the owner, 20.10.2026) -------------
 
     def viewed(self, actor: Actor, item_id: str) -> None:
-        """The viewer opened a card: counted per card and kept in the history."""
+        """The client opened a card: counted per card and kept in the history.
+        The admin's own opens are not counted (the owner, 01.11.2026)."""
         self.get(actor, item_id)
+        if actor.role is Role.ADMIN:
+            return
 
         def fn(tx: Transaction) -> None:
             stats = self._repo.get_stats(tx, actor.id)
@@ -725,9 +733,16 @@ class ShowcaseService:
             i.id: {"title": i.title_line, "thumbnail_url": i.thumbnail_url or i.photo_url}
             for i in self._repo.list_all(self._db)
         }
-        likes = {viewer: data.get("ids") or [] for viewer, data in self._repo.all_likes(self._db)}
+        admins = self._admin_viewers
+        likes = {
+            viewer: data.get("ids") or []
+            for viewer, data in self._repo.all_likes(self._db)
+            if viewer not in admins
+        }
         cards = []
         for viewer, data in self._repo.all_stats(self._db):
+            if viewer in admins:
+                continue
             last = data.get("last") or {}
             for item_id, count in (data.get("views") or {}).items():
                 cards.append(
@@ -760,8 +775,11 @@ class ShowcaseService:
                 "at": d.get("at"),
             }
             for _, d in self._repo.all_log(self._db)
+            if d.get("viewer") not in admins
         ]
         for order in self._orders.showcase_orders(actor):
+            if order.created_by in admins:
+                continue
             history.append(
                 {
                     "kind": "order",
@@ -789,7 +807,8 @@ class ShowcaseService:
             liked = item_id not in ids
             ids = [item_id, *ids] if liked else [i for i in ids if i != item_id]
             self._repo.set_liked(tx, actor.id, ids[:200])
-            self._log(tx, actor, item_id, "like" if liked else "unlike", self._clock.now())
+            if actor.role is not Role.ADMIN:  # «Статистика» is about the client
+                self._log(tx, actor, item_id, "like" if liked else "unlike", self._clock.now())
             return ids
 
         return self._db.run_transaction(fn)
