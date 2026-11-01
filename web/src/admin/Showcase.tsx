@@ -858,18 +858,26 @@ function PrepEditor({
 }) {
   const save = useShowcasePatch(item.id);
   const action = useShowcaseAction(item.id);
+  // A new draft starts with the markup chosen last time (the owner, 02.11.2026).
+  const fresh = item.status === "draft" && item.markup_type === "krw" && !item.markup_value;
+  const last = fresh ? lastMarkup() : null;
   const [form, setForm] = useState({
     brand: item.brand ?? "",
     model: item.model ?? "",
     shop_price_krw: item.shop_price_krw,
     official_price_krw: item.official_price_krw,
-    markup_type: item.markup_type,
-    markup_value: item.markup_value as number | null,
+    markup_type: last?.type ?? item.markup_type,
+    markup_value: (last?.value ?? item.markup_value) as number | null,
     client_price_override: item.client_price_override,
     sizes: item.sizes.map((s) => s.name).join(", "),
   });
   const screenshot = item.source === "screenshot";
-  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
+  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) =>
+    setForm((f) => {
+      const next = { ...f, [key]: value };
+      if (key === "markup_type" || key === "markup_value") rememberMarkup(next.markup_type, next.markup_value ?? 0);
+      return next;
+    });
   const auto = (() => {
     if (!form.shop_price_krw) return null;
     const m = form.markup_value ?? 0;
@@ -942,10 +950,11 @@ function PrepEditor({
             <Download size={18} /> {item.photos.length > 1 ? `Скачать все фото · ${item.photos.length}` : "Скачать фото"}
           </button>
         )}
-        {/* The owner (20.10.2026): check the price on the shop page itself. */}
-        {item.url && (
+        {/* The owner (20.10.2026): check the price on the shop page itself.
+            Not on screenshot cards (02.11.2026: the photo site is not needed). */}
+        {item.url && !screenshot && (
           <a className="btn sc-shop-link" href={item.url} target="_blank" rel="noopener noreferrer">
-            <ExternalLink size={16} /> {screenshot ? "Где нашлись фото" : "Открыть в магазине"}
+            <ExternalLink size={16} /> Открыть в магазине
             {item.shop ? ` · ${item.shop}` : ""}
           </a>
         )}
@@ -996,10 +1005,7 @@ function PrepEditor({
           <Field label="Цена в магазине">
             <MoneyInput value={form.shop_price_krw} onChange={(v) => set("shop_price_krw", v)} />
           </Field>
-          <Field
-            label="Официальная цена"
-            hint={item.official_url ? `Найдено: ${new URL(item.official_url).hostname}` : "Для зачёркивания, если выше вашей"}
-          >
+          <Field label="Официальная цена">
             <MoneyInput value={form.official_price_krw} onChange={(v) => set("official_price_krw", v)} placeholder="не указана" />
           </Field>
           <button
@@ -1036,7 +1042,7 @@ function PrepEditor({
             </div>
           </div>
         </div>
-        <Field label="Цена для клиента" hint={form.client_price_override ? "Своя цена — наценка не учитывается" : "Магазин + наценка, вверх до ₩ 100"}>
+        <Field label="Цена для клиента">
           <MoneyInput value={form.client_price_override ?? auto} onChange={(v) => set("client_price_override", v && v !== auto ? v : null)} />
         </Field>
       </div>
@@ -1111,6 +1117,27 @@ function CardPhotos({ item, toast }: { item: ShowcaseItem; toast: ReturnType<typ
       />
     </div>
   );
+}
+
+const MARKUP_KEY = "crm-sc-markup";
+
+function lastMarkup(): { type: "krw" | "pct"; value: number } | null {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MARKUP_KEY) ?? "null");
+    if (saved && (saved.type === "krw" || saved.type === "pct") && Number.isInteger(saved.value) && saved.value >= 0)
+      return { type: saved.type, value: saved.value };
+  } catch {
+    /* no storage: start from the card's own markup */
+  }
+  return null;
+}
+
+function rememberMarkup(type: "krw" | "pct", value: number): void {
+  try {
+    localStorage.setItem(MARKUP_KEY, JSON.stringify({ type, value }));
+  } catch {
+    /* not important */
+  }
 }
 
 /** «95, 100 105» → ["95", "100", "105"]; «100 (L)» stays one size. */
