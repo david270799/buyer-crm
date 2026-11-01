@@ -716,3 +716,15 @@ def test_showcase_stats_shape(api):
         "history": [],
         "viewers": [],
     }
+
+
+def test_admin_deletes_chosen_or_all_showcase_cards(db, api):
+    """The owner (02.11.2026): «Удалить все» and deleting the chosen cards."""
+    _seed_cards(db)
+    body = {"ids": ["sc2", "missing"]}
+    assert api("POST", "/api/showcase/delete-many", who=CLIENT_TG, json=body).status_code == 403
+    assert api("POST", "/api/showcase/delete-many", json=body).json() == {"deleted": 1}
+    assert db.get("showcase", "sc2") is None and db.get("showcase", "sc1") is not None
+    assert api("POST", "/api/showcase/delete-many", json={"ids": []}).status_code == 422
+    assert api("POST", "/api/showcase/delete-many", json={"ids": ["sc1"]}).json() == {"deleted": 1}
+    assert api("GET", "/api/showcase").json()["items"] == []

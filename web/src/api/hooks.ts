@@ -512,6 +512,15 @@ export const useShowcaseAction = (id: string) => {
   });
 };
 
+/** Delete the chosen cards, or all of them (the owner, 02.11.2026). */
+export const useShowcaseDeleteMany = () => {
+  const refresh = useShowcaseRefresh();
+  return useMutation({
+    mutationFn: (ids: string[]) => post<{ deleted: number }>("/api/showcase/delete-many", { ids }),
+    onSuccess: refresh,
+  });
+};
+
 export const useShowcaseOrder = () => {
   const refresh = useInvalidateAll();
   return useMutation({

@@ -130,6 +130,10 @@ class ShowcaseAddIn(BaseModel):
     url: str = Field(min_length=8, max_length=2000)
 
 
+class ShowcaseDeleteIn(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=500)
+
+
 class ShowcasePatchIn(BaseModel):
     shop_price_krw: int | None = None
     official_price_krw: int | None = None
@@ -857,6 +861,10 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
     @app.post("/api/showcase/{item_id}/status/{status}")
     def showcase_status(item_id: str, status: str, p: Admin) -> dict[str, Any]:
         return {"item": showcase_json(_showcase().set_status(p.actor, item_id, status))}
+
+    @app.post("/api/showcase/delete-many")
+    def showcase_delete_many(body: ShowcaseDeleteIn, p: Admin) -> dict[str, int]:
+        return {"deleted": _showcase().delete_many(p.actor, body.ids)}
 
     @app.post("/api/showcase/{item_id}/delete")
     def showcase_delete(item_id: str, p: Admin) -> dict[str, bool]:

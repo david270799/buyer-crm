@@ -3568,3 +3568,23 @@ button.photo-tile {
     display: none;
   }
 }
+
+/* Choosing «Витрина» cards to delete (02.11.2026). */
+.sc-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.sc-tile.choosing {
+  cursor: pointer;
+}
+
+.sc-tile.chosen {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+
+.list-item.chosen {
+  background: var(--accent-soft);
+}

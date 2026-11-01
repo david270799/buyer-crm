@@ -9,6 +9,7 @@ import {
   useShowcase,
   useShowcaseAction,
   useShowcaseAdd,
+  useShowcaseDeleteMany,
   useShowcaseItem,
   useShowcaseOrder,
   useShowcasePatch,
@@ -16,7 +17,7 @@ import {
 } from "../api/hooks";
 import type { Category, ShowcaseItem, ShowcaseSize } from "../api/types";
 import { PageHead } from "../components/Layout";
-import { Empty, ErrorState, Field, Loading, MoneyInput, errorText, useToast } from "../components/ui";
+import { Checkbox, Confirm, Empty, ErrorState, Field, Loading, MoneyInput, errorText, useToast } from "../components/ui";
 import { CATEGORY_LABEL, krw, moment, plural } from "../lib/format";
 import { downloadFiles, overrideBack } from "../telegram";
 
@@ -159,13 +160,30 @@ function LikeButton({ item, preview }: { item: ShowcaseItem; preview?: boolean }
   );
 }
 
-export function ShowcaseTile({ item, preview }: { item: ShowcaseItem; preview?: boolean }) {
+export function ShowcaseTile({
+  item,
+  preview,
+  selected,
+  onToggle,
+}: {
+  item: ShowcaseItem;
+  preview?: boolean;
+  /** Choosing cards to delete (the owner, 02.11.2026): a tap ticks the card. */
+  selected?: boolean;
+  onToggle?: () => void;
+}) {
   const body = (
     <>
       <div className="sc-photo">
         {item.thumbnail_url || item.photo_url ? <img src={item.thumbnail_url ?? item.photo_url ?? ""} alt="" /> : null}
         {item.shop && <span className="sc-shop">{item.shop}</span>}
-        {!preview && <LikeButton item={item} />}
+        {onToggle ? (
+          <span className="sc-check">
+            <Checkbox checked={Boolean(selected)} onChange={onToggle} label={`Выбрать ${item.title_line}`} />
+          </span>
+        ) : (
+          !preview && <LikeButton item={item} />
+        )}
       </div>
       <div className="sc-body">
         <div className="sc-brand">{item.brand ?? item.shop ?? ""}</div>
@@ -180,6 +198,12 @@ export function ShowcaseTile({ item, preview }: { item: ShowcaseItem; preview?: 
       </div>
     </>
   );
+  if (onToggle)
+    return (
+      <div className={`sc-tile choosing ${selected ? "chosen" : ""}`} onClick={onToggle}>
+        {body}
+      </div>
+    );
   return preview ? (
     <div className="sc-tile">{body}</div>
   ) : (
@@ -213,6 +237,7 @@ export function ShowcasePage() {
   const client = useClientMode();
   const { data, error, isLoading, refetch } = useShowcase("published");
   const cart = useCart();
+  const choose = useChoosing();
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["id"]>("all");
   const items = useMemo(() => {
@@ -229,7 +254,12 @@ export function ShowcasePage() {
       <PageHead
         title="Витрина"
         sub={client ? "Товары из Кореи — выберите размер и закажите" : undefined}
-        action={<CartButton count={cart.lines.length} />}
+        action={
+          <div className="row" style={{ gap: 6 }}>
+            {!client && <ChooseButton choose={choose} />}
+            <CartButton count={cart.lines.length} />
+          </div>
+        }
       />
       <label className="search sc-search">
         <Search size={16} />
@@ -260,10 +290,99 @@ export function ShowcasePage() {
         />
       ) : (
         <div className="sc-grid">
-          {items.map((item) => (
-            <ShowcaseTile key={item.id} item={item} />
-          ))}
+          {items.map((item) =>
+            choose.on ? (
+              <ShowcaseTile key={item.id} item={item} selected={choose.has(item.id)} onToggle={() => choose.toggle(item.id)} />
+            ) : (
+              <ShowcaseTile key={item.id} item={item} />
+            ),
+          )}
         </div>
+      )}
+      {choose.on && <DeleteBar choose={choose} all={(data?.items ?? []).map((i) => i.id)} what="на витрине" />}
+    </>
+  );
+}
+
+/* ------------------------------------------- choosing cards to delete */
+
+function useChoosing() {
+  const [on, setOn] = useState(false);
+  const [ids, setIds] = useState<string[]>([]);
+  return {
+    on,
+    ids,
+    has: (id: string) => ids.includes(id),
+    toggle: (id: string) => setIds((list) => (list.includes(id) ? list.filter((i) => i !== id) : [...list, id])),
+    set: setIds,
+    start: () => setOn(true),
+    stop: () => {
+      setOn(false);
+      setIds([]);
+    },
+  };
+}
+
+type Choosing = ReturnType<typeof useChoosing>;
+
+function ChooseButton({ choose }: { choose: Choosing }) {
+  return (
+    <button className="btn small" onClick={choose.on ? choose.stop : choose.start}>
+      {choose.on ? "Готово" : "Выбрать"}
+    </button>
+  );
+}
+
+/** «Удалить» the chosen cards or «Удалить все» of this list, after a confirmation. */
+function DeleteBar({ choose, all, what }: { choose: Choosing; all: string[]; what: string }) {
+  const toast = useToast();
+  const remove = useShowcaseDeleteMany();
+  const [asking, setAsking] = useState<string[] | null>(null);
+  const everything = all.length > 0 && all.every((id) => choose.has(id));
+  return (
+    <>
+      <div className="selection-bar" role="toolbar" aria-label="Удаление карточек">
+        <b className="num" style={{ whiteSpace: "nowrap" }}>
+          {choose.ids.length}
+        </b>
+        <div className="selection-actions">
+          <button className="btn" onClick={() => choose.set(everything ? [] : all)}>
+            <Check size={16} /> {everything ? "Снять все" : "Выбрать все"}
+          </button>
+          <button className="btn" disabled={!choose.ids.length} onClick={() => setAsking(choose.ids)}>
+            <Trash2 size={16} /> Удалить
+          </button>
+          <button className="btn" disabled={!all.length} onClick={() => setAsking(all)}>
+            <Trash2 size={16} /> Удалить все
+          </button>
+        </div>
+        <button className="btn icon-only" onClick={choose.stop} aria-label="Закончить выбор">
+          <X size={16} />
+        </button>
+      </div>
+      {asking && (
+        <Confirm
+          title={`Удалить ${asking.length} ${plural(asking.length, "карточку", "карточки", "карточек")}?`}
+          confirmLabel="Удалить"
+          danger
+          busy={remove.isPending}
+          onClose={() => setAsking(null)}
+          onConfirm={() =>
+            remove.mutate(asking, {
+              onSuccess: (r) => {
+                toast(`Удалено: ${r.deleted}`);
+                setAsking(null);
+                choose.stop();
+              },
+              onError: (e) => toast(errorText(e), "error"),
+            })
+          }
+        >
+          <div className="small">
+            {asking.length === all.length ? `Все карточки ${what} будут удалены.` : "Выбранные карточки будут удалены."} Заказы, уже
+            сделанные по ним, останутся.
+          </div>
+        </Confirm>
       )}
     </>
   );
@@ -594,6 +713,7 @@ export function PrepPage() {
   const [url, setUrl] = useState("");
   const { data, error, isLoading, refetch } = useShowcase();
   const add = useShowcaseAdd();
+  const choose = useChoosing();
   const all = data?.items ?? [];
   const items = all.filter((i) => i.status === tab);
   const submit = () =>
@@ -607,7 +727,7 @@ export function PrepPage() {
     });
   return (
     <>
-      <PageHead title="Одобрение" sub="Черновики витрины · только вы" />
+      <PageHead title="Одобрение" sub="Черновики витрины · только вы" action={<ChooseButton choose={choose} />} />
       <div className="row" style={{ gap: 8 }}>
         <input
           className="input"
@@ -627,7 +747,14 @@ export function PrepPage() {
       </div>
       <div className="chips" style={{ marginBottom: 12 }}>
         {TABS.map((t) => (
-          <button key={t.id} className={`chip ${tab === t.id ? "active" : ""}`} onClick={() => setTab(t.id)}>
+          <button
+            key={t.id}
+            className={`chip ${tab === t.id ? "active" : ""}`}
+            onClick={() => {
+              setTab(t.id);
+              choose.set([]);
+            }}
+          >
             {t.label} {all.filter((i) => i.status === t.id).length}
           </button>
         ))}
@@ -641,7 +768,22 @@ export function PrepPage() {
       ) : (
         <div className="card list">
           {items.map((item) => (
-            <Link key={item.id} to={`/prep/${item.id}`} className="list-item">
+            <Link
+              key={item.id}
+              to={`/prep/${item.id}`}
+              className={`list-item ${choose.has(item.id) ? "chosen" : ""}`}
+              onClick={(e) => {
+                if (!choose.on) return;
+                e.preventDefault();
+                choose.toggle(item.id);
+              }}
+            >
+              {/* Only a mark: a button inside the link would also open the card. */}
+              {choose.on && (
+                <span className={`checkbox ${choose.has(item.id) ? "on" : ""}`} aria-hidden="true">
+                  {choose.has(item.id) && <Check size={14} strokeWidth={3} />}
+                </span>
+              )}
               <div className="thumb">{item.thumbnail_url ? <img src={item.thumbnail_url} alt="" /> : null}</div>
               <div className="grow" style={{ minWidth: 0 }}>
                 <div className="title">{item.title_line}</div>
@@ -658,6 +800,13 @@ export function PrepPage() {
             </Link>
           ))}
         </div>
+      )}
+      {choose.on && (
+        <DeleteBar
+          choose={choose}
+          all={items.map((i) => i.id)}
+          what={`во вкладке «${TABS.find((t) => t.id === tab)?.label ?? ""}»`}
+        />
       )}
     </>
   );

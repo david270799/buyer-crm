@@ -52,6 +52,7 @@ MAX_MARKUP_PCT = 300
 MAX_CART = 20
 MAX_PAGES_TRIED = 4  # pages of a screenshot's product opened in search of photos
 MAX_TYPED_SIZES = 30
+MAX_DELETE = 500
 
 # Host → the shop's name as in the «Магазин» bubbles.
 _SHOP_NAMES = {
@@ -665,6 +666,37 @@ class ShowcaseService:
             )
 
         self._db.run_transaction(fn)
+
+    def delete_many(self, actor: Actor, item_ids: list[str]) -> int:
+        """Several cards at once — the chosen ones or all (the owner, 02.11.2026).
+        One transaction; cards already gone are skipped. → how many were deleted.
+        Orders made from the cards stay as they are."""
+        require_admin(actor)
+        ids = list(dict.fromkeys(i for i in item_ids if isinstance(i, str) and i))
+        if not ids:
+            raise ValidationError("Не выбрано ни одной карточки.")
+        if len(ids) > MAX_DELETE:
+            raise ValidationError(f"За раз можно удалить не больше {MAX_DELETE} карточек.")
+
+        def fn(tx: Transaction) -> int:
+            now = self._clock.now()
+            found = [i for i in ids if self._repo.get(tx, i) is not None]
+            for item_id in found:
+                self._repo.delete(tx, item_id)
+            if found:
+                self._auditor.record(
+                    tx,
+                    actor,
+                    now,
+                    action="showcase.delete_many",
+                    entity_type="showcase",
+                    entity_id=found[0],
+                    before=None,
+                    after={"deleted": found},
+                )
+            return len(found)
+
+        return self._db.run_transaction(fn)
 
     def _write(
         self, actor: Actor, item_id: str, fields: dict[str, Any], action: str
