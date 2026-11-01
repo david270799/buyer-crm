@@ -172,3 +172,65 @@ def test_showcase_photo_is_a_sharp_jpeg_up_to_1mb():
     assert main[:3] == b"\xff\xd8\xff"  # JPEG: any gallery takes it
     assert len(main) <= 1_000_000 and size[0] == size[1] and size[0] >= 1000
     assert thumb[:4] == b"RIFF"
+
+
+def _viewer_screenshot() -> Image.Image:
+    """A phone screenshot of a shop's photo viewer: black bars with the clock,
+    «‹», «1 / 5» and the phone's buttons around a light photo of a dark shoe."""
+    from PIL import ImageDraw
+
+    shot = Image.new("RGB", (1080, 2520), (0, 0, 0))
+    draw = ImageDraw.Draw(shot)
+    draw.text((960, 40), "24", fill=(255, 255, 255))
+    draw.line((80, 200, 60, 220, 80, 240), fill=(255, 255, 255), width=6)
+    draw.rectangle((0, 648, 1079, 1727), fill=(230, 230, 230))  # the photo
+    draw.rectangle((60, 1000, 1000, 1350), fill=(15, 15, 15))  # the shoe
+    draw.rounded_rectangle((480, 2080, 600, 2160), 10, fill=(80, 80, 80))
+    draw.text((520, 2110), "1 / 5", fill=(255, 255, 255))
+    draw.line((230, 2440, 230, 2480), fill=(255, 255, 255), width=4)
+    return shot
+
+
+def test_photo_viewer_screenshot_loses_its_black_bars():
+    """The owner (02.11.2026): «он сам всё обрезает»."""
+    from crm.services.image_service import trim_screen_bars
+
+    photo = trim_screen_bars(_viewer_screenshot())
+    assert abs(photo.width - 1080) <= 10 and abs(photo.height - 1080) <= 20
+    assert photo.convert("L").getpixel((5, 5)) == 230  # no black edge left
+    assert photo.convert("L").getpixel((photo.width - 5, photo.height - 5)) == 230
+
+
+@pytest.mark.parametrize(
+    "picture",
+    [
+        Image.new("RGB", (900, 1600), (0, 0, 0)),  # all dark
+        Image.new("RGB", (900, 1600), (250, 250, 250)),  # all light
+        Image.new("RGB", (1200, 900), (40, 120, 200)),  # an ordinary photo
+    ],
+)
+def test_other_pictures_are_not_trimmed(picture):
+    from crm.services.image_service import trim_screen_bars
+
+    assert trim_screen_bars(picture).size == picture.size
+
+
+def test_a_dark_photo_with_a_light_spot_is_not_trimmed():
+    from PIL import ImageDraw
+
+    from crm.services.image_service import trim_screen_bars
+
+    shot = Image.new("RGB", (1000, 1000), (10, 10, 10))
+    ImageDraw.Draw(shot).ellipse((300, 300, 700, 700), fill=(240, 240, 240))
+    assert trim_screen_bars(shot).size == shot.size  # a photo, not bars
+
+
+def test_only_admin_uploads_are_trimmed(tmp_path):
+    """Client photos stay whole; «Добавить фото» in the Mini App trims."""
+    buffer = io.BytesIO()
+    _viewer_screenshot().save(buffer, format="PNG")
+    kept, _, _ = process_image(buffer.getvalue())
+    trimmed, _, _ = process_image(buffer.getvalue(), trim=True)
+    corner = (20, 20)
+    assert Image.open(io.BytesIO(kept)).convert("L").getpixel(corner) > 245  # white padding
+    assert abs(Image.open(io.BytesIO(trimmed)).convert("L").getpixel(corner) - 230) < 8

@@ -1153,7 +1153,8 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         if len(data) > MAX_UPLOAD_BYTES:
             raise ValidationError("Файл больше 20 МБ.")
         started = time.monotonic()
-        stored = services.images.store(p.actor, data)
+        # Screenshots of a shop's photo viewer lose their black bars.
+        stored = services.images.store(p.actor, data, trim=True)
         logger.info(
             "Stored image %s KB in %.2fs", stored.photo_bytes // 1024, time.monotonic() - started
         )

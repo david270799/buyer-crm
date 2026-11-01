@@ -63,6 +63,62 @@ def _open(data: bytes) -> Image.Image:
     return image.convert("RGB")
 
 
+# Admin uploads may be phone screenshots of a shop's full-screen photo viewer
+# (the owner, 02.11.2026): black bars above and below with the clock, «‹»,
+# «1 / 5» and the phone's buttons. Only the photo is kept.
+_DARK = 40  # a pixel this dark or darker is the viewer's background
+_PHOTO_SHARE = 0.6  # a row of the photo is mostly not dark
+_BAR_SHARE = 0.35  # a row of a bar is mostly dark (small icons and text allowed)
+_PROBE_WIDTH = 300
+
+
+def _photo_span(shares: list[float]) -> tuple[int, int] | None:
+    """From the first to the last line of the photo (a dark product inside may
+    dip lower), if everything around it is a dark bar."""
+    lines = [i for i, share in enumerate(shares) if share > _PHOTO_SHARE]
+    if not lines:
+        return None
+    low, high = lines[0], lines[-1] + 1
+    if high - low < len(shares) * 0.15:
+        return None
+    if any(share >= _BAR_SHARE for share in shares[:low] + shares[high:]):
+        return None
+    return low, high
+
+
+def trim_screen_bars(image: Image.Image) -> Image.Image:
+    """Cut the dark bars of a full-screen photo viewer off a screenshot; any
+    other picture comes back unchanged."""
+    width, height = image.size
+    probe_h = max(1, round(height * _PROBE_WIDTH / width))
+    probe = image.convert("L").resize((_PROBE_WIDTH, probe_h), Image.Resampling.BILINEAR)
+    light = [1 if v > _DARK else 0 for v in probe.tobytes()]
+    rows = [
+        sum(light[y * _PROBE_WIDTH : (y + 1) * _PROBE_WIDTH]) / _PROBE_WIDTH for y in range(probe_h)
+    ]
+    span = _photo_span(rows)
+    if span is None:
+        return image
+    top, bottom = span
+    band = bottom - top
+    cols = [
+        sum(light[y * _PROBE_WIDTH + x] for y in range(top, bottom)) / band
+        for x in range(_PROBE_WIDTH)
+    ]
+    left, right = _photo_span(cols) or (0, _PROBE_WIDTH)
+    if bottom - top > probe_h * 0.9 and right - left > _PROBE_WIDTH * 0.9:
+        return image  # hardly any bar: not a viewer screenshot
+    scale_x, scale_y = width / _PROBE_WIDTH, height / probe_h
+    # One probe pixel inwards: its edge is a blend of the photo and the bar.
+    box = (
+        round((left + (left > 0)) * scale_x),
+        round((top + 1) * scale_y),
+        round((right - (right < _PROBE_WIDTH)) * scale_x),
+        round((bottom - 1) * scale_y),
+    )
+    return image.crop(box)
+
+
 def _square(image: Image.Image) -> Image.Image:
     """Centre the whole picture on a white 1:1 canvas: nothing is cut off or stretched."""
     width, height = image.size
@@ -143,8 +199,10 @@ def process_showcase_image(data: bytes) -> tuple[bytes, bytes, tuple[int, int]]:
     return main, thumb, current.size
 
 
-def process_image(data: bytes) -> tuple[bytes, bytes, tuple[int, int]]:
-    image = _square(_open(data))
+def process_image(data: bytes, trim: bool = False) -> tuple[bytes, bytes, tuple[int, int]]:
+    """`trim`: cut a photo viewer's dark bars off a screenshot (admin uploads)."""
+    image = _open(data)
+    image = _square(trim_screen_bars(image) if trim else image)
     main, main_image = _encode(image, MAIN_MAX_SIDE, MAIN_TARGET_BYTES)
     thumb, _ = _encode(main_image, THUMB_MAX_SIDE, THUMB_TARGET_BYTES)
     return main, thumb, main_image.size
@@ -159,13 +217,15 @@ class ImageService:
         """A stored (already standardised) image, or None if the URL is not ours."""
         return self._storage.read_url(url)
 
-    def store(self, actor: Actor, data: bytes, folder: str = "images") -> StoredImage:
+    def store(
+        self, actor: Actor, data: bytes, folder: str = "images", trim: bool = False
+    ) -> StoredImage:
         if folder == ORDER_PHOTOS_FOLDER:
             if actor.role not in (Role.ADMIN, Role.CLIENT):
                 raise PermissionDeniedError("Недостаточно прав.")
         else:
             require_admin(actor)
-        return self.store_processed(*process_image(data), folder=folder)
+        return self.store_processed(*process_image(data, trim), folder=folder)
 
     def store_processed(
         self,
