@@ -19,7 +19,7 @@ import type { Category, ShowcaseItem, ShowcaseSize } from "../api/types";
 import { PageHead } from "../components/Layout";
 import { Checkbox, Confirm, Empty, ErrorState, Field, Loading, MoneyInput, errorText, useToast } from "../components/ui";
 import { CATEGORY_LABEL, krw, moment, plural } from "../lib/format";
-import { downloadFiles, overrideBack } from "../telegram";
+import { downloadFiles } from "../telegram";
 
 // «Витрина» (the owner, 20.10.2026). Test mode: only the admin sees it; he
 // walks the client's path himself (♥, size, cart, «Заказать») before it opens.
@@ -552,32 +552,6 @@ function ShowcaseItemView({ item, preview }: { item: ShowcaseItem; preview?: boo
   );
 }
 
-/** «Открыть как клиент» on «Одобрение»: the whole card over the page, with
- * the prices being edited; «Закрыть» or Telegram's «назад» returns. */
-function FullPreview({ item, onClose }: { item: ShowcaseItem; onClose: () => void }) {
-  useEffect(() => overrideBack(onClose), [onClose]);
-  useEffect(() => {
-    const overflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = overflow;
-    };
-  }, []);
-  return (
-    <div className="sc-full" role="dialog" aria-modal="true" aria-label="Предпросмотр карточки">
-      <div className="sc-full-bar">
-        <span>
-          <Eye size={16} /> Так увидит клиент
-        </span>
-        <button className="btn small" onClick={onClose}>
-          <X size={16} /> Закрыть
-        </button>
-      </div>
-      <ShowcaseItemView item={item} preview />
-    </div>
-  );
-}
-
 /** Big photo; several photos swipe sideways with dots below. */
 function ShowcasePhotos({ item, preview }: { item: ShowcaseItem; preview?: boolean }) {
   const [index, setIndex] = useState(0);
@@ -833,7 +807,6 @@ function PrepEditor({
 }) {
   const save = useShowcasePatch(item.id);
   const action = useShowcaseAction(item.id);
-  const [full, setFull] = useState(false);
   const [form, setForm] = useState({
     brand: item.brand ?? "",
     model: item.model ?? "",
@@ -884,6 +857,8 @@ function PrepEditor({
         }),
       onError: (e) => toast(errorText(e), "error"),
     });
+  // One page (the owner, 02.11.2026): the card as the client sees it — photos,
+  // name, price, «Скачать фото» — and the fields to fix right under it.
   return (
     <>
       <PageHead
@@ -895,14 +870,51 @@ function PrepEditor({
           {screenshot ? `📝 Со скриншота: ${item.note}` : `⚠️ Не удалось: ${item.note}`}
         </div>
       )}
-      {/* The owner (20.10.2026): check the price on the shop page itself. */}
-      {item.url && (
-        <a className="btn sc-shop-link" href={item.url} target="_blank" rel="noopener noreferrer">
-          <ExternalLink size={16} /> {screenshot ? "Где нашлись фото" : "Открыть в магазине"}
-          {item.shop ? ` · ${item.shop}` : ""}
-        </a>
-      )}
-      <div className="card pad stack">
+      <div className="sc-detail sc-edit">
+        <ShowcasePhotos item={preview} preview />
+        <div className="sc-brand" style={{ marginTop: 14 }}>
+          {preview.brand}
+          {item.category ? ` · ${CATEGORY_LABEL[item.category]}` : ""}
+        </div>
+        <h2 className="sc-title">{preview.model ?? item.title_line}</h2>
+        <Price item={preview} big />
+        {profit !== null && <div className={`small ${profit < 0 ? "negative" : "positive"}`}>Ваша прибыль: {krw(profit, true)}</div>}
+        {item.photos.length > 0 && (
+          <button
+            className="btn sc-download"
+            onClick={() => {
+              const base = `${item.brand ?? "photo"}_${item.model ?? item.id}`.replace(/\W+/g, "_");
+              void downloadFiles(item.photos.map((p, i) => ({ url: p.photo_url, name: `${base}_${i + 1}.jpg` })));
+            }}
+          >
+            <Download size={18} /> {item.photos.length > 1 ? `Скачать все фото · ${item.photos.length}` : "Скачать фото"}
+          </button>
+        )}
+        {/* The owner (20.10.2026): check the price on the shop page itself. */}
+        {item.url && (
+          <a className="btn sc-shop-link" href={item.url} target="_blank" rel="noopener noreferrer">
+            <ExternalLink size={16} /> {screenshot ? "Где нашлись фото" : "Открыть в магазине"}
+            {item.shop ? ` · ${item.shop}` : ""}
+          </a>
+        )}
+        {!screenshot && (
+          <>
+            <div className="row between" style={{ margin: "16px 0 8px" }}>
+              <span className="small muted">Размеры в магазине</span>
+              <button
+                className="btn small"
+                disabled={action.isPending}
+                onClick={() => action.mutate("refresh", { onSuccess: () => toast("Наличие обновлено"), onError: (e) => toast(errorText(e), "error") })}
+              >
+                <RefreshCw size={14} /> Обновить наличие
+              </button>
+            </div>
+            {item.sizes.length ? <SizeChips sizes={sizesOnce(item.sizes)} counts /> : <div className="small muted">Размеры магазин не показал.</div>}
+          </>
+        )}
+      </div>
+      <div className="card pad stack" style={{ marginTop: 16 }}>
+        <h3>Название и цена</h3>
         <div className="form-grid two">
           <Field label="Бренд">
             <input className="input" value={form.brand} onChange={(e) => set("brand", e.target.value)} />
@@ -921,6 +933,11 @@ function PrepEditor({
                   placeholder="например: 95, 100, 105"
                 />
               </Field>
+              {typedSizes(form.sizes).length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <SizeChips sizes={typedSizes(form.sizes).map((name) => ({ name, stock: null, available: true }))} />
+                </div>
+              )}
             </div>
           )}
           <Field label="Цена в магазине">
@@ -969,27 +986,7 @@ function PrepEditor({
         <Field label="Цена для клиента" hint={form.client_price_override ? "Своя цена — наценка не учитывается" : "Магазин + наценка, вверх до ₩ 100"}>
           <MoneyInput value={form.client_price_override ?? auto} onChange={(v) => set("client_price_override", v && v !== auto ? v : null)} />
         </Field>
-        {profit !== null && <div className={`small ${profit < 0 ? "negative" : "positive"}`}>Ваша прибыль: {krw(profit, true)}</div>}
       </div>
-      <div className="row between" style={{ margin: "18px 0 8px" }}>
-        <span className="small muted">Как увидит клиент</span>
-        {!screenshot && (
-          <button
-            className="btn small"
-            disabled={action.isPending}
-            onClick={() => action.mutate("refresh", { onSuccess: () => toast("Наличие обновлено"), onError: (e) => toast(errorText(e), "error") })}
-          >
-            <RefreshCw size={14} /> Обновить наличие
-          </button>
-        )}
-      </div>
-      <button type="button" className="sc-preview" onClick={() => setFull(true)} aria-label="Открыть карточку как клиент">
-        <ShowcaseTile item={preview} preview />
-        <span className="sc-preview-open">
-          <Eye size={14} /> Открыть как клиент
-        </span>
-      </button>
-      {full && <FullPreview item={preview} onClose={() => setFull(false)} />}
       <div className="sc-cta">
         <button
           className="btn ghost danger"
@@ -1023,6 +1020,7 @@ function PrepEditor({
     </>
   );
 }
+
 
 /** «95, 100 105» → ["95", "100", "105"]; «100 (L)» stays one size. */
 export function typedSizes(text: string): string[] {
