@@ -146,6 +146,8 @@ class ShowcasePatchIn(BaseModel):
     category: str | None = None
     # Screenshot cards only: the sizes typed in by the admin.
     sizes: list[str] | None = Field(default=None, max_length=40)
+    # The card's photos as arranged on «Проверка карточки» (02.11.2026).
+    photos: list[dict[str, str | None]] | None = Field(default=None, max_length=20)
 
 
 class CartLineIn(BaseModel):
@@ -861,6 +863,11 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
     @app.post("/api/showcase/{item_id}/status/{status}")
     def showcase_status(item_id: str, status: str, p: Admin) -> dict[str, Any]:
         return {"item": showcase_json(_showcase().set_status(p.actor, item_id, status))}
+
+    @app.post("/api/showcase/{item_id}/photos/search")
+    def showcase_photos_search(item_id: str, p: Admin) -> dict[str, Any]:
+        item, found = _showcase().search_photos(p.actor, item_id)
+        return {"item": showcase_json(item), "found": found}
 
     @app.post("/api/showcase/delete-many")
     def showcase_delete_many(body: ShowcaseDeleteIn, p: Admin) -> dict[str, int]:

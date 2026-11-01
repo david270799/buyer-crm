@@ -17,6 +17,7 @@ import {
 } from "../api/hooks";
 import type { Category, ShowcaseItem, ShowcaseSize } from "../api/types";
 import { PageHead } from "../components/Layout";
+import { PhotosInput } from "./sheets";
 import { Checkbox, Confirm, Empty, ErrorState, Field, Loading, MoneyInput, Sheet, errorText, useToast } from "../components/ui";
 import { CATEGORY_LABEL, krw, moment, plural } from "../lib/format";
 import { downloadFiles } from "../telegram";
@@ -915,9 +916,10 @@ function PrepEditor({
         title="Проверка карточки"
         sub={<span className={`badge ${item.status === "published" ? "s-delivered" : "warn"}`}>{STATUS_LABEL[item.status]}</span>}
       />
-      {item.note && (
+      {/* No notes on screenshot cards (the owner, 02.11.2026: «лишние комменты»). */}
+      {item.note && !screenshot && (
         <div className="banner info small" style={{ marginBottom: 12 }}>
-          {screenshot ? `📝 Со скриншота: ${item.note}` : `⚠️ Не удалось: ${item.note}`}
+          ⚠️ Не удалось: {item.note}
         </div>
       )}
       <div className="sc-detail sc-edit">
@@ -963,6 +965,7 @@ function PrepEditor({
           </>
         )}
       </div>
+      <CardPhotos item={item} toast={toast} />
       <div className="card pad stack" style={{ marginTop: 16 }}>
         <h3>Название и цена</h3>
         <div className="form-grid two">
@@ -975,7 +978,7 @@ function PrepEditor({
           {screenshot && (
             /* Screenshot cards (the owner, 01.11.2026): the sizes are typed in here. */
             <div className="full">
-              <Field label="Размеры" hint={`Через запятую или пробел: 95, 100, 105 или 260 265 270${item.code ? ` · код ${item.code}` : ""}`}>
+              <Field label="Размеры">
                 <input
                   className="input"
                   value={form.sizes}
@@ -1071,6 +1074,44 @@ function PrepEditor({
   );
 }
 
+
+/** The card's photos on «Проверка карточки» (the owner, 02.11.2026): remove
+ * one (×), add your own from the gallery (+), or look for photos on the web
+ * again by the style code. Saved at once. */
+function CardPhotos({ item, toast }: { item: ShowcaseItem; toast: ReturnType<typeof useToast> }) {
+  const save = useShowcasePatch(item.id);
+  const action = useShowcaseAction(item.id);
+  return (
+    <div className="card pad stack" style={{ marginTop: 16 }}>
+      <div className="row between">
+        <h3>Фото</h3>
+        {item.code && (
+          <button
+            className="btn small"
+            disabled={action.isPending}
+            onClick={() =>
+              action.mutate("photos/search", {
+                onSuccess: (r) => toast(r.found ? `Нашлось фото: ${r.found}` : "Новых фото в интернете не нашлось"),
+                onError: (e) => toast(errorText(e), "error"),
+              })
+            }
+          >
+            {action.isPending ? <Loader2 className="spin" size={14} /> : <Search size={14} />} Найти фото в интернете
+          </button>
+        )}
+      </div>
+      <PhotosInput
+        value={item.photos}
+        onChange={(photos) =>
+          save.mutate(
+            { photos: photos.filter((p) => p.photo_url).map((p) => ({ photo_url: p.photo_url!, thumbnail_url: p.thumbnail_url })) },
+            { onSuccess: () => toast("Фото сохранены"), onError: (e) => toast(errorText(e), "error") },
+          )
+        }
+      />
+    </div>
+  );
+}
 
 /** «95, 100 105» → ["95", "100", "105"]; «100 (L)» stays one size. */
 export function typedSizes(text: string): string[] {

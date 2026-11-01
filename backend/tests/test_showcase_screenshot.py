@@ -101,7 +101,7 @@ def test_screenshot_becomes_a_draft_with_its_price_and_web_photos(db, services, 
     assert item.official_price_krw == 209_000
     assert item.url == PAGE and item.photos and item.sizes == []
     assert "NJ3BS51A" in gemini.searched
-    assert "размеры впишите" in item.note and "скриншота" not in item.note
+    assert item.note is None  # no notes on such cards (the owner, 02.11.2026)
 
 
 def test_no_page_with_the_code_takes_the_photo_from_the_screenshot(db, services, clock, admin):
@@ -109,7 +109,7 @@ def test_no_page_with_the_code_takes_the_photo_from_the_screenshot(db, services,
     showcase = make(db, services, clock, FakeGemini(), html=other)
     item = showcase.add_screenshot(admin, _screenshot())
     assert item.url == "" and item.photos  # cut out of the screenshot
-    assert "фото со скриншота" in item.note
+    assert item.note is None
 
 
 def test_sizes_are_typed_in_and_the_shop_is_never_reread(db, services, clock, admin, client_actor):
@@ -154,3 +154,24 @@ def test_helpers():
     assert crop(_screenshot(), [100, 0, 105, 1000]) is None  # a sliver is not a photo
     piece = Image.open(io.BytesIO(crop(_screenshot(), [100, 0, 530, 1000])))
     assert piece.size == (857, 860)
+
+
+def test_photos_are_searched_again_and_arranged_by_hand(db, services, clock, admin):
+    """The owner (02.11.2026): «найти фото» again and own photos from the gallery."""
+    other = PRODUCT_HTML.replace("NJ3BS51A", "NJ3BS99Z").replace("nj3bs51a", "nj3bs99z")
+    showcase = make(db, services, clock, FakeGemini(), html=other)
+    item = showcase.add_screenshot(admin, _screenshot())  # only the cut-out photo
+    cut = item.photos[0]
+    again, found = showcase.search_photos(admin, item.id)
+    assert found == 0 and again.photos == [cut]
+    showcase._fetcher.html_text = PRODUCT_HTML  # the shop page appeared
+    again, found = showcase.search_photos(admin, item.id)
+    assert found >= 1 and again.photos[-1] == cut and again.url == PAGE
+    own = {"photo_url": "/media/images/own.webp", "thumbnail_url": "/media/images/own_t.webp"}
+    item = showcase.update(admin, item.id, {"photos": [own, cut]})
+    assert item.photos == [own, cut] and item.photo_url == own["photo_url"]
+    with pytest.raises(ValidationError):
+        showcase.update(admin, item.id, {"photos": [{"photo_url": "javascript:alert(1)"}]})
+    db.run_transaction(lambda tx: tx.update("showcase", item.id, {"code": None}))
+    with pytest.raises(ValidationError):
+        showcase.search_photos(admin, item.id)

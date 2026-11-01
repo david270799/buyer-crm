@@ -53,6 +53,7 @@ MAX_CART = 20
 MAX_PAGES_TRIED = 4  # pages of a screenshot's product opened in search of photos
 MAX_TYPED_SIZES = 30
 MAX_DELETE = 500
+MAX_CARD_PHOTOS = 20
 
 # Host → the shop's name as in the «Магазин» bubbles.
 _SHOP_NAMES = {
@@ -116,6 +117,25 @@ def typed_sizes(names: Any) -> list[dict[str, Any]]:
     if len(sizes) > MAX_TYPED_SIZES:
         raise ValidationError(f"Не больше {MAX_TYPED_SIZES} размеров.")
     return sizes
+
+
+def typed_photos(photos: Any) -> list[dict[str, Any]]:
+    """The card's photos as arranged by the admin: removed ones dropped, own
+    photos from the gallery added (already stored through /api/images)."""
+    if not isinstance(photos, list) or len(photos) > MAX_CARD_PHOTOS:
+        raise ValidationError(f"Фото — не больше {MAX_CARD_PHOTOS}.")
+    result = []
+    for photo in photos:
+        url = photo.get("photo_url") if isinstance(photo, dict) else None
+        thumb = photo.get("thumbnail_url") if isinstance(photo, dict) else None
+        if not isinstance(url, str) or not url or len(url) > 500:
+            raise ValidationError("Неверное фото.")
+        if not url.startswith(("/media/", "https://")):
+            raise ValidationError("Неверное фото.")
+        ours = isinstance(thumb, str) and thumb.startswith(("/media/", "https://"))
+        thumb = thumb if ours else None
+        result.append({"photo_url": url, "thumbnail_url": thumb or url})
+    return result
 
 
 def _require_viewer(actor: Actor) -> None:
@@ -373,29 +393,22 @@ class ShowcaseService:
             raise ValidationError(f"Gemini не прочитал скриншот: {exc}") from None
         if not answer.get("is_product") or not answer.get("price_krw"):
             raise ValidationError("На скриншоте не нашлось товара с ценой.")
-        notes: list[str] = []
+        # No notes on such a card (the owner, 02.11.2026: «лишние комменты»):
+        # the page itself shows what is missing, the photos can be searched again.
         brand, model, code = answer.get("brand"), answer.get("model"), answer.get("code")
         if has_hangul(brand):
             brand = None
         if has_hangul(model):
             model = None
-        if answer.get("confidence", 0) < MIN_CONFIDENCE or not (brand or model):
-            notes.append("название не уверено — проверьте")
         page_url, photos = self._photos_from_web(brand, model, code)
         if not photos:
             cut = screenshots.crop(data, answer["photo_box"]) if answer.get("photo_box") else None
-            stored = None
-            if cut is not None:
-                try:
-                    stored = self._store_one(cut)
-                except ValidationError as exc:
-                    notes.append(f"фото: {exc}")
-            if stored is not None:
-                photos = [stored]
-                notes.append("фото со скриншота — других фото в интернете не нашлось")
-            else:
-                notes.append("нет фото")
-        notes.append("размеры впишите сами")
+            try:
+                stored = self._store_one(cut) if cut is not None else None
+            except ValidationError as exc:
+                logger.info("Screenshot photo not stored: %s", exc)
+                stored = None
+            photos = [stored] if stored is not None else []
         fields: dict[str, Any] = {
             "brand": brand,
             "model": model,
@@ -414,7 +427,33 @@ class ShowcaseService:
             fields["photos"] = photos
             fields["photo_url"] = photos[0]["photo_url"]
             fields["thumbnail_url"] = photos[0]["thumbnail_url"]
-        return self._create(actor, fields, notes, page_url or "screenshot")
+        return self._create(actor, fields, [], page_url or "screenshot")
+
+    def search_photos(self, actor: Actor, item_id: str) -> tuple[ShowcaseItem, int]:
+        """«Найти фото в интернете» again (the owner, 02.11.2026): photos of a
+        page with this very style code go in front of the card's photos.
+        → (the card, how many photos were found)."""
+        require_admin(actor)
+        item = self.get(actor, item_id)
+        if not item.code:
+            raise ValidationError(
+                "У карточки нет кода модели — фото не по чему искать. Добавьте фото сами."
+            )
+        if self._recognizer is None or not hasattr(self._recognizer, "find_product_pages"):
+            raise ValidationError("Для поиска фото нужен ключ Gemini (GEMINI_API_KEY).")
+        page_url, found = self._photos_from_web(item.brand, item.model, item.code)
+        if not found:
+            return item, 0
+        known = {p.get("photo_url") for p in found}
+        photos = [*found, *(p for p in item.photos if p.get("photo_url") not in known)]
+        fields: dict[str, Any] = {
+            "photos": photos,
+            "photo_url": photos[0]["photo_url"],
+            "thumbnail_url": photos[0].get("thumbnail_url"),
+        }
+        if not item.url and page_url:
+            fields.update(url=page_url, shop=shop_name(page_url))
+        return self._write(actor, item_id, fields, "showcase.photos_search"), len(found)
 
     def _photos_from_web(
         self, brand: str | None, model: str | None, code: str | None
@@ -588,6 +627,11 @@ class ShowcaseService:
             if changes["category"] not in (None, *CATEGORIES):
                 raise ValidationError("Неизвестная категория.")
             fields["category"] = changes["category"]
+        if "photos" in changes and changes["photos"] is not None:
+            photos = typed_photos(changes["photos"])
+            fields["photos"] = photos
+            fields["photo_url"] = photos[0]["photo_url"] if photos else None
+            fields["thumbnail_url"] = photos[0]["thumbnail_url"] if photos else None
         current = self.get(actor, item_id) if fields or "sizes" in changes else None
         if "sizes" in changes and changes["sizes"] is not None:
             if current is None or not current.from_screenshot:

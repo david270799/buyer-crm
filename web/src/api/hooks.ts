@@ -491,7 +491,7 @@ export type ShowcasePatch = Partial<
     | "shop"
     | "category"
   >
-> & { sizes?: string[] };
+> & { sizes?: string[]; photos?: { photo_url: string; thumbnail_url: string | null }[] };
 
 export const useShowcasePatch = (id: string) => {
   const refresh = useShowcaseRefresh();
@@ -505,9 +505,9 @@ export const useShowcaseAction = (id: string) => {
   const refresh = useShowcaseRefresh();
   return useMutation({
     mutationFn: (
-      action: "refresh" | "like" | "delete" | "official" | "status/published" | "status/hidden" | "status/draft",
+      action: "refresh" | "like" | "delete" | "official" | "photos/search" | "status/published" | "status/hidden" | "status/draft",
     ) =>
-      post<{ item?: ShowcaseItem; liked?: boolean; ok?: boolean }>(`/api/showcase/${id}/${action}`),
+      post<{ item?: ShowcaseItem; liked?: boolean; ok?: boolean; found?: number }>(`/api/showcase/${id}/${action}`),
     onSuccess: refresh,
   });
 };
