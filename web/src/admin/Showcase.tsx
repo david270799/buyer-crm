@@ -1,4 +1,4 @@
-import { Check, Download, ExternalLink, Eye, Heart, LayoutGrid, Loader2, RefreshCw, Search, ShoppingBag, ShoppingCart, Trash2, Undo2, X } from "lucide-react";
+import { Bell, Check, Download, ExternalLink, Eye, Heart, LayoutGrid, Loader2, RefreshCw, Search, ShoppingBag, ShoppingCart, Trash2, Undo2, X } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -9,6 +9,7 @@ import {
   useShowcase,
   useShowcaseAction,
   useShowcaseAdd,
+  useShowcaseAnnounce,
   useShowcaseDeleteMany,
   useShowcaseItem,
   useShowcaseOrder,
@@ -257,6 +258,7 @@ export function ShowcasePage() {
         sub={client ? "Товары из Кореи — выберите размер и закажите" : undefined}
         action={
           <div className="row" style={{ gap: 6 }}>
+            {!client && !choose.on && <AnnounceButton />}
             {!client && <ChooseButton choose={choose} />}
             <CartButton count={cart.lines.length} />
           </div>
@@ -325,6 +327,41 @@ function useChoosing() {
 }
 
 type Choosing = ReturnType<typeof useChoosing>;
+
+/** «Уведомить»: a message to the client that the showcase was updated (the owner, 02.11.2026). */
+function AnnounceButton() {
+  const toast = useToast();
+  const announce = useShowcaseAnnounce();
+  const [asking, setAsking] = useState(false);
+  return (
+    <>
+      <button className="btn small" onClick={() => setAsking(true)} aria-label="Уведомить клиента">
+        <Bell size={15} /> Уведомить
+      </button>
+      {asking && (
+        <Confirm
+          title="Уведомить клиента?"
+          confirmLabel="Отправить"
+          busy={announce.isPending}
+          onClose={() => setAsking(false)}
+          onConfirm={() =>
+            announce.mutate(undefined, {
+              onSuccess: (r) => {
+                setAsking(false);
+                toast(r.client_has_telegram ? "Уведомление отправлено клиенту" : "У клиента не указан Telegram — уведомление только в колокольчике");
+              },
+              onError: (e) => toast(errorText(e), "error"),
+            })
+          }
+        >
+          <div className="small">
+            Клиенту в Telegram придёт: «🛍 Витрина обновилась» — сколько новых товаров и кнопка, которая откроет витрину.
+          </div>
+        </Confirm>
+      )}
+    </>
+  );
+}
 
 function ChooseButton({ choose }: { choose: Choosing }) {
   return (

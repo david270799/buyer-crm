@@ -728,3 +728,27 @@ def test_admin_deletes_chosen_or_all_showcase_cards(db, api):
     assert api("POST", "/api/showcase/delete-many", json={"ids": []}).status_code == 422
     assert api("POST", "/api/showcase/delete-many", json={"ids": ["sc1"]}).json() == {"deleted": 1}
     assert api("GET", "/api/showcase").json()["items"] == []
+
+
+def test_admin_tells_the_client_the_showcase_was_updated(db, api, clock):
+    """The owner (02.11.2026): «Уведомить» — sent to the client even with
+    notifications switched off, at most once a minute."""
+    from crm.domain.enums import Role
+    from crm.domain.notifications import NotifyRecipient
+    from crm.services.common import Actor
+    from crm.services.container import build_services
+
+    _seed_cards(db)
+    assert api("POST", "/api/showcase/announce", who=CLIENT_TG).status_code == 403
+    r = api("POST", "/api/showcase/announce").json()
+    assert r == {"new": 1, "client_has_telegram": True}
+    assert api("POST", "/api/showcase/announce").status_code == 409  # a second tap
+    [event] = [d for _, d in db.scan("events") if d.get("type") == "showcase_updated"]
+    assert event["title"] == "Витрина обновилась" and "Новых товаров: 1" in event["body"]
+    services = build_services(db, frozenset({ADMIN_TG}), clock)
+    assert (
+        services.notifications.get_settings(Actor.telegram(ADMIN_TG, Role.ADMIN)).recipient
+        is NotifyRecipient.OFF
+    )
+    [delivery] = services.notifications.due().deliveries
+    assert delivery.chat_ids == (CLIENT_TG,)

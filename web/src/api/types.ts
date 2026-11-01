@@ -84,7 +84,8 @@ export type EventType =
   | "deposit"
   | "adjustment"
   | "rate"
-  | "debt_warning";
+  | "debt_warning"
+  | "showcase_updated";
 
 export interface CrmEvent {
   id: string;

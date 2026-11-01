@@ -869,6 +869,16 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
         item, found = _showcase().search_photos(p.actor, item_id)
         return {"item": showcase_json(item), "found": found}
 
+    @app.post("/api/showcase/announce")
+    def showcase_announce(p: Admin) -> dict[str, Any]:
+        if p.preview:
+            raise ApiError(403, "forbidden", "В режиме «Как видит клиент» ничего не меняется.")
+        new = _showcase().announce(p.actor)
+        return {
+            "new": new,
+            "client_has_telegram": services.notifications.client_has_telegram(p.actor),
+        }
+
     @app.post("/api/showcase/delete-many")
     def showcase_delete_many(body: ShowcaseDeleteIn, p: Admin) -> dict[str, int]:
         return {"deleted": _showcase().delete_many(p.actor, body.ids)}

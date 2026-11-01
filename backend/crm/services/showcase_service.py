@@ -17,10 +17,12 @@ from urllib.parse import parse_qs, urlsplit
 from crm.domain.categories import CATEGORIES, category_from_text
 from crm.domain.enums import Role
 from crm.domain.errors import ConflictError, NotFoundError, PermissionDeniedError, ValidationError
+from crm.domain.events import EventType
 from crm.domain.models import ShowcaseItem
 from crm.repositories import ShowcaseRepository
 from crm.services import screenshots
 from crm.services.common import Actor, Auditor, Clock, require_admin
+from crm.services.events import EventRecorder
 from crm.services.image_service import ImageService, process_image, process_showcase_image
 from crm.services.link_import import (
     _TRANSLATE_AGAIN,
@@ -54,6 +56,8 @@ MAX_PAGES_TRIED = 4  # pages of a screenshot's product opened in search of photo
 MAX_TYPED_SIZES = 30
 MAX_DELETE = 500
 MAX_CARD_PHOTOS = 20
+ANNOUNCE_DOC = "showcase_announce"
+ANNOUNCE_PAUSE = timedelta(minutes=1)
 
 # Host → the shop's name as in the «Магазин» bubbles.
 _SHOP_NAMES = {
@@ -198,6 +202,7 @@ class ShowcaseService:
         fetcher: Any = None,
         *,
         admin_ids: frozenset[int] = frozenset(),
+        events: EventRecorder | None = None,
     ):
         self._db = db
         self._clock = clock
@@ -210,6 +215,7 @@ class ShowcaseService:
         # «Статистика» counts the client only (the owner, 01.11.2026): the
         # admins' own opens and ♥ are not written and older ones are hidden.
         self._admin_viewers = frozenset(f"tg:{i}" for i in admin_ids)
+        self._events = events
         self._reading = threading.BoundedSemaphore(READ_PARALLEL)
 
     # --- reading the shop page -----------------------------------------------
@@ -710,6 +716,51 @@ class ShowcaseService:
             )
 
         self._db.run_transaction(fn)
+
+    def announce(self, actor: Actor) -> int:
+        """«Отправить уведомление» (the owner, 02.11.2026): tell the client the
+        showcase was updated, so he comes and looks. → how many new cards since
+        the last such message (all published ones the first time)."""
+        require_admin(actor)
+        if self._events is None:
+            raise ValidationError("Уведомления не настроены.")
+        published = [i for i in self._repo.list_all(self._db) if i.status == "published"]
+        if not published:
+            raise ValidationError("На витрине нет опубликованных карточек.")
+
+        def fn(tx: Transaction) -> int:
+            now = self._clock.now()
+            state = tx.get("settings", ANNOUNCE_DOC) or {}
+            last = state.get("last_at")
+            if isinstance(last, datetime) and now - last < ANNOUNCE_PAUSE:
+                raise ConflictError("Уведомление только что отправлено — подождите минуту.")
+            new = [
+                i
+                for i in published
+                if not isinstance(last, datetime) or (i.published_at and i.published_at > last)
+            ]
+            body = (
+                f"Новых товаров: {len(new)}. Загляните во вкладку «Витрина»."
+                if new
+                else "Загляните во вкладку «Витрина»."
+            )
+            self._events.record(
+                tx, actor, now, EventType.SHOWCASE_UPDATED, "Витрина обновилась", body=body
+            )
+            tx.set("settings", ANNOUNCE_DOC, {"last_at": now, "count": len(new)}, merge=True)
+            self._auditor.record(
+                tx,
+                actor,
+                now,
+                action="showcase.announce",
+                entity_type="settings",
+                entity_id=ANNOUNCE_DOC,
+                before=None,
+                after={"new": len(new)},
+            )
+            return len(new)
+
+        return self._db.run_transaction(fn)
 
     def delete_many(self, actor: Actor, item_ids: list[str]) -> int:
         """Several cards at once — the chosen ones or all (the owner, 02.11.2026).

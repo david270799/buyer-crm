@@ -24,6 +24,7 @@ from crm.services.events import EventRecorder
 from crm.storage import Database, DocumentMissingError, Transaction
 
 MAX_ATTEMPTS = 5
+TO_CLIENT_ALWAYS = frozenset({EventType.DEBT_WARNING, EventType.SHOWCASE_UPDATED})
 # A notification that could not go out for a day is no longer news.
 MAX_AGE = timedelta(hours=24)
 _MAX_ERROR = 300
@@ -54,8 +55,9 @@ class SendOutcome:
 def _skip_reason(
     event: Event, settings: NotificationSettings, chat_ids: tuple[int, ...], now: datetime
 ) -> str | None:
-    if event.type is EventType.DEBT_WARNING:
-        # Always to the client, whatever the settings (the owner, 16.10.2026).
+    if event.type in TO_CLIENT_ALWAYS:
+        # Always to the client, whatever the settings (the owner, 16.10.2026;
+        # «Витрина обновилась» is sent by the admin's own button, 02.11.2026).
         if event.created_at is None:
             return "no_time"
         if now - event.created_at > MAX_AGE:
@@ -192,7 +194,7 @@ class NotificationService:
         deliveries = []
         for event in pending:
             targets = chat_ids
-            if event.type is EventType.DEBT_WARNING:
+            if event.type in TO_CLIENT_ALWAYS:
                 if client_ids is None:
                     client_ids = self._chat_ids(replace(settings, recipient=NotifyRecipient.CLIENT))
                 targets = client_ids

@@ -26,7 +26,7 @@ from aiogram.types import (
 
 from crm.bot import formatting as fmt
 from crm.bot.admin_group import start_param_url
-from crm.domain.events import Event
+from crm.domain.events import Event, EventType
 from crm.domain.notifications import DeliveryStatus
 from crm.services.admin_group import NOTIFICATIONS, AdminGroup
 from crm.services.notifications import NotificationService, SendOutcome
@@ -44,6 +44,8 @@ def open_target(event: Event) -> str:
         return f"order:{event.order_ids[0]}"
     if event.shipment_id:
         return f"shipment:{event.shipment_id}"
+    if event.type is EventType.SHOWCASE_UPDATED:
+        return "showcase"
     return "notifications"
 
 

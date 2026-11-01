@@ -38,6 +38,7 @@ const ICONS: Record<EventType, LucideIcon> = {
   adjustment: SlidersHorizontal,
   rate: SlidersHorizontal,
   debt_warning: AlertTriangle,
+  showcase_updated: ShoppingBag,
 };
 
 export function BellButton() {
@@ -57,6 +58,7 @@ function target(event: CrmEvent): string | null {
   if (event.shipment_id) return `/shipments/${event.shipment_id}`;
   if (event.order_ids.length > 1) return `/orders/${event.order_ids[0]}`;
   if (event.type === "deposit" || event.type === "adjustment" || event.type === "debt_warning") return "/balance";
+  if (event.type === "showcase_updated") return "/showcase";
   return null;
 }
 

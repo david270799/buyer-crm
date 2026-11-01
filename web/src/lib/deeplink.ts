@@ -18,6 +18,7 @@ export function deepLinkPath(search: string, hash = ""): string | null {
   const open = openTarget(search, hash);
   if (!open) return null;
   if (open === "notifications") return "/notifications";
+  if (open === "showcase") return "/showcase";
   const order = /^order:n(\d{1,9})$/i.exec(open);
   if (order) return `/orders/N${order[1]}`;
   const shipment = /^shipment:([A-Za-z0-9_-]{1,64})$/.exec(open);

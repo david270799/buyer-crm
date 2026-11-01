@@ -35,6 +35,7 @@ class EventType(StrEnum):
     ADJUSTMENT = "adjustment"
     RATE = "rate"
     DEBT_WARNING = "debt_warning"  # the debt passed another million (sent to the client)
+    SHOWCASE_UPDATED = "showcase_updated"  # «Витрина обновилась» (the admin's button)
 
 
 IMPORTANT_EVENTS = frozenset(
@@ -48,6 +49,7 @@ IMPORTANT_EVENTS = frozenset(
         EventType.ADJUSTMENT,
         EventType.RATE,
         EventType.DEBT_WARNING,
+        EventType.SHOWCASE_UPDATED,
     }
 )
 

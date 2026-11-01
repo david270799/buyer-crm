@@ -151,6 +151,7 @@ def build_services(
             ImageService(blob_storage, clock) if blob_storage is not None else None,
             recognizer,
             admin_ids=admin_ids,
+            events=recorder,
         ),
         updates=UpdateService(db, clock, auditor, update_dir),
         admin_group=AdminGroupService(db, clock, auditor),

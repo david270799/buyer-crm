@@ -512,6 +512,12 @@ export const useShowcaseAction = (id: string) => {
   });
 };
 
+/** «Отправить уведомление»: tell the client the showcase was updated (02.11.2026). */
+export const useShowcaseAnnounce = () =>
+  useMutation({
+    mutationFn: () => post<{ new: number; client_has_telegram: boolean }>("/api/showcase/announce"),
+  });
+
 /** Delete the chosen cards, or all of them (the owner, 02.11.2026). */
 export const useShowcaseDeleteMany = () => {
   const refresh = useShowcaseRefresh();
