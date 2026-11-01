@@ -27,6 +27,7 @@ from crm.services.admin_group import SHOWCASE
 from crm.services.common import Actor
 from crm.services.container import Services
 from crm.services.recognition import extract_urls
+from crm.services.showcase_service import model_code
 
 logger = logging.getLogger(__name__)
 MAX_LINKS = 5
@@ -93,6 +94,23 @@ def build(services: Services, settings: Settings) -> Router:
                 # command): the page itself, to teach the CRM this shop.
                 await send_page(message, actor, url, unread=True)
 
+    async def on_code(message: Message, bot: Bot, actor: Actor | None) -> None:
+        """Model numbers alone in the «Витрина» topic («SYXS106», 02.11.2026):
+        the brand's page (Swatch) or one found on the web → a draft card."""
+        if actor is None or services.showcase is None:
+            return
+        codes = [c for c in (model_code(w) for w in (message.text or "").split()) if c]
+        for code in list(dict.fromkeys(codes))[:MAX_LINKS]:
+            wait = await message.reply(f"Ищу модель {fmt.e(code)}…")
+            where = {"chat_id": wait.chat.id, "message_id": wait.message_id}
+            try:
+                item = await asyncio.to_thread(services.showcase.add_by_code, actor, code)
+            except CRMError as exc:
+                await bot.edit_message_text(f"❌ {fmt.e(exc.user_message)}", **where)
+                continue
+            markup = await keyboard(bot, item, message)
+            await bot.edit_message_text(draft_text(item), reply_markup=markup, **where)
+
     async def on_screenshot(message: Message, bot: Bot, actor: Actor | None) -> None:
         """A shop screenshot in the «Витрина» topic → a draft card (01.11.2026)."""
         if actor is None or services.showcase is None or not message.photo:
@@ -155,6 +173,15 @@ def build(services: Services, settings: Settings) -> Router:
         await send_page(message, actor, urls[0])
 
     router.message.register(pagefile, Command("pagefile"), F.func(here), HasRole(Role.ADMIN))
+    router.message.register(
+        on_code,
+        F.text,
+        ~F.text.startswith("/"),
+        ~F.text.contains("http"),
+        F.func(lambda m: in_topic(services, m, SHOWCASE)),
+        F.func(lambda m: any(model_code(w) for w in (m.text or "").split())),
+        HasRole(Role.ADMIN),
+    )
     router.message.register(
         on_screenshot,
         F.photo,

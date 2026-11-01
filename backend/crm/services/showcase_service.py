@@ -8,6 +8,7 @@ filled in). No money moves: the order is bought out as usual with /buy.
 """
 
 import logging
+import re
 import threading
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -102,6 +103,29 @@ def _gateway_target(url: str) -> str | None:
     inner_host = (urlsplit(inner).hostname or "").lower()
     ssg = inner_host == "ssg.com" or inner_host.endswith(".ssg.com")
     return inner if inner.startswith("https://") and ssg else None
+
+
+# Brands whose own page opens by the model number alone (the owner, 02.11.2026).
+CODE_PAGES = {"swatch": "https://www.swatch.com/en-en/{code}.html"}
+_SWATCH_TITLE = re.compile(r"^\s*(.+?)\s+-\s+([A-Z0-9.-]+)\s+-\s+Swatch", re.I)
+
+
+def brand_model_name(title: str | None, code: str) -> str | None:
+    """The brand's own model name from its page title, when the brand writes
+    it so (Swatch: «SKINBLUEIRON - SYXS106 - Swatch® Official Store»)."""
+    match = _SWATCH_TITLE.match(title or "")
+    if not match or match.group(2).upper() != code.upper():
+        return None
+    return match.group(1).strip().title()
+
+
+_CODE = re.compile(r"^(?=.*[A-Z])(?=.*\d)[A-Z0-9][A-Z0-9.-]{3,23}$")
+
+
+def model_code(text: str | None) -> str | None:
+    """«syxs106» → «SYXS106»; None when the text is not a model number."""
+    value = (text or "").strip().upper()
+    return value if _CODE.match(value) else None
 
 
 def typed_sizes(names: Any) -> list[dict[str, Any]]:
@@ -406,7 +430,10 @@ class ShowcaseService:
             brand = None
         if has_hangul(model):
             model = None
-        page_url, photos = self._photos_from_web(brand, model, code)
+        page_url, photos, own_name = self._photos_from_web(brand, model, code)
+        if own_name:  # «SKINBLUEIRON - SYXS106 - Swatch®» → «Skinblueiron»
+            model = own_name
+            brand = brand or "Swatch"
         if not photos:
             cut = screenshots.crop(data, answer["photo_box"]) if answer.get("photo_box") else None
             try:
@@ -419,7 +446,8 @@ class ShowcaseService:
             "brand": brand,
             "model": model,
             "code": code,
-            "category": category_from_text(answer.get("category")),
+            "category": category_from_text(answer.get("category"))
+            or ("watch" if own_name else None),
             "shop_price_krw": answer["price_krw"],
             # Exactly as on the screenshot (the owner): no rounding to ₩ 100.
             "client_price_override": answer["price_krw"],
@@ -447,7 +475,7 @@ class ShowcaseService:
             )
         if self._recognizer is None or not hasattr(self._recognizer, "find_product_pages"):
             raise ValidationError("Для поиска фото нужен ключ Gemini (GEMINI_API_KEY).")
-        page_url, found = self._photos_from_web(item.brand, item.model, item.code)
+        page_url, found, _ = self._photos_from_web(item.brand, item.model, item.code)
         if not found:
             return item, 0
         known = {p.get("photo_url") for p in found}
@@ -461,19 +489,27 @@ class ShowcaseService:
             fields.update(url=page_url, shop=shop_name(page_url))
         return self._write(actor, item_id, fields, "showcase.photos_search"), len(found)
 
+    def _brand_pages(self, brand: str | None, code: str) -> list[str]:
+        """The brand's own page for this model number (Swatch), tried first."""
+        low = (brand or "").lower()
+        return [t.format(code=code) for key, t in CODE_PAGES.items() if not low or key in low]
+
     def _photos_from_web(
         self, brand: str | None, model: str | None, code: str | None
-    ) -> tuple[str | None, list[dict[str, Any]]]:
-        """(page, stored photos) of the first found page that carries the code."""
-        if not code or not hasattr(self._recognizer, "find_product_pages"):
-            return None, []
-        query = " ".join(p for p in (brand, code, model) if p)
-        try:
-            urls = self._recognizer.find_product_pages(query)
-        except RecognitionError as exc:
-            logger.info("Product pages not found: %s", exc)
-            return None, []
-        for url in urls[:MAX_PAGES_TRIED]:
+    ) -> tuple[str | None, list[dict[str, Any]], str | None]:
+        """(page, stored photos, the brand's own name of the model) of the
+        first page that carries the code: the brand's site first (the owner,
+        02.11.2026: Swatch watches go straight to swatch.com), then Google."""
+        if not code:
+            return None, [], None
+        urls = self._brand_pages(brand, code)
+        if hasattr(self._recognizer, "find_product_pages"):
+            query = " ".join(p for p in (brand, code, model) if p)
+            try:
+                urls += self._recognizer.find_product_pages(query)[:MAX_PAGES_TRIED]
+            except RecognitionError as exc:
+                logger.info("Product pages not found: %s", exc)
+        for url in urls:
             try:
                 with self._reading:
                     html, final = self._fetcher.html(url)
@@ -485,8 +521,8 @@ class ShowcaseService:
             page = parse_page(html, final)
             _, photos = self._store_photos(html, final, page.image_url, [])
             if photos:
-                return final, photos
-        return None, []
+                return final, photos, brand_model_name(page.title, code)
+        return None, [], None
 
     def page_source(self, actor: Actor, url: str) -> tuple[str, str]:
         """/pagefile: the shop page exactly as this server gets it (HTML, final
@@ -515,6 +551,44 @@ class ShowcaseService:
             raise ValidationError("Нужна ссылка на товар (https://…).")
         fields, notes = self._read(url)
         return self._create(actor, {**fields, "url": url, "shop": shop_name(url)}, notes, url)
+
+    def add_by_code(self, actor: Actor, code: str) -> ShowcaseItem:
+        """A card from a model number alone (the owner, 02.11.2026: the client
+        often shows Swatch watches): the brand's own page for that number if
+        the brand is known (Swatch: swatch.com/en-en/<code>.html), else a page
+        found with Google Search that carries the number. The price is set on
+        «Подготовка» when the page has none."""
+        require_admin(actor)
+        code = model_code(code)
+        if code is None:
+            raise ValidationError("Нужен номер модели: буквы и цифры, например SYXS106.")
+        for url in [*self._brand_pages(None, code), *self._found_pages(code)]:
+            try:
+                with self._reading:
+                    html, final = self._fetcher.html(url)
+            except LinkError as exc:
+                logger.info("Page %s for %s not read: %s", url, code, exc)
+                continue
+            if not screenshots.page_has_code(html, code):
+                continue
+            item = self.add(actor, final)
+            fields: dict[str, Any] = {"code": code}
+            if "swatch.com" in final:
+                fields.update(brand=item.brand or "Swatch", category="watch")
+                own = brand_model_name(parse_page(html, final).title, code)
+                if own:
+                    fields["model"] = own
+            return self._write(actor, item.id, fields, "showcase.code")
+        raise ValidationError(f"Модель {code} не нашлась. Пришлите ссылку или скриншот.")
+
+    def _found_pages(self, code: str) -> list[str]:
+        if self._recognizer is None or not hasattr(self._recognizer, "find_product_pages"):
+            return []
+        try:
+            return self._recognizer.find_product_pages(code)[:MAX_PAGES_TRIED]
+        except RecognitionError as exc:
+            logger.info("Pages for %s not found: %s", code, exc)
+            return []
 
     def _create(
         self, actor: Actor, fields: dict[str, Any], notes: list[str], source: str

@@ -267,6 +267,25 @@ _CONTENT = re.compile(r'content=["\']([^"\']+)["\']', re.I)
 _HMALL_IMAGE = re.compile(r"(https?://image\.hmall\.com/.+?/\d+_)(\d+)(\.jpg)", re.I)
 
 
+_SWATCH_FIRST = re.compile(r"https://static\.swatch\.com/images/product/([A-Z0-9]+)/")
+
+
+def _swatch_gallery(html: str, first: str | None) -> list[str]:
+    """Swatch shows one og:image; the page lists the whole gallery
+    (static.swatch.com/images/product/<code>/sa200|sa000/…png). The 360°
+    frames and the «m» copies of the same shots are left out (02.11.2026)."""
+    match = _SWATCH_FIRST.match(first or "")
+    if not match:
+        return []
+    code = match.group(1)
+    pattern = re.compile(
+        rf"https://static\.swatch\.com/images/product/{code}/(sa200|sa000)/{code}_[\w]+\.png"
+    )
+    shots = list(dict.fromkeys(m.group(0) for m in pattern.finditer(html)))
+    shots = [u for u in shots if not (u.endswith("m.png") and u[: -len("m.png")] + ".png" in shots)]
+    return sorted(shots, key=lambda u: 0 if "/sa200/" in u else 1)
+
+
 def photo_candidates(html: str, base_url: str, first: str | None) -> list[str]:
     """Product photo URLs in order, best size first; the caller downloads what exists.
 
@@ -291,6 +310,8 @@ def photo_candidates(html: str, base_url: str, first: str | None) -> list[str]:
         for n in range(1, 10):
             add(f"{prefix}{n}{ext}?RS=1000x1000")
         return found
+    for url in _swatch_gallery(html, first):
+        add(url)
     for tag in _OG_IMAGE.findall(html):
         content = _CONTENT.search(tag)
         add(content.group(1) if content else None)

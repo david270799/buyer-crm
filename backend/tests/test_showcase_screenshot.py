@@ -175,3 +175,68 @@ def test_photos_are_searched_again_and_arranged_by_hand(db, services, clock, adm
     db.run_transaction(lambda tx: tx.update("showcase", item.id, {"code": None}))
     with pytest.raises(ValidationError):
         showcase.search_photos(admin, item.id)
+
+
+SWATCH = "https://static.swatch.com/images/product/SYXS106"
+SWATCH_HTML = (
+    "<html><head>"
+    '<meta property="og:title" content="SKINBLUEIRON - SYXS106 - Swatch® Official Store">'
+    f'<meta property="og:image" content="{SWATCH}/sa200/SYXS106_sa200_er005.png"></head><body>'
+    f'<img src="{SWATCH}/sa200/SYXS106_sa200_er006.png">'
+    f'<img src="{SWATCH}/sa000/SYXS106_sa000_er003.png">'
+    f'<img src="{SWATCH}/sa000/SYXS106_sa000_er003m.png">'
+    f'<img src="{SWATCH}/sa360/SYXS106_36.png">'
+    "</body></html>"
+)
+
+
+def test_swatch_gallery_is_read_whole():
+    from crm.services.offers import photo_candidates
+
+    urls = photo_candidates(
+        SWATCH_HTML,
+        "https://www.swatch.com/en-en/x/SYXS106.html",
+        f"{SWATCH}/sa200/SYXS106_sa200_er005.png",
+    )
+    assert urls == [
+        f"{SWATCH}/sa200/SYXS106_sa200_er005.png",
+        f"{SWATCH}/sa200/SYXS106_sa200_er006.png",
+        f"{SWATCH}/sa000/SYXS106_sa000_er003.png",
+    ]  # no 360° frames, no «m» copies
+
+
+def test_a_model_number_makes_a_card_from_the_brand_page(db, services, clock, admin):
+    """The owner (02.11.2026): «SYXS106» → the Swatch page → photos."""
+    from crm.services.showcase_service import model_code
+
+    assert model_code(" syxs106 ") == "SYXS106"
+    assert model_code("260") is None and model_code("Air") is None and model_code("N5") is None
+    showcase = make(db, services, clock, FakeGemini(pages=()), html=SWATCH_HTML)
+    item = showcase.add_by_code(admin, "syxs106")
+    assert showcase._fetcher.opened[0] == "https://www.swatch.com/en-en/SYXS106.html"
+    assert item.code == "SYXS106" and item.brand == "Swatch" and item.category == "watch"
+    assert len(item.photos) == 3 and item.status == "draft"
+    with pytest.raises(ValidationError):
+        make(db, services, clock, FakeGemini(pages=()), html="<p>nothing</p>").add_by_code(
+            admin, "SYXS999"
+        )
+
+
+def test_a_watch_screenshot_goes_to_the_brand_site_first(db, services, clock, admin):
+    """The owner (02.11.2026): a Swatch screenshot → swatch.com by the number,
+    photos and the name from there, the price from the screenshot."""
+    watch = {
+        **JACKET,
+        "brand": "Swatch",
+        "model": "Men's Watch",
+        "code": "SYXS106",
+        "price_krw": 190_000,
+        "original_price_krw": 289_000,
+        "category": None,
+    }
+    gemini = FakeGemini(watch, pages=())
+    showcase = make(db, services, clock, gemini, html=SWATCH_HTML)
+    item = showcase.add_screenshot(admin, _screenshot())
+    assert showcase._fetcher.opened[0] == "https://www.swatch.com/en-en/SYXS106.html"
+    assert (item.brand, item.model, item.category) == ("Swatch", "Skinblueiron", "watch")
+    assert item.client_price_krw == 190_000 and len(item.photos) == 3

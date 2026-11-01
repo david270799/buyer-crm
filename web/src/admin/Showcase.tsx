@@ -799,7 +799,7 @@ export function PrepPage() {
           className="input"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="Вставьте ссылку на товар"
+          placeholder="Ссылка на товар или номер модели (SYXS106)"
           onKeyDown={(e) => {
             if (e.key === "Enter" && url.trim()) submit();
           }}
@@ -809,7 +809,7 @@ export function PrepPage() {
         </button>
       </div>
       <div className="tiny faint" style={{ margin: "6px 0 12px" }}>
-        Или просто пришлите ссылку боту — черновик появится здесь.
+        Или пришлите боту ссылку, номер модели или скриншот — черновик появится здесь.
       </div>
       <div className="chips" style={{ marginBottom: 12 }}>
         {TABS.map((t) => (

@@ -52,7 +52,7 @@ from crm.services.container import Services
 from crm.services.ledger import BalanceChange
 from crm.services.order_service import BulkUpdate, NewOrder, OrderQuery, OrderUpdate
 from crm.services.shipment_service import ShipmentDetails, ShipmentUpdate
-from crm.services.showcase_service import CartLine
+from crm.services.showcase_service import CartLine, model_code
 from crm.services.sizes import order_sizes
 from crm.services.telegram_share import TelegramShare
 from crm.storage import TransactionContentionError
@@ -127,7 +127,8 @@ class ArrivalIn(BaseModel):
 
 
 class ShowcaseAddIn(BaseModel):
-    url: str = Field(min_length=8, max_length=2000)
+    # A shop link, or a model number alone («SYXS106», 02.11.2026).
+    url: str = Field(min_length=4, max_length=2000)
 
 
 class ShowcaseDeleteIn(BaseModel):
@@ -815,7 +816,10 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
 
     @app.post("/api/showcase")
     def showcase_add(body: ShowcaseAddIn, p: Admin) -> dict[str, Any]:
-        return {"item": showcase_json(_showcase().add(p.actor, body.url))}
+        text = body.url.strip()
+        if not text.startswith(("http://", "https://")) and model_code(text):
+            return {"item": showcase_json(_showcase().add_by_code(p.actor, text))}
+        return {"item": showcase_json(_showcase().add(p.actor, text))}
 
     @app.get("/api/showcase/{item_id}")
     def showcase_get(item_id: str, p: Any_) -> dict[str, Any]:
