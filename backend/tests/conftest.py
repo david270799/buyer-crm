@@ -115,3 +115,11 @@ def admin() -> Actor:
 @pytest.fixture
 def client_actor() -> Actor:
     return Actor.telegram(CLIENT_TG, Role.CLIENT)
+
+
+@pytest.fixture(autouse=True)
+def _no_pause_between_links(monkeypatch):
+    """The bot waits 25–40 s between shop links; tests must not."""
+    from crm.bot.handlers import showcase
+
+    monkeypatch.setattr(showcase, "LINK_GAP_SECONDS", (0.0, 0.0))

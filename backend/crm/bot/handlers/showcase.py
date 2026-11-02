@@ -5,6 +5,7 @@ admin group — becomes a draft card on «Подготовка»."""
 import asyncio
 import contextlib
 import logging
+import random
 from urllib.parse import urlsplit
 
 from aiogram import Bot, F, Router
@@ -36,6 +37,39 @@ MAX_LINKS = 5
 # tries the same link again by itself.
 RETRY_DELAYS = (60, 180, 420)
 _retries: set[asyncio.Task] = set()
+# Links are read one by one with a random pause between them (the owner,
+# 02.11.2026: «25 секунд, 30 и т. д.»), so a shop does not take a burst of
+# links for a robot. Includes the retries above.
+LINK_GAP_SECONDS = (25.0, 40.0)
+QUEUED = (
+    "⏳ В очереди. Ссылки читаются по одной, с паузой 25–40 секунд, "
+    "чтобы магазин не принял бота за робота."
+)
+
+
+class LinkQueue:
+    """One link at a time, a random pause after each (one per dispatcher, so
+    the lock lives on the bot's own event loop)."""
+
+    def __init__(self) -> None:
+        self._gate = asyncio.Lock()
+        self._next_at = 0.0
+
+    def busy(self) -> bool:
+        return self._gate.locked()
+
+    @contextlib.asynccontextmanager
+    async def turn(self):
+        async with self._gate:
+            loop = asyncio.get_running_loop()
+            delay = self._next_at - loop.time()
+            if delay > 0:
+                await asyncio.sleep(delay)
+            try:
+                yield
+            finally:
+                low, high = LINK_GAP_SECONDS
+                self._next_at = loop.time() + random.uniform(low, high)
 
 
 def draft_text(item: ShowcaseItem) -> str:
@@ -64,6 +98,7 @@ def draft_text(item: ShowcaseItem) -> str:
 
 def build(services: Services, settings: Settings) -> Router:
     router = Router(name="showcase")
+    queue = LinkQueue()
 
     async def keyboard(
         bot: Bot, item: ShowcaseItem, message: Message
@@ -84,11 +119,18 @@ def build(services: Services, settings: Settings) -> Router:
     async def on_link(message: Message, bot: Bot, actor: Actor | None) -> None:
         if actor is None or services.showcase is None:
             return
+        waiting = []
         for url in extract_urls(message.text)[:MAX_LINKS]:
-            wait = await message.reply("Читаю страницу магазина…")
-            where = {"chat_id": wait.chat.id, "message_id": wait.message_id}
+            busy = queue.busy() or bool(waiting)
+            wait = await message.reply(QUEUED if busy else "Читаю страницу магазина…")
+            waiting.append((url, {"chat_id": wait.chat.id, "message_id": wait.message_id}, busy))
+        for url, where, busy in waiting:
             try:
-                item = await asyncio.to_thread(services.showcase.add, actor, url)
+                async with queue.turn():
+                    if busy:
+                        with contextlib.suppress(Exception):
+                            await bot.edit_message_text("Читаю страницу магазина…", **where)
+                    item = await asyncio.to_thread(services.showcase.add, actor, url)
             except ShopBlockedError:
                 task = asyncio.create_task(retry_later(message, bot, actor, url, where))
                 _retries.add(task)
@@ -124,7 +166,8 @@ def build(services: Services, settings: Settings) -> Router:
                     )
                 await asyncio.sleep(delay)
                 try:
-                    item = await asyncio.to_thread(services.showcase.add, actor, url)
+                    async with queue.turn():
+                        item = await asyncio.to_thread(services.showcase.add, actor, url)
                 except ShopBlockedError:
                     continue
                 except CRMError as exc:

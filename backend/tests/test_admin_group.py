@@ -255,3 +255,25 @@ async def test_a_shop_refusing_the_bot_is_tried_again_later(env, monkeypatch):
     edits = [m.text for m in env.session.sent if type(m).__name__ == "EditMessageText"]
     assert any("Попробую ещё раз" in t for t in edits)
     assert "Черновик витрины" in edits[-1]
+
+
+async def test_links_are_read_one_by_one_with_a_random_pause(monkeypatch):
+    """The owner (02.11.2026): «каждую ссылку с разной периодичностью, 25, 30 секунд»."""
+    import asyncio
+
+    from crm.bot.handlers import showcase as handler
+
+    monkeypatch.setattr(handler, "LINK_GAP_SECONDS", (0.05, 0.08))
+    queue = handler.LinkQueue()
+    loop = asyncio.get_running_loop()
+    starts = []
+
+    async def read(i):
+        async with queue.turn():
+            starts.append((i, loop.time()))
+            await asyncio.sleep(0.01)
+
+    await asyncio.gather(*(read(i) for i in range(3)))
+    assert [i for i, _ in starts] == [0, 1, 2]  # in the order sent
+    gaps = [b - a for (_, a), (_, b) in zip(starts, starts[1:], strict=False)]
+    assert all(0.06 - 0.005 <= g <= 0.09 + 0.03 for g in gaps)
