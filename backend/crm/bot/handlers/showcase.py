@@ -27,10 +27,15 @@ from crm.services.admin_group import SHOWCASE
 from crm.services.common import Actor
 from crm.services.container import Services
 from crm.services.recognition import extract_urls
-from crm.services.showcase_service import model_code
+from crm.services.showcase_service import ShopBlockedError, model_code
 
 logger = logging.getLogger(__name__)
 MAX_LINKS = 5
+# SSG stops letting the bot in after about ten links in a row (the owner,
+# 02.11.2026) and lets it in again a few minutes later: the bot waits and
+# tries the same link again by itself.
+RETRY_DELAYS = (60, 180, 420)
+_retries: set[asyncio.Task] = set()
 
 
 def draft_text(item: ShowcaseItem) -> str:
@@ -84,15 +89,55 @@ def build(services: Services, settings: Settings) -> Router:
             where = {"chat_id": wait.chat.id, "message_id": wait.message_id}
             try:
                 item = await asyncio.to_thread(services.showcase.add, actor, url)
+            except ShopBlockedError:
+                task = asyncio.create_task(retry_later(message, bot, actor, url, where))
+                _retries.add(task)
+                task.add_done_callback(_retries.discard)
+                continue
             except CRMError as exc:
                 await bot.edit_message_text(fmt.e(exc.user_message), **where)
                 continue
-            markup = await keyboard(bot, item, message)
-            await bot.edit_message_text(draft_text(item), reply_markup=markup, **where)
-            if item.shop_price_krw is None or not item.sizes:
-                # A shop the CRM cannot read yet (the owner, 20.10.2026: no extra
-                # command): the page itself, to teach the CRM this shop.
-                await send_page(message, actor, url, unread=True)
+            await show_draft(message, bot, actor, url, item, where)
+
+    async def show_draft(
+        message: Message, bot: Bot, actor: Actor, url: str, item: ShowcaseItem, where: dict
+    ) -> None:
+        markup = await keyboard(bot, item, message)
+        await bot.edit_message_text(draft_text(item), reply_markup=markup, **where)
+        if item.shop_price_krw is None or not item.sizes:
+            # A shop the CRM cannot read yet (the owner, 20.10.2026: no extra
+            # command): the page itself, to teach the CRM this shop.
+            await send_page(message, actor, url, unread=True)
+
+    async def retry_later(message: Message, bot: Bot, actor: Actor, url: str, where: dict) -> None:
+        """The shop refused the bot: wait and try again, the same message
+        telling how it goes; the link need not be sent again."""
+        try:
+            for attempt, delay in enumerate(RETRY_DELAYS, start=1):
+                minutes = max(1, delay // 60)
+                with contextlib.suppress(Exception):
+                    await bot.edit_message_text(
+                        "⏳ Магазин сейчас не пускает бота (защита от роботов). "
+                        f"Попробую ещё раз через {minutes} мин. "
+                        f"(попытка {attempt} из {len(RETRY_DELAYS)}), присылать заново не нужно.",
+                        **where,
+                    )
+                await asyncio.sleep(delay)
+                try:
+                    item = await asyncio.to_thread(services.showcase.add, actor, url)
+                except ShopBlockedError:
+                    continue
+                except CRMError as exc:
+                    await bot.edit_message_text(fmt.e(exc.user_message), **where)
+                    return
+                await show_draft(message, bot, actor, url, item, where)
+                return
+            await bot.edit_message_text(
+                "❌ Магазин так и не пустил бота. Ссылка в порядке — пришлите её ещё раз позже.",
+                **where,
+            )
+        except Exception:  # noqa: BLE001 - a background task: log, never crash the bot
+            logger.exception("Showcase retry for %s failed", url)
 
     async def on_code(message: Message, bot: Bot, actor: Actor | None) -> None:
         """Model numbers alone in the «Витрина» topic («SYXS106», 02.11.2026):

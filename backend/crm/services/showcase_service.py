@@ -85,6 +85,16 @@ SHOP_BLOCKED = (
     "Магазин сейчас не пустил бота (защита от роботов). Ссылка в порядке — "
     "пришлите её ещё раз через пару минут."
 )
+
+
+class ShopBlockedError(ValidationError):
+    """The shop's bot guard refused the page (SSG after ~10 links in a row,
+    02.11.2026): the link is fine, a later try usually gets through."""
+
+    def __init__(self) -> None:
+        super().__init__(SHOP_BLOCKED)
+
+
 NAVER_BLOCKED = (
     "Naver не даёт программам читать страницы Smart Store. "
     "Такой товар пока можно добавить только вручную (обычным заказом)."
@@ -343,7 +353,7 @@ class ShowcaseService:
             if "HTTP 429" in str(exc) and _is_naver(url):
                 raise ValidationError(NAVER_BLOCKED) from None
             if "HTTP 403" in str(exc):  # the link is fine: the shop's guard said no
-                raise ValidationError(SHOP_BLOCKED) from None
+                raise ShopBlockedError() from None
             raise ValidationError(f"{exc} Проверьте ссылку.") from None
         page = parse_page(html, final)
         offer = self._offer(html)

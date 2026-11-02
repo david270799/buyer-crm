@@ -228,3 +228,30 @@ async def test_showcase_link_in_its_topic_makes_a_draft(env, monkeypatch):
     edits = [m for m in env.session.sent if type(m).__name__ == "EditMessageText"]
     button = edits[-1].reply_markup.inline_keyboard[0][0]
     assert button.url == "https://t.me/crm_bot?startapp=prep-sc1"
+
+
+async def test_a_shop_refusing_the_bot_is_tried_again_later(env, monkeypatch):
+    """The owner (02.11.2026): SSG refused after ~10 links; the bot retries alone."""
+    import asyncio
+
+    from crm.bot.handlers import showcase as handler
+    from crm.domain.models import ShowcaseItem
+    from crm.services.showcase_service import ShopBlockedError
+
+    await env.bind_all()
+    calls = []
+
+    def flaky_add(actor, url):
+        calls.append(url)
+        if len(calls) < 3:
+            raise ShopBlockedError()
+        return ShowcaseItem(id="sc9", url=url, shop="SSG.com", brand="Nike", model="Bag")
+
+    monkeypatch.setattr(env.services.showcase, "add", flaky_add)
+    monkeypatch.setattr(handler, "RETRY_DELAYS", (0, 0, 0))
+    await env.say("🛍 Ветрина", "https://www.ssg.com/item/9")
+    await asyncio.gather(*list(handler._retries))
+    assert len(calls) == 3
+    edits = [m.text for m in env.session.sent if type(m).__name__ == "EditMessageText"]
+    assert any("Попробую ещё раз" in t for t in edits)
+    assert "Черновик витрины" in edits[-1]
