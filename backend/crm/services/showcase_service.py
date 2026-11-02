@@ -81,6 +81,10 @@ _SHOP_NAMES = {
 
 # Naver Smart Store answers every program with HTTP 429 (checked 20.10.2026,
 # also from the owner's Korean server), so say so plainly.
+SHOP_BLOCKED = (
+    "Магазин сейчас не пустил бота (защита от роботов). Ссылка в порядке — "
+    "пришлите её ещё раз через пару минут."
+)
 NAVER_BLOCKED = (
     "Naver не даёт программам читать страницы Smart Store. "
     "Такой товар пока можно добавить только вручную (обычным заказом)."
@@ -338,6 +342,8 @@ class ShowcaseService:
         except LinkError as exc:
             if "HTTP 429" in str(exc) and _is_naver(url):
                 raise ValidationError(NAVER_BLOCKED) from None
+            if "HTTP 403" in str(exc):  # the link is fine: the shop's guard said no
+                raise ValidationError(SHOP_BLOCKED) from None
             raise ValidationError(f"{exc} Проверьте ссылку.") from None
         page = parse_page(html, final)
         offer = self._offer(html)

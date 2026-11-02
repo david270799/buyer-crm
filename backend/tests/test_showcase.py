@@ -510,3 +510,31 @@ def test_a_refused_plain_request_is_tried_as_a_browser(monkeypatch):
     monkeypatch.setattr(link_import, "_get", missing)  # other errors: no second try
     with pytest.raises(link_import.LinkError, match="404"):
         link_import.PageFetcher().html("https://m.ssg.com/item/1")
+
+
+def test_a_refused_iphone_tries_once_more_as_android(monkeypatch):
+    """The owner's server got 403 from SSG as an iPhone (02.11.2026)."""
+    from crm.services import link_import
+
+    tried = []
+
+    def once(url, limit, profile):
+        tried.append(profile)
+        if profile == "safari_ios":
+            raise link_import.LinkError("Сайт ответил ошибкой (HTTP 403).")
+        return b"<html>ok</html>", "text/html", url
+
+    monkeypatch.setattr(link_import, "_browser_once", once)
+    monkeypatch.setattr(link_import, "_BROWSER_PAUSE_SECONDS", 0)
+    assert link_import._browser_get("https://m.ssg.com/item/1", 100)[0] == b"<html>ok</html>"
+    assert tried == ["safari_ios", "chrome_android"]
+
+    monkeypatch.setattr(
+        link_import,
+        "_browser_once",
+        lambda url, limit, profile: (_ for _ in ()).throw(
+            link_import.LinkError("Сайт ответил ошибкой (HTTP 403).")
+        ),
+    )
+    with pytest.raises(link_import.LinkError, match="403"):
+        link_import._browser_get("https://m.ssg.com/item/1", 100)

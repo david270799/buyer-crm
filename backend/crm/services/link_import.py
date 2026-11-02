@@ -17,6 +17,7 @@ import logging
 import os
 import re
 import socket
+import time
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import Any
@@ -225,7 +226,27 @@ def absolute_url(base_url: str, url: str) -> str:
     return urljoin(base_url, url)
 
 
+# Profiles SSG's guard lets through (checked 02.11.2026: desktop Chrome and
+# Safari are refused); the second one is tried when the first is refused too.
+_BROWSERS = ("safari_ios", "chrome_android")
+_BROWSER_PAUSE_SECONDS = 1.5
+
+
 def _browser_get(url: str, limit: int) -> tuple[bytes, str, str]:
+    """`_browser_once` as an iPhone, then (refused again, as happened on the
+    owner's server 02.11.2026) as an Android phone after a short pause."""
+    for i, profile in enumerate(_BROWSERS):
+        try:
+            return _browser_once(url, limit, profile)
+        except LinkError as exc:
+            if "HTTP 403" not in str(exc) or i == len(_BROWSERS) - 1:
+                raise
+            logger.info("403 as %s from %s: one more try", profile, urlsplit(url).hostname)
+            time.sleep(_BROWSER_PAUSE_SECONDS)
+    raise AssertionError("unreachable")
+
+
+def _browser_once(url: str, limit: int, profile: str) -> tuple[bytes, str, str]:
     """`_get` again, the request made like Safari on an iPhone down to the
     connection itself (curl_cffi). Bot guards such as SSG's (Akamai) refuse
     plain clients by that alone: checked 20.10.2026, also from the owner's
@@ -240,7 +261,7 @@ def _browser_get(url: str, limit: int) -> tuple[bytes, str, str]:
         try:
             response = browser.get(
                 url,
-                impersonate="safari_ios",
+                impersonate=profile,
                 headers={"Accept-Language": _HEADERS["Accept-Language"]},
                 allow_redirects=False,
                 timeout=TIMEOUT_SECONDS,
