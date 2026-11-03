@@ -108,9 +108,15 @@ def _is_naver(url: str) -> bool:
 
 def _gateway_target(url: str) -> str | None:
     """SSG share links (ssg.li) open a «snsGateway» page that only points to the
-    product (`?url=…`); the product page is that inner URL."""
+    product (`?url=…`); the product page is that inner URL. Same for app links
+    made with Airbridge (Lotte ON)."""
     parts = urlsplit(url)
     host = (parts.hostname or "").lower()
+    if host.endswith((".airbridge.io", ".deeplink.page")) and parts.path == "/webview":
+        # Lotte ON share links (dept.lotteon.com/…, 03.11.2026) open an
+        # «airbridge» page for the app; the product is its `?url=…`.
+        inner = (parse_qs(parts.query).get("url") or [""])[0]
+        return inner if inner.startswith("https://") else None
     if not (host == "ssg.com" or host.endswith(".ssg.com")) or "snsGateway" not in parts.path:
         return None
     inner = (parse_qs(parts.query).get("url") or [""])[0]

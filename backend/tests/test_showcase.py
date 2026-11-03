@@ -1,6 +1,7 @@
 import io
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import quote
 
 import pytest
 from conftest import ADMIN_TG, START_BALANCE, balance
@@ -538,3 +539,14 @@ def test_a_refused_iphone_tries_once_more_as_android(monkeypatch):
     )
     with pytest.raises(link_import.LinkError, match="403"):
         link_import._browser_get("https://m.ssg.com/item/1", 100)
+
+
+def test_lotte_on_share_links_lead_to_the_product_page():
+    """dept.lotteon.com/ic93eke → lottedept.airbridge.io/webview?url=… (03.11.2026)."""
+    from crm.services.showcase_service import _gateway_target
+
+    product = "https://www.lotteon.com/m/product/LE1218660779?mall_no=2"
+    page = "https://lottedept.airbridge.io/webview?url=" + quote(product, safe="") + "&short_id=x"
+    assert _gateway_target(page) == product
+    assert _gateway_target("https://lottedept.airbridge.io/webview?url=http%3A%2F%2Fa.kr") is None
+    assert _gateway_target("https://lottedept.airbridge.io/other?url=" + quote(product)) is None
