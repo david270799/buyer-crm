@@ -572,3 +572,26 @@ def test_status_filter_sorts_by_the_date_of_that_status(db, services, admin):
     assert ids(status=OrderStatus.BOUGHT, sort="oldest") == ["N3", "N2", "N1"]
     assert ids(status=OrderStatus.WAREHOUSE) == ["N5", "N4"]
     assert ids() == ["N5", "N4", "N3", "N2", "N1"]
+
+
+def test_back_to_bought_drops_the_warehouse_photos(db, services, admin):
+    """The owner (05.11.2026): photos of other shoes were sent by mistake."""
+    seed_order(
+        db,
+        "N1",
+        status="warehouse",
+        client_price=120,
+        charged_amount_krw=120,
+        arrival_photo_url="/media/a.webp",
+        arrival_thumbnail_url="/media/a_t.webp",
+        arrival_photos=[{"photo_url": "/media/b.webp"}],
+        arrival_check={"status": "ok"},
+        review_ko="좋아요",
+    )
+    services.orders.set_status(admin, ["N1"], OrderStatus.BOUGHT)
+    order = db.get("orders", "N1")
+    assert order["status"] == "bought"
+    assert order["arrival_photo_url"] is None and order["arrival_photos"] == []
+    assert order["arrival_check"] is None and order["review_ko"] is None
+    [log] = [d for _, d in db.scan("audit_logs") if d.get("action") == "order.status"]
+    assert log["before"]["arrival_photo_url"] == "/media/a.webp"  # kept in the log

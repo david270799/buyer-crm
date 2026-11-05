@@ -1208,6 +1208,13 @@ class OrderService:
             # keep the real purchase / sending date (profit by month)
             if not rollback and order.status is not OrderStatus.DELIVERED:
                 fields[ts_field] = now
+            before: dict[str, Any] = {"status": order.status_raw}
+            if rollback:
+                # A mistaken «На складе» (the owner, 05.11.2026: photos of other
+                # shoes were sent): its warehouse photos and check go too.
+                before.update(_arrival_of(order))
+                fields.update(dict.fromkeys(_ARRIVAL_FIELDS))
+                fields["arrival_photos"] = []
             self._orders.update(tx, order.id, fields)
             self._auditor.record(
                 tx,
@@ -1216,7 +1223,7 @@ class OrderService:
                 action="order.status",
                 entity_type="order",
                 entity_id=order.id,
-                before={"status": order.status_raw},
+                before=before,
                 after={"status": new_status.value},
             )
             result.updated.append(order.id)
@@ -1753,3 +1760,14 @@ _STATUS_EVENTS = {
     OrderStatus.WAREHOUSE: (EventType.ORDER_WAREHOUSE, "Прибыл на склад"),
     OrderStatus.DELIVERED: (EventType.ORDER_DELIVERED, "Доставлен"),
 }
+
+
+_ARRIVAL_FIELDS = ("arrival_photo_url", "arrival_thumbnail_url", "arrival_check", "review_ko")
+
+
+def _arrival_of(order: Order) -> dict[str, Any]:
+    """What «Пришло на склад» left on the order, for the audit log."""
+    kept = {f: getattr(order, f) for f in _ARRIVAL_FIELDS if getattr(order, f)}
+    if order.arrival_photos:
+        kept["arrival_photos"] = order.arrival_photos
+    return kept
