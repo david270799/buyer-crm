@@ -791,6 +791,9 @@ class OrderService:
                 "showcase_id": new.showcase_id,
                 "source_message_id": new.source_message_id,
                 "attention_required": new.attention_required,
+                # «Витрина» orders: the bot tells the admin and posts the photo
+                # to the orders channel (services/showcase_relay.py).
+                **({"relay": "pending", "relay_by": actor.role.value} if new.showcase_id else {}),
                 "created_at": now,
                 "updated_at": now,
                 "created_by": actor.id,

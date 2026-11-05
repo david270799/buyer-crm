@@ -19,6 +19,7 @@ from crm.bot.backups import NightlyBackup
 from crm.bot.handlers import build_router
 from crm.bot.notifier import TelegramNotifier
 from crm.bot.reactions import ReactionSyncer
+from crm.bot.showcase_relay import ShowcaseRelay
 from crm.config import Settings
 from crm.domain.errors import ConfigurationError
 from crm.services.container import Services
@@ -154,6 +155,17 @@ async def run_bot(
             reactions_task = asyncio.create_task(reactions.run(), name="order-reactions")
             reactions_task.add_done_callback(_report_notifier_exit)
             background.append(reactions_task)
+        if services.showcase_relay is not None:
+            relay = ShowcaseRelay(
+                bot,
+                services.showcase_relay,
+                services.images,
+                services.roles.admin_ids,
+                settings.mini_app_url,
+            )
+            relay_task = asyncio.create_task(relay.run(), name="showcase-orders")
+            relay_task.add_done_callback(_report_notifier_exit)
+            background.append(relay_task)
         if nightly is not None:
             backup_task = asyncio.create_task(nightly.run(), name="nightly-backup")
             backup_task.add_done_callback(_report_notifier_exit)

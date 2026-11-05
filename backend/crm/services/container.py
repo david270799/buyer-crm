@@ -36,6 +36,7 @@ from crm.services.recognition import Recognizer
 from crm.services.security_service import SecurityService
 from crm.services.sequences import SequenceAllocator
 from crm.services.shipment_service import ShipmentService
+from crm.services.showcase_relay import ShowcaseRelayService
 from crm.services.showcase_service import ShowcaseService
 from crm.services.update_service import UpdateService
 from crm.storage import Database
@@ -67,6 +68,7 @@ class Services:
     updates: UpdateService | None = None
     # The admin's group with topics («Склад», «Витрина», «Уведомления»).
     admin_group: AdminGroupService | None = None
+    showcase_relay: ShowcaseRelayService | None = None
 
 
 def build_services(
@@ -106,7 +108,7 @@ def build_services(
         blobs=blob_storage,
         profit=profit_repo,
     )
-    return Services(
+    services = Services(
         orders=order_service,
         shipments=ShipmentService(
             db,
@@ -156,3 +158,11 @@ def build_services(
         updates=UpdateService(db, clock, auditor, update_dir),
         admin_group=AdminGroupService(db, clock, auditor),
     )
+    services.showcase_relay = ShowcaseRelayService(
+        db,
+        clock,
+        recorder,
+        services.groups,
+        admin_chat=lambda: services.admin_group.current().chat_id,
+    )
+    return services
