@@ -296,11 +296,13 @@ can be given twice, as the usual size and as the Korean size of the same item ("
 Answer with JSON:
 - size_seen: the size printed on the label / tag / box in the photo, exactly as written \
 (e.g. "270", "US 9", "M", "42", "95"). If several systems are printed (US, UK, EU, mm/CM, \
-Korean 85/90/95/100/105), give the one in the same system as one of the ordered sizes. null if \
-no size is readable. Never guess.
+Korean 85/90/95/100/105), give the one in the same system as one of the ordered sizes; for shoes \
+the Korean size is the length in mm, so when a CM / mm length is printed give it (e.g. "27.5"). \
+null if no size is readable. Never guess.
 - matches: true if the size seen is one of the ordered sizes (also in another size system, \
 e.g. 270 mm = US 9 for men's Nike, Korean 100 = L), false if it is clearly a different size, \
-null if unsure.
+null if unsure. For shoes the Korean (mm) size decides: 27.5 cm = 275; never convert it from \
+the EU size, EU charts differ by brand.
 - confidence: from 0 to 1, how sure you are about size_seen and matches.
 - note: in Russian, short, only if something else is clearly wrong (other model or colour); \
 null otherwise.

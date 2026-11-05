@@ -7,6 +7,7 @@ review points. The photo and the result are saved on the order (admin only) and 
 
 import logging
 import random
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -37,6 +38,30 @@ def ordered_sizes(order: Order) -> list[str]:
     return [s for s in (order.size, order.size_kr) if s]
 
 
+_CM = re.compile(r"^(?:cm)?(\d{2}(?:\.\d)?)(?:cm)?$")
+_MM = re.compile(r"^(\d{3})(?:mm)?$")
+
+
+def _mm(size: str | None) -> int | None:
+    """A shoe size in mm: «275», «275mm», «27.5», «27.5 cm», «CM 27.5» → 275.
+    Plain two-digit sizes («42», «95») are other systems: None."""
+    text = "".join((size or "").casefold().split())
+    if m := _MM.match(text):
+        value = int(m.group(1))
+    elif (m := _CM.match(text)) and ("cm" in text or "." in m.group(1)):
+        value = round(float(m.group(1)) * 10)
+    else:
+        return None
+    return value if 200 <= value <= 330 else None
+
+
+def _note(status: str, note: str | None) -> str | None:
+    """Gemini's remark, unless it is about a size the check found right."""
+    if status == MATCH and note and "размер" in note.casefold():
+        return None
+    return note
+
+
 def judge(order: Order, answer: dict[str, Any] | None) -> str:
     sizes = ordered_sizes(order)
     if order.category == "watch" or not sizes or answer is None:
@@ -46,6 +71,14 @@ def judge(order: Order, answer: dict[str, Any] | None) -> str:
         return UNCLEAR
     if any(_norm(seen) == _norm(size) for size in sizes):
         return MATCH
+    # The Korean size is the shoe's length in mm (the owner, 05.11.2026: the box
+    # said «cm 27.5», the order «42.5 · KR 275» — Gemini went by «42.5» → 27.0).
+    # When both are lengths, they decide alone.
+    ordered_mm = _mm(order.size_kr) or _mm(order.size)
+    seen_mm = _mm(seen)
+    sure = answer.get("confidence", 0) >= MIN_CONFIDENCE
+    if ordered_mm and seen_mm and sure:
+        return MATCH if ordered_mm == seen_mm else MISMATCH
     if answer.get("confidence", 0) < MIN_CONFIDENCE or answer.get("matches") is None:
         return UNCLEAR
     return MATCH if answer["matches"] else MISMATCH
@@ -196,7 +229,7 @@ class ArrivalService:
                 "status": status,
                 "size_seen": answer.get("size_seen"),
                 "ordered_size": current.size,
-                "note": answer.get("note"),
+                "note": _note(status, answer.get("note")),
                 "confidence": answer.get("confidence"),
                 "error": error,
                 "at": now,

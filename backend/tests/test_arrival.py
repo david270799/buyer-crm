@@ -127,3 +127,20 @@ def test_waiting_lists_bought_orders(db, services, admin, clock):
     bought(db, services, admin)
     seed_order(db, "N6")
     assert [o.id for o in make(db, services, clock, None).waiting(admin)] == ["N5"]
+
+
+def test_shoe_length_decides_not_the_eu_size():
+    """The owner (05.11.2026): ordered «42.5 · KR 275», the box said «cm 27.5»;
+    Gemini went by 42.5 → 27.0 cm and called it the wrong size."""
+    from crm.domain.models import Order
+    from crm.services.arrival import MATCH, MISMATCH, _mm, _note, judge
+
+    order = Order.from_doc("N99", {"status": "bought", "size": "42.5", "size_kr": "275"})
+    wrong = {"size_seen": "27.5", "matches": False, "confidence": 0.95}
+    assert judge(order, wrong) == MATCH
+    assert judge(order, {**wrong, "size_seen": "CM 27.5"}) == MATCH
+    assert judge(order, {**wrong, "size_seen": "CM 28", "matches": True}) == MISMATCH
+    assert judge(order, {**wrong, "size_seen": "270mm", "matches": True}) == MISMATCH
+    assert _note(MATCH, "Привезли другой размер (27.5 см вместо 27.0 см)") is None
+    assert _note(MATCH, "Другой цвет") == "Другой цвет"
+    assert (_mm("42"), _mm("95"), _mm("100"), _mm("9.5")) == (None, None, None, None)
