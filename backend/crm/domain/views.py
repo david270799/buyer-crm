@@ -171,4 +171,16 @@ def showcase_view(card: dict[str, Any], role: Role) -> dict[str, Any]:
     """A showcase card (as built by the API) without the admin-only fields."""
     if role is Role.ADMIN:
         return card
-    return {k: (None if k in ADMIN_ONLY_SHOWCASE_FIELDS else v) for k, v in card.items()}
+    view = {k: (None if k in ADMIN_ONLY_SHOWCASE_FIELDS else v) for k, v in card.items()}
+    # How many pairs the shop has left is the buyer's knowledge (found by the
+    # security audit, 10.11.2026): the client gets «есть / нет» and «мало».
+    view["sizes"] = [_client_size(size) for size in card.get("sizes") or []]
+    return view
+
+
+def _client_size(size: Any) -> Any:
+    if not isinstance(size, dict):
+        return size
+    stock = size.get("stock")
+    low = bool(size.get("available")) and isinstance(stock, int) and stock <= 2
+    return {**size, "stock": None, "low": low}

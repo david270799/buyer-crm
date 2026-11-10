@@ -99,7 +99,8 @@ function SizeChips({
   return (
     <div className={`sc-sizes ${onSelect ? "" : "small"}`}>
       {sizes.map((s) => {
-        const low = s.available && s.stock !== null && s.stock <= 2;
+        // The client gets no numbers, only «мало» (`low`).
+        const low = s.available && (s.low ?? (s.stock !== null && s.stock <= 2));
         const cls = `sc-size ${s.available ? "" : "out"} ${low ? "low" : ""} ${selected === s.name ? "sel" : ""}`;
         const body = (
           <>

@@ -306,6 +306,8 @@ export interface ShowcaseSize {
   name: string;
   stock: number | null;
   available: boolean;
+  /** For the client, who gets no numbers: two or fewer left. */
+  low?: boolean;
   /** Colour first, then size (Hmall jackets, 20.10.2026). */
   color?: string | null;
 }

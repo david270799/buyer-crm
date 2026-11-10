@@ -674,6 +674,9 @@ def test_client_sees_published_cards_without_shop_details(db, api, clock):
     assert card["official_price_krw"] == 150_000  # crossed out on the card
     for hidden in ("url", "shop", "shop_price_krw", "markup_value", "note"):
         assert card[hidden] is None
+    # How many the shop has left stays with the admin (audit, 10.11.2026).
+    assert [(s["name"], s["stock"], s["low"]) for s in card["sizes"]] == [("270", None, False)]
+    assert api("GET", "/api/showcase/sc1").json()["item"]["sizes"][0]["stock"] == 3
     assert api("GET", "/api/showcase/sc2", who=CLIENT_TG).status_code == 404  # a draft
     db.run_transaction(lambda tx: tx.update("showcase", "sc1", {"refreshed_at": clock.current}))
     fresh = api("POST", "/api/showcase/sc1/refresh", who=CLIENT_TG).json()["item"]
