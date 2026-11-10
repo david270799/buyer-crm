@@ -755,3 +755,13 @@ def test_admin_tells_the_client_the_showcase_was_updated(db, api, clock):
     )
     [delivery] = services.notifications.due().deliveries
     assert delivery.chat_ids == (CLIENT_TG,)
+
+
+def test_oversized_body_is_refused_before_it_is_read(api):
+    """Security audit (10.11.2026): the upload was received whole before the
+    role was checked, so anyone could make the server store huge files."""
+    huge = {"Content-Length": str(500 * 1024 * 1024)}
+    answer = api("POST", "/api/images", who=None, headers=dict(huge), content=b"x")
+    assert answer.status_code == 413 and answer.json()["error"]["code"] == "too_large"
+    assert api("POST", "/api/images", headers=dict(huge), content=b"x").status_code == 413
+    assert api("GET", "/api/me").status_code == 200  # ordinary requests untouched

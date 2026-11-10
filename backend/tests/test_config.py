@@ -1,5 +1,6 @@
 """Settings helpers."""
 
+
 def test_http_client_logs_never_show_request_addresses():
     """Security audit (10.11.2026): httpx at INFO printed
     «POST https://api.telegram.org/bot<token>/sendPhoto» into the server log."""

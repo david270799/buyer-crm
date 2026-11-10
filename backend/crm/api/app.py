@@ -64,6 +64,7 @@ logger = logging.getLogger(__name__)
 mimetypes.add_type("image/webp", ".webp")
 
 MAX_UPLOAD_BYTES = 20 * 1024 * 1024
+MAX_REQUEST_BYTES = MAX_UPLOAD_BYTES + 1024 * 1024  # the file plus the form around it
 SHARE_FILE_TTL = 10 * 60  # seconds a «Скачать» link lives
 SHARE_FILE_MAX = 10
 IdempotencyKey = Annotated[str, Field(pattern=r"^[A-Za-z0-9_.:-]{8,80}$")]
@@ -414,6 +415,11 @@ def create_app(services: Services, config: ApiConfig, lifespan=None) -> FastAPI:
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next: Callable):
+        # A body is received before the handler checks who is asking (security
+        # audit, 10.11.2026): refuse an oversized one at once, signed in or not.
+        declared = request.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > MAX_REQUEST_BYTES:
+            return _error(413, "too_large", "Файл больше 20 МБ.")
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
