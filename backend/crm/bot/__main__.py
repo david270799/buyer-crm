@@ -12,7 +12,7 @@ import sys
 from aiogram.exceptions import TelegramNetworkError
 from dotenv import find_dotenv, load_dotenv
 
-from crm.config import load_settings
+from crm.config import apply_log_level, load_settings
 from crm.domain.errors import ConfigurationError
 
 
@@ -33,7 +33,7 @@ async def _main(demo: bool) -> None:
     from crm.services.container import build_services
 
     settings = load_settings()
-    logging.getLogger().setLevel(settings.log_level)
+    apply_log_level(settings.log_level)
     if demo:
         from crm.demo import create_demo_database
 

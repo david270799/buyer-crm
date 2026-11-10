@@ -4,6 +4,7 @@ Secrets (bot token, Firebase service account, Gemini key) live only in the
 environment or in files outside git. See `.env.example`.
 """
 
+import logging
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -118,3 +119,13 @@ def load_settings(env: Mapping[str, str] | None = None, *, require_bot: bool = T
     if require_bot and not settings.bot_token:
         raise ConfigurationError("Не задан BOT_TOKEN (токен от @BotFather).")
     return settings
+
+
+def apply_log_level(level: str) -> None:
+    """The log level from the settings — except for the HTTP client libraries:
+    at INFO they print every request's address, and a Telegram Bot API address
+    contains the bot token (security audit, 10.11.2026: «Поделиться» wrote the
+    token to the server log). They stay at WARNING whatever LOG_LEVEL says."""
+    logging.getLogger().setLevel(level)
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)

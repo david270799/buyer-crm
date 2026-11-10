@@ -18,7 +18,7 @@ from pathlib import Path
 
 from dotenv import find_dotenv, load_dotenv
 
-from crm.config import Settings, load_settings
+from crm.config import Settings, apply_log_level, load_settings
 from crm.domain.errors import ConfigurationError
 
 logger = logging.getLogger(__name__)
@@ -141,7 +141,7 @@ def main() -> None:
     demo = "--demo" in sys.argv[1:]
     try:
         settings = load_settings(require_bot=not demo)
-        logging.getLogger().setLevel(settings.log_level)
+        apply_log_level(settings.log_level)
         app = build_app(settings, demo)
     except ConfigurationError as exc:
         print(f"Ошибка конфигурации: {exc.user_message}", file=sys.stderr)
