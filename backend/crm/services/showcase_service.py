@@ -125,6 +125,49 @@ def _gateway_target(url: str) -> str | None:
     return inner if inner.startswith("https://") and ssg else None
 
 
+@dataclass(frozen=True)
+class AppShare:
+    """What an app's «Поделиться» link says about the product by itself."""
+
+    page: str
+    title: str | None
+    image: str | None
+    code: str | None
+
+
+def app_share(url: str) -> AppShare | None:
+    """Share links of shop apps made with AppsFlyer (adidas.onelink.me/…, the
+    owner, 11.11.2026) lead to the app store, but carry the product in their
+    own parameters: the web page (`af_web_dp`), the name and the photo for the
+    preview (`af_og_title`, `af_og_image`) and the app's address with the
+    model number (`af_dp=adidas://product/KQ5545`)."""
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    if not (host == "onelink.me" or host.endswith(".onelink.me")):
+        return None
+    query = parse_qs(parts.query)
+
+    def first(name: str) -> str | None:
+        return ((query.get(name) or [""])[0]).strip() or None
+
+    page = first("af_web_dp")
+    if not page or not page.startswith("https://"):
+        return None
+    image = first("af_og_image")
+    code = model_code((first("af_dp") or "").rstrip("/").rsplit("/", 1)[-1])
+    return AppShare(
+        page, first("af_og_title"), image if image and image.startswith("https://") else None, code
+    )
+
+
+def _larger(image_url: str) -> str:
+    """adidas previews are 600 px wide («…/images/w_600,f_auto,q_auto/…»); the
+    same address gives the photo at any width."""
+    if (urlsplit(image_url).hostname or "").lower() == "assets.adidas.com":
+        return re.sub(r"/w_\d+,", "/w_1600,", image_url, count=1)
+    return image_url
+
+
 # Brands whose own page opens by the model number alone (the owner, 02.11.2026).
 CODE_PAGES = {"swatch": "https://www.swatch.com/en-en/{code}.html"}
 _SWATCH_TITLE = re.compile(r"^\s*(.+?)\s+-\s+([A-Z0-9.-]+)\s+-\s+Swatch", re.I)
@@ -593,7 +636,16 @@ class ShowcaseService:
         url = (url or "").strip()
         if not url.startswith(("http://", "https://")):
             raise ValidationError("Нужна ссылка на товар (https://…).")
-        fields, notes = self._read(url)
+        share = app_share(url)
+        try:
+            fields, notes = self._read(share.page if share else url)
+        except ShopBlockedError:
+            if share is None or not (share.title or share.image):
+                raise
+            # The shop's site refuses the server, but the link itself names the product.
+            return self._from_share(actor, share, url)
+        if share and share.code and not fields.get("code"):
+            fields["code"] = share.code
         final = fields.get("url") or url
         fields["shop"] = shop_name(final)
         code = swatch_code(final)
@@ -603,6 +655,49 @@ class ShowcaseService:
             if own:
                 fields["model"] = own
         return self._create(actor, fields, notes, url)
+
+    def _from_share(self, actor: Actor, share: AppShare, source: str) -> ShowcaseItem:
+        """A draft from the share link alone (the shop's page did not open):
+        the name, the model number and the preview photo. The price and the
+        sizes are typed in on «Подготовка», like on a screenshot card."""
+        image, photos = None, []
+        if share.image:
+            try:
+                original = self._fetcher.image(_larger(share.image))
+                image, _, _ = process_image(original)
+                stored = self._store_one(original)
+                photos = [stored] if stored is not None else []
+            except (LinkError, ValidationError) as exc:
+                logger.info("Share link photo not stored: %s", exc)
+        brand, model, category = None, share.title, None
+        if self._recognizer is not None and hasattr(self._recognizer, "read_listing"):
+            text = f"Site: {shop_name(share.page)}\nTitle: {share.title or ''}"
+            try:
+                answer = self._recognizer.read_listing(image, text)
+                if has_hangul(answer.get("brand")) or has_hangul(answer.get("model")):
+                    answer = self._recognizer.read_listing(image, text + _TRANSLATE_AGAIN)
+                if answer.get("confidence", 0) >= MIN_CONFIDENCE:
+                    brand, model = answer.get("brand"), answer.get("model")
+                category = category_from_text(answer.get("category"))
+            except RecognitionError as exc:
+                logger.info("Share link name not read: %s", exc)
+        fields: dict[str, Any] = {
+            "title": share.title,
+            "brand": None if has_hangul(brand) else brand,
+            "model": None if has_hangul(model) else model,
+            "code": share.code,
+            "category": category,
+            "shop_price_krw": None,
+            "sizes": [],
+            "source": "screenshot",  # sizes typed in, the shop never re-read
+            "url": share.page,
+            "shop": shop_name(share.page),
+        }
+        if photos:
+            fields["photos"] = photos
+            fields["photo_url"] = photos[0]["photo_url"]
+            fields["thumbnail_url"] = photos[0]["thumbnail_url"]
+        return self._create(actor, fields, [], source)
 
     def add_by_code(self, actor: Actor, code: str) -> ShowcaseItem:
         """A card from a model number alone (the owner, 02.11.2026: the client

@@ -261,3 +261,52 @@ def test_short_links_end_on_the_shop_page_and_official_sites_go_first(db, servic
     assert swatch_code(page) == "SYXS106" and swatch_code("https://example.com/a.html") is None
     assert _brand_site("https://www.thenorthfacekorea.co.kr/p/1", "The North Face")
     assert not _brand_site("https://www.musinsa.com/p/1", "The North Face")
+
+
+ADIDAS_LINK = (
+    "https://adidas.onelink.me/ihha?pid=AppSharePDP&af_dp=adidas%3A%2F%2Fproduct%2FKQ5545"
+    "&af_web_dp=https%3A%2F%2Fwww.adidas.co.kr%2F-%2FKQ5545.html"
+    "&af_og_title=%EC%BD%94%EB%93%80%EB%A1%9C%EC%9D%B4+%ED%8A%B8%EB%9E%99%ED%83%91"
+    "&af_og_image=https%3A%2F%2Fassets.adidas.com%2Fimages%2Fw_600%2Cf_auto%2Cq_auto"
+    "%2F48724e_9366%2FBrown_KQ5545_20_01_model.jpg"
+)
+
+
+def test_an_app_share_link_makes_a_card_when_the_shop_refuses(db, services, clock, admin):
+    """The owner (11.11.2026): adidas.onelink.me leads to the app store and
+    adidas.co.kr refuses the server; the link itself names the product."""
+    from crm.bot.handlers.showcase import draft_text
+    from crm.services.showcase_service import app_share
+
+    share = app_share(ADIDAS_LINK)
+    assert share.page == "https://www.adidas.co.kr/-/KQ5545.html" and share.code == "KQ5545"
+    assert share.title == "코듀로이 트랙탑" and share.image.endswith("_model.jpg")
+    assert app_share("https://www.ssg.com/item/1") is None
+    assert app_share("https://x.onelink.me/a?af_web_dp=javascript%3Aalert(1)") is None
+
+    class Refusing(FakeFetcher):
+        def html(self, url):
+            self.opened.append(url)
+            raise LinkError("Сайт ответил ошибкой (HTTP 403).")
+
+        def image(self, url):
+            self.opened.append(url)
+            return super().image(url)
+
+    showcase = make(db, services, clock, None)
+    showcase._fetcher = Refusing("")
+    item = showcase.add(admin, ADIDAS_LINK)
+    assert showcase._fetcher.opened[0] == share.page  # the web page, not the app store
+    assert "/w_1600," in showcase._fetcher.opened[1]  # the large photo
+    assert (item.url, item.code, item.shop) == (share.page, "KQ5545", "Adidas")
+    assert item.from_screenshot and item.photos and item.shop_price_krw is None
+    assert "впишите цену и размеры" in draft_text(item)
+    item = showcase.update(admin, item.id, {"sizes": ["M", "L"], "client_price_override": 99_000})
+    assert item.client_price_krw == 99_000 and [s["name"] for s in item.sizes] == ["M", "L"]
+
+
+def test_an_app_share_link_reads_the_page_when_it_opens(db, services, clock, admin):
+    showcase = make(db, services, clock, None, html=PRODUCT_HTML)
+    item = showcase.add(admin, ADIDAS_LINK)
+    assert showcase._fetcher.opened[0] == "https://www.adidas.co.kr/-/KQ5545.html"
+    assert not item.from_screenshot and item.code == "KQ5545"

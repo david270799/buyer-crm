@@ -89,7 +89,10 @@ def draft_text(item: ShowcaseItem) -> str:
         lines.append("В наличии: " + fmt.e(", ".join(sizes)))
     if item.note:
         lines.append(f"⚠️ {fmt.e(item.note)}")
-    if item.from_screenshot:
+    if item.from_screenshot and not item.shop_price_krw:
+        # A card from an app's share link: the shop's site did not open.
+        lines.append("Магазин не открылся: впишите цену и размеры в «Одобрении».")
+    elif item.from_screenshot:
         lines.append("Впишите размеры и опубликуйте в «Одобрении».")
     else:
         lines.append("Проверьте цену и опубликуйте в «Одобрении».")
