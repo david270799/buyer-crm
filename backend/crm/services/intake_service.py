@@ -40,7 +40,7 @@ from crm.services.order_service import (
 from crm.services.order_split import PlannedItem, plan, strip_quantity
 from crm.services.recognition import _SIZE_RE, Recognition, extract_urls
 from crm.services.sequences import SequenceAllocator
-from crm.services.sizes import order_sizes
+from crm.services.sizes import order_sizes, split_sizes
 from crm.storage import Database, DocumentExistsError, Transaction
 
 _URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
@@ -129,6 +129,48 @@ class IntakeService:
     def existing(self, chat_id: int, message_id: int) -> str | None:
         """Order already created from this message, if any (cheap pre-check)."""
         return self._intake.order_id(self._db, IntakeRepository.key(chat_id, message_id))
+
+    def size_from_edit(self, chat_id: int, message_id: int, caption: str | None) -> Order | None:
+        """The client posted the photo first and wrote the size into the caption
+        a moment later (the owner, 12.11.2026: «39» added by editing the post,
+        the bot had already asked the admin). A new order of that message with
+        no size takes it from the edited caption; nothing else changes.
+        → the updated order, or None when there was nothing to do."""
+        order_id = self.existing(chat_id, message_id)
+        if order_id is None:
+            return None
+        now = self._clock.now()
+        actor = Actor.order_sender(chat_id)
+
+        def fn(tx: Transaction) -> Order | None:
+            raw = tx.get("orders", order_id)
+            order = Order.from_doc(order_id, raw) if raw is not None else None
+            if order is None or order.status is not OrderStatus.NEW or order.size or order.size_kr:
+                return None
+            size, size_kr = split_sizes(
+                _no_links(strip_quantity(caption)), clothes=order.category == "clothes"
+            )
+            fields = {
+                "size": _safe(_clean_text, size, "Размер", _MAX_SHORT_TEXT),
+                "size_kr": _safe(_clean_text, size_kr, "Корейский размер", _MAX_SHORT_TEXT),
+            }
+            if not (fields["size"] or fields["size_kr"]):
+                return None
+            self._orders.update(tx, order_id, {**fields, "updated_at": now, "updated_by": actor.id})
+            self._auditor.record(
+                tx,
+                actor,
+                now,
+                action="order.size_from_edit",
+                entity_type="order",
+                entity_id=order_id,
+                before={"size": None, "size_kr": None},
+                after=fields,
+            )
+            self._events.touched(tx)
+            return Order.from_doc(order_id, {**raw, **fields})
+
+        return self._db.run_transaction(fn)
 
     def accept(self, actor: Actor, incoming: IncomingOrder) -> IntakeResult:
         if actor.role not in (Role.ADMIN, Role.CLIENT):

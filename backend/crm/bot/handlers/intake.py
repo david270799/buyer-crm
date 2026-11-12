@@ -296,7 +296,27 @@ def build(services: Services, settings: Settings) -> Router:
         text = fmt.group_added_for_admin(chat.title or "группа", chat.id, sees_photos)
         await tell_admins(bot, services, text)
 
+    async def on_edited(message: Message, bot: Bot) -> None:
+        """A size written into the caption after the photo was posted (12.11.2026)."""
+        if message.chat.type != ChatType.CHANNEL or _file_id(message) is None:
+            return
+        order = await asyncio.to_thread(
+            services.intake.size_from_edit, message.chat.id, message.message_id, message.caption
+        )
+        if order is None:
+            return
+        sizes = " / ".join(s for s in (order.size, order.size_kr) if s)
+        await tell_admins(
+            bot,
+            services,
+            f"✅ Заказ {fmt.e(order.id)}: клиент дописал размер — <b>{fmt.e(sizes)}</b>. "
+            "Вопрос про размер снят.",
+            mini_app=settings.mini_app_url,
+            target=f"order:{order.id}",
+        )
+
     router.message.register(on_add, Command("add"))
+    router.edited_channel_post.register(on_edited, F.photo | F.document)
     router.message.register(on_photo, F.photo | F.document)
     router.channel_post.register(on_photo, F.photo | F.document)
     router.my_chat_member.register(on_added_to_group, ChatMemberUpdatedFilter(JOIN_TRANSITION))

@@ -88,6 +88,7 @@ def create_dispatcher(
     dp.message.outer_middleware(access)
     dp.callback_query.outer_middleware(access)
     dp.channel_post.outer_middleware(access)
+    dp.edited_channel_post.outer_middleware(access)  # only allowed channels
     dp.include_router(build_router(services, settings))
     return dp
 

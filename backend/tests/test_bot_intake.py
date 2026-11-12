@@ -192,6 +192,16 @@ def env(db, clock):
             await dp.feed_update(bot, update)
             return message
 
+        async def edit(original, caption):
+            """The channel post edited: a new caption on the same message."""
+            edited = original.model_copy(
+                update={
+                    "caption": caption,
+                    "edit_date": int(datetime.now(timezone.utc).timestamp()),
+                }
+            )
+            await dp.feed_update(bot, Update(update_id=next(_ids), edited_channel_post=edited))
+
         async def text(value, user_id=ADMIN_TG, chat_id=GROUP, reply_to=None):
             chat_type = "private" if chat_id > 0 else "supergroup"
             message = Message(
@@ -235,6 +245,7 @@ def env(db, clock):
             "session": session,
             "blobs": blobs,
             "photo": photo,
+            "edit": edit,
             "text": text,
             "added_by": added_by,
         }
@@ -697,3 +708,19 @@ async def test_admin_link_in_private_becomes_a_showcase_draft(db, env):
     assert "пока прочитать не может" in page.caption
     await e["text"]("https://shop.example.kr/item/9", user_id=CLIENT_TG, chat_id=CLIENT_TG)
     assert len(db.query("showcase")) == 1  # the client cannot add cards
+
+
+async def test_size_written_into_the_caption_later_is_taken(db, env):
+    """The owner (12.11.2026): the post had no caption, «39» was added by
+    editing it; the bot had already asked «размер не указан»."""
+    e = env(FakeGemini())
+    post = await e["photo"](None)
+    [order_id] = db.list_ids("orders")
+    assert not db.get("orders", order_id).get("size")
+    await e["edit"](post, "39")
+    order = db.get("orders", order_id)
+    assert order["size"] == "39" and order["status"] == "new"
+    assert any("дописал размер" in t and "39" in t for t in e["session"].to(ADMIN_TG))
+    # A size already there is never replaced.
+    await e["edit"](post, "41")
+    assert db.get("orders", order_id)["size"] == "39"
