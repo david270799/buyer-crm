@@ -1297,7 +1297,9 @@ export function EditOrderSheet({ order, onClose }: { order: Order; onClose: () =
     client_price: order.client_price ?? null,
     photo: { photo_url: order.photo_url, thumbnail_url: order.thumbnail_url } as PhotoValue,
   });
-  const set = <K extends keyof typeof form>(key: K, v: (typeof form)[K]) => setForm({ ...form, [key]: v });
+  // Functional update: the photo arrives after an upload, when `form` of the
+  // click is already stale (fields typed meanwhile, or the photo itself, were lost).
+  const set = <K extends keyof typeof form>(key: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: v }));
   const text = (v: string) => v.trim() || null;
   return (
     <Sheet
