@@ -765,3 +765,23 @@ def test_oversized_body_is_refused_before_it_is_read(api):
     assert answer.status_code == 413 and answer.json()["error"]["code"] == "too_large"
     assert api("POST", "/api/images", headers=dict(huge), content=b"x").status_code == 413
     assert api("GET", "/api/me").status_code == 200  # ordinary requests untouched
+
+
+def test_discount_is_one_balance_row_with_the_old_price_crossed(db, api):
+    """The owner (12.11.2026): not a separate «+₩ 7,900», but the order's line
+    with the first price crossed out and «Скидка 10%»."""
+    seed_order(db, "N5", brand="Nike")
+    api("POST", "/api/orders/5/buy", json={"purchase_price": 1, "client_price": 79_000})
+    answer = api(
+        "POST",
+        "/api/orders/bulk/discount",
+        json={"order_ids": ["N5"], "percent": 10, "idempotency_key": "disc-test-1"},
+    )
+    assert answer.status_code == 200, answer.json()
+    for who in (ADMIN_TG, CLIENT_TG):
+        rows = api("GET", "/api/transactions", who=who).json()["items"]
+        [row] = [r for r in rows if r["order_id"] == "N5"]
+        assert row["type"] == "order_charge" and row["discount_label"] == "Скидка 10%"
+        assert row["amount_krw"] == -71_100 and row["original_amount_krw"] == -79_000
+        assert row["balance_after"] == balance(db)
+        assert sum(r["amount_krw"] for r in rows) == balance(db) - START_BALANCE

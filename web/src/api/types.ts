@@ -150,6 +150,8 @@ export interface LedgerItem {
   /** A re-purchased order's charge line: the first price (crossed out) and when it was bought. */
   original_amount_krw?: number;
   rebuy_count?: number;
+  /** «Скидка 10%» folded into the order's line (12.11.2026). */
+  discount_label?: string;
   bought_at?: string | null;
   /** Shipping lines: the parcel's tracking code and photo. */
   shipment?: { id: string; number: number | null; tracking_code: string | null; thumbnail_url: string | null } | null;

@@ -104,8 +104,11 @@ const orderDeleted = (item: LedgerItem) => Boolean(item.order_id) && !item.order
 
 function entrySubtitle(item: LedgerItem): string | null {
   if (orderDeleted(item)) return item.comment || "Заказ удалён";
-  if (item.original_amount_krw !== undefined)
-    return `Перезаказ: ${krw(-item.original_amount_krw)} → ${krw(-item.amount_krw)}`;
+  if (item.original_amount_krw !== undefined) {
+    // A discount and / or a re-purchase folded into the order's line (12.11.2026).
+    const what = [item.rebuy_count ? "Перезаказ" : null, item.discount_label ?? null].filter(Boolean).join(" и ");
+    return `${what || "Изменение цены"}: ${krw(-item.original_amount_krw)} → ${krw(-item.amount_krw)}`;
+  }
   if (item.order_id || item.type === "shipping_charge") return null;
   return item.comment;
 }

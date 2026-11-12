@@ -116,32 +116,38 @@ def ledger_view(entry: LedgerEntry, role: Role) -> dict[str, Any]:
 
 
 def ledger_rows(entries: list[LedgerEntry], role: Role) -> list[dict[str, Any]]:
-    """Balance history rows (newest first). A re-purchase is shown on its order's
-    charge line instead of a separate «+₩ 30,000» (the owner, 17.10.2026): one row
-    with the final amount, the first price crossed out. It stands where the last
-    re-purchase stands, so its «после» is that entry's balance. The ledger itself
+    """Balance history rows (newest first). A re-purchase or a discount is shown
+    on its order's charge line instead of a separate «+₩ 7,900» (the owner,
+    17.10.2026 and 12.11.2026): one row with the final amount, the first price
+    crossed out, and what changed it («Скидка 10%»). It stands where the last
+    change stands, so its «после» is that entry's balance. The ledger itself
     is untouched — append-only, every entry kept."""
+    folded = (LedgerType.ORDER_CHARGE, LedgerType.ORDER_REBUY, LedgerType.ORDER_DISCOUNT)
     by_order: dict[str, list[LedgerEntry]] = {}
     for entry in entries:
-        if entry.order_id and entry.type in (LedgerType.ORDER_CHARGE, LedgerType.ORDER_REBUY):
+        if entry.order_id and entry.type in folded:
             by_order.setdefault(entry.order_id, []).append(entry)
-    merged: dict[str, dict[str, Any]] = {}  # id of the newest re-purchase → merged row
+    merged: dict[str, dict[str, Any]] = {}  # id of the newest change → merged row
     hidden: set[str] = set()
     for group in by_order.values():
         charges = [e for e in group if e.type is LedgerType.ORDER_CHARGE]
-        rebuys = [e for e in group if e.type is LedgerType.ORDER_REBUY]
-        if len(charges) != 1 or not rebuys:
+        changes = [e for e in group if e.type is not LedgerType.ORDER_CHARGE]
+        if len(charges) != 1 or not changes:
             continue  # the charge is older than this page: rows stay as they are
-        charge, newest = charges[0], rebuys[0]  # entries come newest first
+        charge, newest = charges[0], changes[0]  # entries come newest first
+        rebuys = [e for e in changes if e.type is LedgerType.ORDER_REBUY]
+        discounts = [e for e in changes if e.type is LedgerType.ORDER_DISCOUNT]
         row = ledger_view(charge, role)
         row.update(
-            amount_krw=charge.amount_krw + sum(e.amount_krw for e in rebuys),
+            amount_krw=charge.amount_krw + sum(e.amount_krw for e in changes),
             original_amount_krw=charge.amount_krw,
             rebuy_count=len(rebuys),
             balance_after=newest.balance_after,
             created_at=newest.created_at,
             bought_at=charge.created_at,
         )
+        if discounts:
+            row["discount_label"] = discounts[0].comment or "Скидка"
         merged[newest.id] = row
         hidden.update(e.id for e in group)
     rows = []
